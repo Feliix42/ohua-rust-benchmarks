@@ -1,0 +1,14 @@
+ns some_ns;
+
+// goal:
+
+// f :: (StartPoint, EndPoint) -> Grid -> Path
+// update :: Grid -> Path -> (Grid, ())
+//
+// transact :: [(Start, End)] -> (... -> ...) -> Grid -> Grid
+// transact data f grid =
+//     let paths = map (f grid) data in
+//         let (paths, grid') = update grid paths in
+//             if length paths == 0
+//                 then grid'
+//                 else transact paths f grid'

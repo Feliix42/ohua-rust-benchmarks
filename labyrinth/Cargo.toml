@@ -1,0 +1,9 @@
+[package]
+name = "labyrinth"
+version = "0.1.0"
+authors = ["Felix Wittwer <dev@felixwittwer.de>"]
+edition = "2018"
+
+[dependencies]
+ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime" }
+ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime" }
