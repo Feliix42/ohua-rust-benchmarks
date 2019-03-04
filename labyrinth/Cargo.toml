@@ -5,5 +5,6 @@ authors = ["Felix Wittwer <dev@felixwittwer.de>"]
 edition = "2018"
 
 [dependencies]
+clap = "2.32"
 ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime" }
 ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime" }
