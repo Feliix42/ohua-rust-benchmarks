@@ -1,5 +1,6 @@
 mod labyrinth_types;
 mod parser;
+mod pathfinder;
 
 use clap::{App, Arg};
 use labyrinth_types::Maze;

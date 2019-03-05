@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// A point in the 3D maze
 pub struct Point {
     pub x: usize,
@@ -35,14 +35,14 @@ impl Maze {
 }
 
 /// A single path in the maze.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Path {
     /// Starting point
-    start: Point,
+    pub start: Point,
     /// Ending point
-    end: Point,
-    /// All points to be visitad between start and end
-    path: Vec<Point>,
+    pub end: Point,
+    /// All points to be visited from start to end
+    pub path: Vec<Point>,
 }
 
 /// The grid the maze is set up in. Contains for every field the information about its state.
@@ -75,4 +75,8 @@ pub fn initialize_grid(
     }
 
     grid
+}
+
+pub fn at_grid_coordinates<'a>(grid: &'a Grid, pt: &Point) -> &'a Field {
+    &grid[pt.x][pt.y][pt.z]
 }
