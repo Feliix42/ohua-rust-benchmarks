@@ -80,3 +80,34 @@ pub fn initialize_grid(
 pub fn at_grid_coordinates<'a>(grid: &'a Grid, pt: &Point) -> &'a Field {
     &grid[pt.x][pt.y][pt.z]
 }
+
+/// Updates the grid with any paths that have been found. Overlapping or not matching paths are
+/// not implemented but returned instead.
+pub fn update_grid(mut grid: Grid, mut paths: Vec<Path>) -> (Grid, Vec<(Point, Point)>) {
+    let mut non_matching = Vec::new();
+
+    for path in paths.drain(..) {
+        if path_is_available(&grid, &path) {
+            for pt in path.path {
+                grid[pt.x][pt.y][pt.z] = Field::Used;
+            }
+        } else {
+            non_matching.push((path.start, path.end));
+        }
+    }
+
+    (grid, non_matching)
+}
+
+/// Checks whether a path is still available (i.e., free) on the grid
+fn path_is_available(grid: &Grid, path: &Path) -> bool {
+    for point in &path.path {
+        match at_grid_coordinates(grid, point) {
+            &Field::Free => (),
+            &Field::Used => return false,
+            &Field::Wall => panic!("Routed a path through a wall"),
+        }
+    }
+
+    true
+}
