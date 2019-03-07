@@ -1,4 +1,4 @@
-use crate::labyrinth_types::{at_grid_coordinates, Field, Grid, Path, Point};
+use crate::types::{at_grid_coordinates, Field, Grid, Path, Point};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// This HashMap contains the information on how to get back from the end point to the start.
@@ -125,7 +125,7 @@ fn generate_path(end_node: Point, mut meta_info: BacktrackMetaData) -> Path {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::labyrinth_types::*;
+    use crate::types::*;
 
     #[test]
     fn simple_pathfinding() {

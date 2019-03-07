@@ -15,22 +15,34 @@ pub struct Maze {
     pub obstacles: Option<Vec<Point>>,
     /// Paths already mapped into the grid
     pub paths: Vec<Path>,
-    /// Paths that have not been mapped yet
-    pub unmapped_paths: Vec<(Point, Point)>,
+    /// Paths that could not be mapped
+    pub unmappable_paths: Vec<(Point, Point)>,
 }
 
 impl Maze {
-    pub fn new(
-        dimensions: Point,
-        paths: Vec<(Point, Point)>,
-        obstacles: Option<Vec<Point>>,
-    ) -> Self {
+    pub fn new(dimensions: Point, obstacles: Option<Vec<Point>>) -> Self {
         Maze {
             grid: initialize_grid(dimensions.x, dimensions.y, dimensions.z, &obstacles),
             obstacles: obstacles,
-            paths: Vec::with_capacity(paths.len()),
-            unmapped_paths: paths,
+            paths: Vec::new(),
+            unmappable_paths: Vec::new(),
         }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        let mut ctrl_grid = self.grid.clone();
+
+        for path in &self.paths {
+            for pt in &path.path {
+                if at_grid_coordinates(&ctrl_grid, &pt) == &Field::Used {
+                    ctrl_grid[pt.x][pt.y][pt.z] = Field::Free;
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 }
 
@@ -49,7 +61,7 @@ pub struct Path {
 pub type Grid = Vec<Vec<Vec<Field>>>;
 
 /// A single field. Can be either free or used or it may be a wall.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Field {
     Free,
     Used,
@@ -81,22 +93,25 @@ pub fn at_grid_coordinates<'a>(grid: &'a Grid, pt: &Point) -> &'a Field {
     &grid[pt.x][pt.y][pt.z]
 }
 
-/// Updates the grid with any paths that have been found. Overlapping or not matching paths are
-/// not implemented but returned instead.
-pub fn update_grid(mut grid: Grid, mut paths: Vec<Path>) -> (Grid, Vec<(Point, Point)>) {
+/// Updates the maze with mapped paths by updating the underlying grid and the management data
+/// structures in the `Maze` struct.
+///
+/// Returns the updated struct and the paths that require remapping (i.e., due to overlapping paths).
+pub fn update_maze(mut maze: Maze, mut paths: Vec<Path>) -> (Maze, Vec<(Point, Point)>) {
     let mut non_matching = Vec::new();
 
     for path in paths.drain(..) {
-        if path_is_available(&grid, &path) {
-            for pt in path.path {
-                grid[pt.x][pt.y][pt.z] = Field::Used;
+        if path_is_available(&maze.grid, &path) {
+            for pt in &path.path {
+                maze.grid[pt.x][pt.y][pt.z] = Field::Used;
             }
+            maze.paths.push(path);
         } else {
             non_matching.push((path.start, path.end));
         }
     }
 
-    (grid, non_matching)
+    (maze, non_matching)
 }
 
 /// Checks whether a path is still available (i.e., free) on the grid

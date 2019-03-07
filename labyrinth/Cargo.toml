@@ -9,8 +9,10 @@ clap = { version = "2.32", optional = true }
 ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
 ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
 stm = { version = "0.4.0", optional = true }
+time = { version = "0.1", optional = true }
 
 [features]
+bench = ["time"]
 cli = ["clap"]
 ohua = ["ohua_codegen", "ohua_runtime"]
 transactional = ["stm"]
@@ -18,14 +20,14 @@ transactional = ["stm"]
 [[bin]]
 name = "simple_sequential"
 path = "src/bin/simple_sequential.rs"
-required-features = ["cli"]
+required-features = ["cli", "bench"]
 
 [[bin]]
 name = "ohua"
 path = "src/bin/ohua.rs"
-required-features = ["ohua", "cli"]
+required-features = ["ohua", "cli", "bench"]
 
 [[bin]]
 name = "stm"
 path = "src/bin/stm.rs"
-required-features = ["transactional", "cli"]
+required-features = ["transactional", "cli", "bench"]

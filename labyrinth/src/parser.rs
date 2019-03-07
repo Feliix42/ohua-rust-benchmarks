@@ -1,4 +1,4 @@
-use crate::labyrinth_types::Point;
+use crate::types::Point;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
