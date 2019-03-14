@@ -9,6 +9,11 @@ pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
     // TODO: Add costs?
     let (start, end) = points;
 
+    // check if the route is still available
+    if at_grid_coordinates(grid, &start) != &Field::Free {
+        return None;
+    }
+
     let mut unseen_points = VecDeque::new();
     unseen_points.push_back(start.clone());
     let mut visited_points = HashSet::new();
@@ -27,7 +32,7 @@ pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
         // get a list of all possible successors
         for child in get_successors(&current, grid) {
             // sort out anything that has been seen or is blocked
-            match at_grid_coordinates(grid, &current) {
+            match at_grid_coordinates(grid, &child) {
                 &Field::Used => continue,
                 &Field::Wall => continue,
                 &Field::Free => (),
@@ -207,6 +212,33 @@ mod tests {
         ];
 
         let grid = initialize_grid(5, 3, 1, &Some(obstacles));
+        let start = Point { x: 0, y: 1, z: 0 };
+        let end = Point { x: 4, y: 0, z: 0 };
+
+        let path = find_path((start, end), &grid);
+
+        assert_eq!(path, None);
+    }
+
+    #[test]
+    fn no_route_through_used_paths() {
+        // grid structure: (o -> used)
+        // ####G
+        // S.##.
+        // #.o..
+        let obstacles = vec![
+            Point { x: 0, y: 0, z: 0 },
+            Point { x: 1, y: 0, z: 0 },
+            Point { x: 2, y: 0, z: 0 },
+            Point { x: 3, y: 0, z: 0 },
+            Point { x: 2, y: 1, z: 0 },
+            Point { x: 3, y: 1, z: 0 },
+            Point { x: 0, y: 2, z: 0 },
+            Point { x: 2, y: 2, z: 0 },
+        ];
+
+        let mut grid = initialize_grid(5, 3, 1, &Some(obstacles));
+        grid[2][2][0] = Field::Used;
         let start = Point { x: 0, y: 1, z: 0 };
         let end = Point { x: 4, y: 0, z: 0 };
 
