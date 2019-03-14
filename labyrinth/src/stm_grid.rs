@@ -13,7 +13,16 @@ pub fn initialize_grid(
     depth: usize,
     walls: &Option<Vec<Point>>,
 ) -> Grid {
-    let mut grid = vec![vec![vec![TVar::new(Field::Free); depth]; height]; width];
+    let mut grid = vec![vec![Vec::with_capacity(depth); height]; width];
+
+    // must initialize this way because of the `clone` semantics of `vec!`
+    for x in 0..width {
+        for y in 0..height {
+            for z in 0..depth {
+                grid[x][y][z] = TVar::new(Field::Free);
+            }
+        }
+    }
 
     // place walls if any
     if let Some(wall_vec) = walls {
@@ -33,29 +42,28 @@ pub fn at_grid_coordinates<'a>(
     &grid[pt.x][pt.y][pt.z].read(transaction)
 }
 
-/// Updates the maze with mapped paths by updating the underlying grid and the management data
-/// structures in the `Maze` struct.
-///
-/// Returns the updated struct and the paths that require remapping (i.e., due to overlapping paths).
-pub fn update_maze(
-    mut maze: Maze,
+/// Updates the grid with mapped paths.
+pub fn update_grid(
+    mut maze: &Grid,
     mut paths: Vec<Path>,
     transaction: &mut Transaction,
-) -> StmResult<(Maze, Vec<(Point, Point)>)> {
-    let mut non_matching = Vec::new();
+) -> StmResult<(Vec<Path>, Vec<(Point, Point)>)> {
+    // TODO: should this return a list of nodes that have been overwritten by previously mapped nodes from _this current_ run? (i.e., should we remap locally?)
+    let mut mapped = Vec::new();
+    let mut not_mapped = Vec::new();
 
     for path in paths.drain(..) {
         if path_is_available(&maze.grid, &path) {
             for pt in &path.path {
-                maze.grid[pt.x][pt.y][pt.z].write(transaction, Field::Used)?;
+                grid[pt.x][pt.y][pt.z].write(transaction, Field::Used)?;
             }
-            maze.paths.push(path);
+            mapped.push(path);
         } else {
-            non_matching.push((path.start, path.end));
+            not_mapped.push((path.start, path.end));
         }
     }
 
-    (maze, non_matching)
+    Ok((mapped, not_mapped))
 }
 
 /// Checks whether a path is still available (i.e., free) on the grid
