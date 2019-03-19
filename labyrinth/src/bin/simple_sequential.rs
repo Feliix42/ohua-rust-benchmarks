@@ -1,7 +1,8 @@
 use clap::{App, Arg};
 use labyrinth::parser;
 use labyrinth::pathfinder;
-use labyrinth::types::{self, Maze, Point};
+use labyrinth::types::{Maze, Point};
+use labyrinth::grid;
 use time::PreciseTime;
 
 fn main() {
@@ -57,7 +58,7 @@ fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>) -> Maze {
     }
 
     // update the maze
-    let (new_maze, to_remap) = types::update_maze(maze, mapped);
+    let (new_maze, to_remap) = grid::update_maze(maze, mapped);
 
     if to_remap.is_empty() {
         new_maze

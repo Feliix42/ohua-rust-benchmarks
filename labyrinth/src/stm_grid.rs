@@ -13,7 +13,7 @@ pub fn initialize_grid(
     depth: usize,
     walls: &Option<Vec<Point>>,
 ) -> Grid {
-    let mut grid = vec![vec![Vec::with_capacity(depth); height]; width];
+    let mut grid = vec![vec![vec![TVar::new(Field::Free); depth]; height]; width];
 
     // must initialize this way because of the `clone` semantics of `vec!`
     for x in 0..width {
@@ -38,13 +38,13 @@ pub fn at_grid_coordinates<'a>(
     grid: &'a Grid,
     pt: &Point,
     transaction: &mut Transaction,
-) -> StmResult<&'a Field> {
-    &grid[pt.x][pt.y][pt.z].read(transaction)
+) -> StmResult<Field> {
+    Ok(grid[pt.x][pt.y][pt.z].read(transaction)?)
 }
 
 /// Updates the grid with mapped paths.
 pub fn update_grid(
-    mut maze: &Grid,
+    grid: &Grid,
     mut paths: Vec<Path>,
     transaction: &mut Transaction,
 ) -> StmResult<(Vec<Path>, Vec<(Point, Point)>)> {
@@ -53,7 +53,7 @@ pub fn update_grid(
     let mut not_mapped = Vec::new();
 
     for path in paths.drain(..) {
-        if path_is_available(&maze.grid, &path) {
+        if path_is_available(grid, &path, transaction)? {
             for pt in &path.path {
                 grid[pt.x][pt.y][pt.z].write(transaction, Field::Used)?;
             }
@@ -69,12 +69,12 @@ pub fn update_grid(
 /// Checks whether a path is still available (i.e., free) on the grid
 fn path_is_available(grid: &Grid, path: &Path, transaction: &mut Transaction) -> StmResult<bool> {
     for point in &path.path {
-        match at_grid_coordinates(grid, point)? {
-            &Field::Free => (),
-            &Field::Used => return false,
-            &Field::Wall => panic!("Routed a path through a wall"),
+        match at_grid_coordinates(grid, point, transaction)? {
+            Field::Free => (),
+            Field::Used => return Ok(false),
+            Field::Wall => panic!("Routed a path through a wall"),
         }
     }
 
-    true
+    Ok(true)
 }

@@ -1,7 +1,8 @@
 use clap::{App, Arg};
 use labyrinth::parser;
 use labyrinth::pathfinder;
-use labyrinth::types::{self, Maze, Point, Path, Grid};
+use labyrinth::types::{Maze, Point, Path, Grid};
+use labyrinth::stm_grid;
 use std::str::FromStr;
 use std::thread;
 use stm::{atomically, StmResult, Transaction};
@@ -22,6 +23,7 @@ fn main() {
             Arg::with_name("threadcount")
             .long("threads")
             .short("t")
+            .takes_value(true)
             .help("The number of threads to run on.")
             .required(true)
         )
@@ -68,50 +70,46 @@ fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: u
         splitter = (splitter + 1) % thread_number;
     }
 
-    atomically(|trans| {
         let mut handles = Vec::new();
 
         for points in paths_to_map.drain(..) {
             let g = maze.grid.clone();
             handles.push(thread::spawn(move || {
-                route(g, points, trans)
+                atomically(|trans| route(&g, &points, trans))
             }));
         }
 
         for handle in handles {
-            let (mut mapped, mut not_mapped) = handle.join().unwrap()?;
+            let (mut mapped, mut not_mapped) = handle.join().unwrap();
             maze.paths.append(&mut mapped);
             maze.unmappable_paths.append(&mut not_mapped);
         }
-
-        Ok(())
-    });
 
     maze
 }
 
 /// Attempts to route the paths from `to_map` on he grid using STM.
 fn route(
-    grid: Grid,
-    mut to_map: Vec<(Point, Point)>,
+    grid: &Grid,
+    to_map: &Vec<(Point, Point)>,
     transaction: &mut Transaction,
 ) -> StmResult<(Vec<Path>, Vec<(Point, Point)>)> {
     let mut mapped = Vec::new();
     let mut unmappable_paths = Vec::new();
 
     // search for a path for all point pairs (sort out any pairs w/o path)
-    for pair in to_map.drain(..) {
-        if let Some(path) = pathfinder::find_path(pair.clone(), &grid) {
+    for pair in to_map {
+        if let Some(path) = pathfinder::find_path(pair.clone(), &grid, transaction)? {
             mapped.push(path);
         } else {
-            unmappable_paths.push(pair);
+            unmappable_paths.push(pair.clone());
         }
     }
 
     // update the maze
-    let (mapped, mut not_mapped) = crate::stm_grid::update_grid(&grid, mapped, transaction);
+    let (mapped, mut not_mapped) = stm_grid::update_grid(&grid, mapped, transaction)?;
 
     unmappable_paths.append(&mut not_mapped);
 
-    (mapped, unmappable_paths)
+    Ok((mapped, unmappable_paths))
 }

@@ -2,8 +2,8 @@ pub mod parser;
 pub mod pathfinder;
 pub mod types;
 
-#[cfg(transactional)]
+#[cfg(feature = "transactional")]
 pub mod stm_grid;
 
-#[cfg(not(transactional))]
+#[cfg(not(feature = "transactional"))]
 pub mod grid;
