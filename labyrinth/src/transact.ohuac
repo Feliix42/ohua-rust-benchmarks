@@ -1,5 +1,7 @@
 ns some_ns;
 
+use sf to::implement::{find_path, update_grid, is_empty};
+
 // goal:
 
 // f :: (StartPoint, EndPoint) -> Grid -> Path
@@ -12,3 +14,21 @@ ns some_ns;
 //             if length paths == 0
 //                 then grid'
 //                 else transact paths f grid'
+
+// IDEA: For now, don't track unmapped paths, just drop them
+fn main(maze: Maze, to_map: Vec<(Point, Point)>) -> Maze {
+    let paths = for pair in to_map {
+        find_path(maze, to_map)   // -> returns Option<Path>
+    };       // -> Vec<Option<Path>>
+
+    // returns (Vec<Path>, Maze)  -- prunes optionals from previous vec!
+    // also adds mapped paths to mapped vec
+    let (remap_paths, new_maze) = update_grid(maze, paths);
+
+    // simple check for len == 0
+    if (is_empty(remap_paths)) {
+        new_maze
+    } else {
+        main(new_maze, remap_paths)
+    }
+}

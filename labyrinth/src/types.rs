@@ -14,6 +14,7 @@ pub struct Point {
 
 /// The central maze data structure
 #[derive(Debug)]
+#[cfg_attr(feature = "ohua", derive(Clone))]
 pub struct Maze {
     /// The Grid we are working on
     pub grid: Grid,
@@ -81,6 +82,7 @@ impl Maze {
 
 /// A single path in the maze.
 #[derive(Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "ohua", derive(Clone))]
 pub struct Path {
     /// Starting point
     pub start: Point,
