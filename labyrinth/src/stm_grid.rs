@@ -45,36 +45,12 @@ pub fn at_grid_coordinates<'a>(
 /// Updates the grid with mapped paths.
 pub fn update_grid(
     grid: &Grid,
-    mut paths: Vec<Path>,
+    path: &Path,
     transaction: &mut Transaction,
-) -> StmResult<(Vec<Path>, Vec<(Point, Point)>)> {
-    // TODO: should this return a list of nodes that have been overwritten by previously mapped nodes from _this current_ run? (i.e., should we remap locally?)
-    let mut mapped = Vec::new();
-    let mut not_mapped = Vec::new();
-
-    for path in paths.drain(..) {
-        if path_is_available(grid, &path, transaction)? {
-            for pt in &path.path {
-                grid[pt.x][pt.y][pt.z].write(transaction, Field::Used)?;
-            }
-            mapped.push(path);
-        } else {
-            not_mapped.push((path.start, path.end));
-        }
+) -> StmResult<()> {
+    for pt in &path.path {
+        grid[pt.x][pt.y][pt.z].write(transaction, Field::Used)?;
     }
 
-    Ok((mapped, not_mapped))
-}
-
-/// Checks whether a path is still available (i.e., free) on the grid
-fn path_is_available(grid: &Grid, path: &Path, transaction: &mut Transaction) -> StmResult<bool> {
-    for point in &path.path {
-        match at_grid_coordinates(grid, point, transaction)? {
-            Field::Free => (),
-            Field::Used => return Ok(false),
-            Field::Wall => panic!("Routed a path through a wall"),
-        }
-    }
-
-    Ok(true)
+    Ok(())
 }

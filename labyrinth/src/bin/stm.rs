@@ -5,7 +5,7 @@ use labyrinth::types::{Maze, Point, Path, Grid};
 use labyrinth::stm_grid;
 use std::str::FromStr;
 use std::thread;
-use stm::{atomically, StmResult, Transaction};
+use stm::atomically;
 use time::PreciseTime;
 
 fn main() {
@@ -75,7 +75,7 @@ fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: u
         for points in paths_to_map.drain(..) {
             let g = maze.grid.clone();
             handles.push(thread::spawn(move || {
-                atomically(|trans| route(&g, &points, trans))
+                route(&g, points)
             }));
         }
 
@@ -91,25 +91,28 @@ fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: u
 /// Attempts to route the paths from `to_map` on he grid using STM.
 fn route(
     grid: &Grid,
-    to_map: &Vec<(Point, Point)>,
-    transaction: &mut Transaction,
-) -> StmResult<(Vec<Path>, Vec<(Point, Point)>)> {
+    mut to_map: Vec<(Point, Point)>,
+) -> (Vec<Path>, Vec<(Point, Point)>) {
     let mut mapped = Vec::new();
     let mut unmappable_paths = Vec::new();
 
     // search for a path for all point pairs (sort out any pairs w/o path)
-    for pair in to_map {
-        if let Some(path) = pathfinder::find_path(pair.clone(), &grid, transaction)? {
+    for pair in to_map.drain(..) {
+        let ta_result = atomically(|trans| {
+            if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
+                stm_grid::update_grid(&grid, &path, trans)?;
+                Ok(Some(path))
+            } else {
+                Ok(None)
+            }
+        });
+
+        if let Some(path) = ta_result {
             mapped.push(path);
         } else {
-            unmappable_paths.push(pair.clone());
+            unmappable_paths.push(pair);
         }
     }
 
-    // update the maze
-    let (mapped, mut not_mapped) = stm_grid::update_grid(&grid, mapped, transaction)?;
-
-    unmappable_paths.append(&mut not_mapped);
-
-    Ok((mapped, unmappable_paths))
+    (mapped, unmappable_paths)
 }
