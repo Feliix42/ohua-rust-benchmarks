@@ -4,6 +4,8 @@ pub use crate::stm_grid::*;
 #[cfg(not(feature = "transactional"))]
 pub use crate::grid::*;
 
+use std::fmt;
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// A point in the 3D maze
 pub struct Point {
@@ -12,12 +14,32 @@ pub struct Point {
     pub z: usize,
 }
 
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}x{}x{}", self.x, self.y, self.z)
+    }
+}
+
 /// The central maze data structure
 #[derive(Debug)]
 #[cfg_attr(feature = "ohua", derive(Clone))]
+#[cfg(not(feature = "transactional"))]
 pub struct Maze {
     /// The Grid we are working on
     pub grid: Grid,
+    /// If any obstacles have been provided, those are stored here
+    pub obstacles: Option<Vec<Point>>,
+    /// Paths already mapped into the grid
+    pub paths: Vec<Path>,
+    /// Paths that could not be mapped
+    pub unmappable_paths: Vec<(Point, Point)>,
+}
+
+#[derive(Debug)]
+#[cfg(feature = "transactional")]
+pub struct Maze {
+    /// The Grid we are working on
+    pub grid: StmGrid,
     /// If any obstacles have been provided, those are stored here
     pub obstacles: Option<Vec<Point>>,
     /// Paths already mapped into the grid

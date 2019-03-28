@@ -1,8 +1,8 @@
 use clap::{App, Arg};
 use labyrinth::parser;
 use labyrinth::pathfinder;
-use labyrinth::types::{Maze, Point, Path, Grid};
 use labyrinth::stm_grid;
+use labyrinth::types::{StmGrid, Maze, Path, Point};
 use std::str::FromStr;
 use std::thread;
 use stm::atomically;
@@ -36,7 +36,7 @@ fn main() {
     // input location & parsing
     let input_file = matches.value_of("INPUT").unwrap();
     let (dimensions, paths) = parser::parse_file(input_file);
-    let maze = Maze::new(dimensions, None);
+    let maze = Maze::new(dimensions.clone(), None);
     let path_count = paths.len();
 
     println!("[INFO] Loaded maze data from file.");
@@ -52,9 +52,14 @@ fn main() {
     if filled_maze.is_valid() {
         println!("[INFO] Successfully validated the maze.");
         println!("\nStatistics:");
-        println!("    Paths overall: {}", path_count);
-        println!("    Mapped:        {}", filled_maze.paths.len());
-        println!("    Unmapped:      {}", filled_maze.unmappable_paths.len());
+        println!("    Maze configuration: {}", dimensions);
+        println!("    Thread number:      {}", thread_number);
+        println!("    Paths overall:      {}", path_count);
+        println!("    Mapped:             {}", filled_maze.paths.len());
+        println!(
+            "    Unmapped:           {}",
+            filled_maze.unmappable_paths.len()
+        );
         println!("\nRouting Time: {} ms", runtime_ms);
     } else {
         eprintln!("Incorrect path mappings found in maze: {:#?}", filled_maze);
@@ -70,36 +75,33 @@ fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: u
         splitter = (splitter + 1) % thread_number;
     }
 
-        let mut handles = Vec::new();
+    let mut handles = Vec::new();
 
-        for points in paths_to_map.drain(..) {
-            let g = maze.grid.clone();
-            handles.push(thread::spawn(move || {
-                route(&g, points)
-            }));
-        }
+    for points in paths_to_map.drain(..) {
+        let g = maze.grid.clone();
+        handles.push(thread::spawn(move || route(&g, points)));
+    }
 
-        for handle in handles {
-            let (mut mapped, mut not_mapped) = handle.join().unwrap();
-            maze.paths.append(&mut mapped);
-            maze.unmappable_paths.append(&mut not_mapped);
-        }
+    for handle in handles {
+        let (mut mapped, mut not_mapped) = handle.join().unwrap();
+        maze.paths.append(&mut mapped);
+        maze.unmappable_paths.append(&mut not_mapped);
+    }
 
     maze
 }
 
 /// Attempts to route the paths from `to_map` on he grid using STM.
-fn route(
-    grid: &Grid,
-    mut to_map: Vec<(Point, Point)>,
-) -> (Vec<Path>, Vec<(Point, Point)>) {
+fn route(grid: &StmGrid, mut to_map: Vec<(Point, Point)>) -> (Vec<Path>, Vec<(Point, Point)>) {
     let mut mapped = Vec::new();
     let mut unmappable_paths = Vec::new();
 
     // search for a path for all point pairs (sort out any pairs w/o path)
     for pair in to_map.drain(..) {
         let ta_result = atomically(|trans| {
-            if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
+            let copy_grid = stm_grid::create_working_copy(&grid);
+            if let Some(path) = pathfinder::find_path(pair.clone(), &copy_grid) {
+            // if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
                 stm_grid::update_grid(&grid, &path, trans)?;
                 Ok(Some(path))
             } else {
