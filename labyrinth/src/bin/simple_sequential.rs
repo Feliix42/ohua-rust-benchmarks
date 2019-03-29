@@ -50,23 +50,14 @@ fn main() {
 }
 
 fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>) -> Maze {
-    let mut mapped = Vec::new();
-
     // search for a path for all point pairs (sort out any pairs w/o path)
     for pair in to_map.drain(..) {
         if let Some(path) = pathfinder::find_path(pair.clone(), &maze.grid) {
-            mapped.push(path);
+            grid::update_maze(&mut maze, path);
         } else {
             maze.unmappable_paths.push(pair);
         }
     }
 
-    // update the maze
-    let (new_maze, to_remap) = grid::update_maze(maze, mapped);
-
-    if to_remap.is_empty() {
-        new_maze
-    } else {
-        route_paths(new_maze, to_remap)
-    }
+    maze
 }

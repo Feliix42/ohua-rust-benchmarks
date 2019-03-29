@@ -28,36 +28,11 @@ pub fn at_grid_coordinates<'a>(grid: &'a Grid, pt: &Point) -> &'a Field {
     &grid[pt.x][pt.y][pt.z]
 }
 
-/// Updates the maze with mapped paths by updating the underlying grid and the management data
+/// Updates the maze with a mapped path by updating the underlying grid and the management data
 /// structures in the `Maze` struct.
-///
-/// Returns the updated struct and the paths that require remapping (i.e., due to overlapping paths).
-pub fn update_maze(mut maze: Maze, mut paths: Vec<Path>) -> (Maze, Vec<(Point, Point)>) {
-    let mut non_matching = Vec::new();
-
-    for path in paths.drain(..) {
-        if path_is_available(&maze.grid, &path) {
-            for pt in &path.path {
-                maze.grid[pt.x][pt.y][pt.z] = Field::Used;
-            }
-            maze.paths.push(path);
-        } else {
-            non_matching.push((path.start, path.end));
-        }
+pub fn update_maze(maze: &mut Maze, path: Path) {
+    for pt in &path.path {
+        maze.grid[pt.x][pt.y][pt.z] = Field::Used;
     }
-
-    (maze, non_matching)
-}
-
-/// Checks whether a path is still available (i.e., free) on the grid
-fn path_is_available(grid: &Grid, path: &Path) -> bool {
-    for point in &path.path {
-        match at_grid_coordinates(grid, point) {
-            &Field::Free => (),
-            &Field::Used => return false,
-            &Field::Wall => panic!("Routed a path through a wall"),
-        }
-    }
-
-    true
+    maze.paths.push(path);
 }

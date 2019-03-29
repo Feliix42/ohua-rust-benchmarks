@@ -53,12 +53,9 @@ pub fn update_grid(grid: &StmGrid, path: &Path, transaction: &mut Transaction) -
         if at_stm_grid_coordinates(grid, pt, transaction)? == Field::Free {
             grid[pt.x][pt.y][pt.z].write(transaction, Field::Used)?;
         } else {
-            println!("retry...");
             return Err(StmError::Retry)
         }
     }
-
-    println!("Mapped path!");
 
     Ok(())
 }
