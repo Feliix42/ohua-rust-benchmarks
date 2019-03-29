@@ -2,7 +2,9 @@ use clap::{App, Arg};
 use labyrinth::parser;
 use labyrinth::pathfinder;
 use labyrinth::stm_grid;
-use labyrinth::types::{StmGrid, Maze, Path, Point};
+use labyrinth::types::{Maze, Path, Point, StmGrid};
+use std::fs::{create_dir_all, File};
+use std::io::Write;
 use std::str::FromStr;
 use std::thread;
 use stm::atomically;
@@ -21,11 +23,24 @@ fn main() {
         )
         .arg(
             Arg::with_name("threadcount")
-            .long("threads")
-            .short("t")
+                .long("threads")
+                .short("t")
+                .takes_value(true)
+                .help("The number of threads to run on.")
+                .required(true)
+        )
+        .arg(
+            Arg::with_name("runs")
+            .long("runs")
+            .short("r")
             .takes_value(true)
-            .help("The number of threads to run on.")
-            .required(true)
+            .help("The number of runs to conduct.")
+        )
+        .arg(
+            Arg::with_name("json")
+                .long("json")
+                .short("j")
+                .help("Dump results as JSON file.")
         )
         .get_matches();
 
@@ -33,36 +48,81 @@ fn main() {
     let thread_number = usize::from_str(matches.value_of("threadcount").unwrap())
         .expect("The entered thread count was not a valid uint");
 
+    // JSON Dump?
+    let json_dump = matches.is_present("json");
+
+    // #runs
+    let runs = usize::from_str(matches.value_of("runs").unwrap_or("1")).unwrap();
+
     // input location & parsing
     let input_file = matches.value_of("INPUT").unwrap();
     let (dimensions, paths) = parser::parse_file(input_file);
-    let maze = Maze::new(dimensions.clone(), None);
-    let path_count = paths.len();
 
-    println!("[INFO] Loaded maze data from file.");
+    let mut results = Vec::with_capacity(runs);
+    let mut mapped_paths = Vec::with_capacity(runs);
 
-    let start = PreciseTime::now();
-    let filled_maze = route_paths(maze, paths, thread_number);
-    let end = PreciseTime::now();
+    for _ in 0..runs {
+        let maze = Maze::new(dimensions.clone(), None);
 
-    println!("[INFO] Routing complete.");
+        if !json_dump {
+            println!("[INFO] Loaded maze data from file.");
+        }
 
-    let runtime_ms = start.to(end).num_milliseconds();
+        let start = PreciseTime::now();
+        let filled_maze = route_paths(maze, paths.clone(), thread_number);
+        let end = PreciseTime::now();
 
-    if filled_maze.is_valid() {
+        if !json_dump {
+            println!("[INFO] Routing complete.");
+        }
+
+        let runtime_ms = start.to(end).num_milliseconds();
+
+        if filled_maze.is_valid() {
+            results.push(runtime_ms);
+            mapped_paths.push(filled_maze.paths.len());
+        } else {
+            eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
+            return;
+        }
+    }
+
+    if json_dump {
+        create_dir_all("results").unwrap();
+        let filename = format!(
+            "results/stm-{}-p{}-t{}-r{}_log.json",
+            dimensions,
+            paths.len(),
+            thread_number,
+            runs
+        );
+        let mut f = File::create(&filename).unwrap();
+        f.write_fmt(format_args!(
+            "{{
+    \"configuration\": \"{conf}\",
+    \"paths\": {paths},
+    \"threads\": {threads},
+    \"runs\": {runs},
+    \"mapped\": {mapped:?},
+    \"results\": {res:?},
+}}",
+            conf = dimensions,
+            paths = paths.len(),
+            threads = thread_number,
+            runs = runs,
+            mapped = mapped_paths,
+            res = results
+        ))
+        .unwrap();
+    } else {
         println!("[INFO] Successfully validated the maze.");
         println!("\nStatistics:");
         println!("    Maze configuration: {}", dimensions);
         println!("    Thread number:      {}", thread_number);
-        println!("    Paths overall:      {}", path_count);
-        println!("    Mapped:             {}", filled_maze.paths.len());
-        println!(
-            "    Unmapped:           {}",
-            filled_maze.unmappable_paths.len()
-        );
-        println!("\nRouting Time: {} ms", runtime_ms);
-    } else {
-        eprintln!("Incorrect path mappings found in maze: {:#?}", filled_maze);
+        println!("    Paths overall:      {}", paths.len());
+        println!("    Runs:               {}", runs);
+        println!("    Mapped:             {:?}", mapped_paths);
+        println!("\nRouting Time: {:?} ms", results);
     }
 }
 
@@ -101,7 +161,7 @@ fn route(grid: &StmGrid, mut to_map: Vec<(Point, Point)>) -> (Vec<Path>, Vec<(Po
         let ta_result = atomically(|trans| {
             let copy_grid = stm_grid::create_working_copy(&grid);
             if let Some(path) = pathfinder::find_path(pair.clone(), &copy_grid) {
-            // if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
+                // if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
                 stm_grid::update_grid(&grid, &path, trans)?;
                 Ok(Some(path))
             } else {
