@@ -8,7 +8,8 @@ edition = "2018"
 clap = { version = "2.32", optional = true }
 ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
 ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
-stm = { version = "0.4.0", optional = true }
+# use patched version of rust-stm
+stm = { git = "https://github.com/feliix42/rust-stm" , optional = true }
 time = { version = "0.1", optional = true }
 
 [features]
