@@ -1,6 +1,8 @@
 ns some_ns;
 
-use sf to::implement::{find_path, update_grid, is_empty};
+use sf crate::is_empty;
+use sf labyrinth::grid::update_maze;
+use sf labyrinth::pathfinder::find_path;
 
 // goal:
 
@@ -23,12 +25,12 @@ fn main(maze: Maze, to_map: Vec<(Point, Point)>) -> Maze {
 
 fn transact(maze: Maze, to_map: Vec<(Point, Point)>) -> Maze {
     let paths = for pair in to_map {
-        find_path(maze, to_map)   // -> returns Option<Path>
+        find_path(maze, pair)   // -> returns Option<Path>
     };       // -> Vec<Option<Path>>
 
-    // returns (Vec<Path>, Maze)  -- prunes optionals from previous vec!
+    // returns (Vec<(Point, Point)>, Maze)  -- prunes optionals from previous vec!
     // also adds mapped paths to mapped vec
-    let (remap_paths, new_maze) = update_grid(maze, paths);
+    let (remap_paths, new_maze) = update_maze(maze, paths);
 
     // simple check for len == 0
     if (is_empty(remap_paths)) {

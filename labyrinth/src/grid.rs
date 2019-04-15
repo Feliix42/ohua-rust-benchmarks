@@ -30,9 +30,45 @@ pub fn at_grid_coordinates<'a>(grid: &'a Grid, pt: &Point) -> &'a Field {
 
 /// Updates the maze with a mapped path by updating the underlying grid and the management data
 /// structures in the `Maze` struct.
+#[cfg(not(feature = "ohua"))]
 pub fn update_maze(maze: &mut Maze, path: Path) {
     for pt in &path.path {
         maze.grid[pt.x][pt.y][pt.z] = Field::Used;
     }
     maze.paths.push(path);
+}
+
+/// Updates the grid with mapped paths.
+#[cfg(feature = "ohua")]
+pub fn update_maze(mut maze: Maze, paths: Vec<Option<Path>>) -> (Vec<(Point, Point)>, Maze) {
+    let mut remap = Vec::new();
+
+    for p in paths {
+        // skip empty paths
+        let path = match p {
+            Some(pa) => pa,
+            None => continue,
+        };
+
+        if path_available(&maze.grid, &path) {
+            for pt in &path.path {
+                maze.grid[pt.x][pt.y][pt.z] = Field::Used;
+            }
+        } else {
+            remap.push((path.start, path.end));
+        }
+    }
+
+    (remap, maze)
+}
+
+#[cfg(feature = "ohua")]
+fn path_available(grid: &Grid, path: &Path) -> bool {
+    for pt in &path.path {
+        if at_grid_coordinates(grid, pt) != &Field::Free {
+            return false;
+        }
+    }
+
+    true
 }
