@@ -1,6 +1,6 @@
 ns some_ns;
 
-use sf crate::is_empty;
+use sf crate::is_not_empty;
 use sf labyrinth::grid::update_maze;
 use sf labyrinth::pathfinder::find_path;
 
@@ -33,9 +33,9 @@ fn transact(maze: Maze, to_map: Vec<(Point, Point)>) -> Maze {
     let (remap_paths, new_maze) = update_maze(maze, paths);
 
     // simple check for len == 0
-    if (is_empty(remap_paths)) {
-        new_maze
-    } else {
+    if (is_not_empty(remap_paths)) {
         transact(new_maze, remap_paths)
+    } else {
+        new_maze
     }
 }

@@ -54,6 +54,7 @@ pub fn update_maze(mut maze: Maze, paths: Vec<Option<Path>>) -> (Vec<(Point, Poi
             for pt in &path.path {
                 maze.grid[pt.x][pt.y][pt.z] = Field::Used;
             }
+            maze.paths.push(path);
         } else {
             remap.push((path.start, path.end));
         }
