@@ -57,7 +57,7 @@ fn main() {
 
         let start = PreciseTime::now();
 
-        let filled_maze = {
+        /* let filled_maze = {
             use crate::is_empty;
             use labyrinth::grid::update_maze;
             use labyrinth::pathfinder::find_path;
@@ -282,10 +282,12 @@ fn main() {
             }));
             run_tasks(tasks);
             result_rcv.recv().unwrap()
-        };
+        }; */
 
-        // #[ohua]
-        // let filled_maze = transact(maze, paths.clone());
+        let paths2 = paths.clone();
+
+        #[ohua]
+        let filled_maze = transact(maze, paths2);
 
         // TODO: update "mapped paths stats"
         let end = PreciseTime::now();
