@@ -1,0 +1,43 @@
+let maze = $0 in
+let to_map = $1 in
+(let transact maze to_map =
+     let c = crate/splitup to_map in
+     let tm1 = ohua.lang/nth 0 2 c in
+     let tm2 = ohua.lang/nth 1 2 c in
+     let part1 =
+         (let search_path maze to_map mapped =
+              let a = crate/get_one to_map in
+              let pair = ohua.lang/nth 0 2 a in
+              let tail = ohua.lang/nth 1 2 a in
+              let p = labyrinth.pathfinder/find_path maze pair in
+              let updated = crate/insert_path p maze in
+              let new_mapped = crate/add_to mapped p in
+              ohua.lang/if (crate/is_not_empty tail) (λ _ -> search_path updated tail new_mapped)
+                (λ _ -> new_mapped) in
+           search_path)
+           maze
+           tm1
+           (crate/empty_vec ()) in
+     let part2 =
+         (let search_path maze to_map mapped =
+              let a = crate/get_one to_map in
+              let pair = ohua.lang/nth 0 2 a in
+              let tail = ohua.lang/nth 1 2 a in
+              let p = labyrinth.pathfinder/find_path maze pair in
+              let updated = crate/insert_path p maze in
+              let new_mapped = crate/add_to mapped p in
+              ohua.lang/if (crate/is_not_empty tail) (λ _ -> search_path updated tail new_mapped)
+                (λ _ -> new_mapped) in
+           search_path)
+           maze
+           tm2
+           (crate/empty_vec ()) in
+     let paths = crate/join part1 part2 in
+     let b = labyrinth.grid/update_maze maze paths in
+     let remap_paths = ohua.lang/nth 0 2 b in
+     let new_maze = ohua.lang/nth 1 2 b in
+     ohua.lang/if (crate/is_not_empty remap_paths) (λ _ -> transact new_maze remap_paths)
+       (λ _ -> new_maze) in
+  transact)
+  maze
+  to_map

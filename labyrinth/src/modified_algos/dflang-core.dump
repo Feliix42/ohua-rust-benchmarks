@@ -1,0 +1,61 @@
+let (ctrl_4, maze_1, to_map_1, j) = dataflow ohua.lang/recurFun<1> ( e
+                                                                   , new_mapped_0
+                                                                   , $0
+                                                                   , $1
+                                                                   , updated_0
+                                                                   , tail_0
+                                                                   , new_mapped_0 ) in
+let (maze_1_0, to_map_1_0, lit_unit_0, lit_unit_1) = dataflow ohua.lang/ctrl<5> ( ctrl_4
+                                                                                , maze_1
+                                                                                , to_map_1
+                                                                                , ()
+                                                                                , () ) in
+let (c_0) = crate/splitup<10> (to_map_1_0) in
+let (tm1_0) = ohua.lang/nth<11> (0, 2, c_0) in
+let (tm2_0) = ohua.lang/nth<12> (1, 2, c_0) in
+let (d) = crate/empty_vec<13> (lit_unit_0) in
+let (ctrl_2, maze_2, to_map_2, mapped_0, j) = dataflow ohua.lang/recurFun<14> ( e
+                                                                              , new_mapped_0
+                                                                              , maze_1_0
+                                                                              , tm1_0
+                                                                              , d
+                                                                              , updated_0
+                                                                              , tail_0
+                                                                              , new_mapped_0 ) in
+let (mapped_0_0, maze_2_0, to_map_2_0) = dataflow ohua.lang/ctrl<19> ( ctrl_2
+                                                                     , mapped_0
+                                                                     , maze_2
+                                                                     , to_map_2 ) in
+let (a_0) = crate/get_one<23> (to_map_2_0) in
+let (pair_0) = ohua.lang/nth<24> (0, 2, a_0) in
+let (tail_0) = ohua.lang/nth<25> (1, 2, a_0) in
+let (p_0) = labyrinth.pathfinder/find_path<26> (maze_2_0, pair_0) in
+let (updated_0) = crate/insert_path<27> (p_0, maze_2_0) in
+let (new_mapped_0) = crate/add_to<28> (mapped_0_0, p_0) in
+let (e) = crate/is_not_empty<29> (tail_0) in
+let (f) = crate/empty_vec<31> (lit_unit_0) in
+let (ctrl_0, maze_3, to_map_3, mapped_1, l) = dataflow ohua.lang/recurFun<32> ( g
+                                                                              , new_mapped_1
+                                                                              , maze_1_0
+                                                                              , tm2_0
+                                                                              , f
+                                                                              , updated_1
+                                                                              , tail_1
+                                                                              , new_mapped_1 ) in
+let (mapped_1_0, maze_3_0, to_map_3_0) = dataflow ohua.lang/ctrl<37> ( ctrl_0
+                                                                     , mapped_1
+                                                                     , maze_3
+                                                                     , to_map_3 ) in
+let (a_1) = crate/get_one<41> (to_map_3_0) in
+let (pair_1) = ohua.lang/nth<42> (0, 2, a_1) in
+let (tail_1) = ohua.lang/nth<43> (1, 2, a_1) in
+let (p_1) = labyrinth.pathfinder/find_path<44> (maze_3_0, pair_1) in
+let (updated_1) = crate/insert_path<45> (p_1, maze_3_0) in
+let (new_mapped_1) = crate/add_to<46> (mapped_1_0, p_1) in
+let (g) = crate/is_not_empty<47> (tail_1) in
+let (paths_0) = crate/join<49> (j, l) in
+let (b_0) = labyrinth.grid/update_maze<50> (maze_1_0, paths_0) in
+let (remap_paths_0) = ohua.lang/nth<51> (0, 2, b_0) in
+let (new_maze_0) = ohua.lang/nth<52> (1, 2, b_0) in
+let (h) = crate/is_not_empty<53> (remap_paths_0) in
+n
