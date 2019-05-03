@@ -86,7 +86,7 @@ fn main() {
     \"threads\": 1,
     \"runs\": {runs},
     \"mapped\": {mapped:?},
-    \"results\": {res:?},
+    \"results\": {res:?}
 }}",
             conf = dimensions,
             paths = paths.len(),

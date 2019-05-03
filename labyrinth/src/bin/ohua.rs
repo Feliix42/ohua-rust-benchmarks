@@ -95,7 +95,7 @@ fn main() {
     \"paths\": {paths},
     \"runs\": {runs},
     \"mapped\": {mapped:?},
-    \"results\": {res:?},
+    \"results\": {res:?}
 }}",
             conf = dimensions,
             paths = paths.len(),
