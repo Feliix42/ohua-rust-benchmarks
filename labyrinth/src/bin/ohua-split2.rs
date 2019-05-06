@@ -47,6 +47,7 @@ fn main() {
 
     let mut results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
+    let mut collisions = Vec::with_capacity(runs);
 
     for _ in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -60,7 +61,7 @@ fn main() {
         let paths2 = paths.clone();
 
         #[ohua]
-        let filled_maze = modified_algos::transact_split2(maze, paths2);
+        let (filled_maze, collision_count) = modified_algos::transact_split2(maze, paths2);
 
         let end = PreciseTime::now();
 
@@ -73,6 +74,7 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
+            collisions.push(collision_count);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -82,7 +84,7 @@ fn main() {
     if json_dump {
         create_dir_all("results").unwrap();
         let filename = format!(
-            "results/ohua-split2-{}-p{}-r{}_log.json",
+            "results/ohua_split2-{}-p{}-r{}_log.json",
             dimensions,
             paths.len(),
             runs
@@ -94,12 +96,14 @@ fn main() {
     \"paths\": {paths},
     \"runs\": {runs},
     \"mapped\": {mapped:?},
+    \"collisions\": {collisions:?},
     \"results\": {res:?}
 }}",
             conf = dimensions,
             paths = paths.len(),
             runs = runs,
             mapped = mapped_paths,
+            collisions = collisions,
             res = results
         ))
         .unwrap();
@@ -110,6 +114,7 @@ fn main() {
         println!("    Paths overall:      {}", paths.len());
         println!("    Runs:               {}", runs);
         println!("    Mapped:             {:?}", mapped_paths);
+        println!("    Collisions:         {:?}", collisions);
         println!("\nRouting Time: {:?} ms", results);
     }
 }

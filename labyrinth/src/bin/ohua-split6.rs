@@ -61,7 +61,7 @@ fn main() {
         let paths2 = paths.clone();
 
         #[ohua]
-        let (filled_maze, collision_count) = modified_algos::transact_split5(maze, paths2);
+        let (filled_maze, collision_count) = modified_algos::transact_split6(maze, paths2);
 
         let end = PreciseTime::now();
 
@@ -84,7 +84,7 @@ fn main() {
     if json_dump {
         create_dir_all("results").unwrap();
         let filename = format!(
-            "results/ohua_split5-{}-p{}-r{}_log.json",
+            "results/ohua_split6-{}-p{}-r{}_log.json",
             dimensions,
             paths.len(),
             runs
@@ -131,8 +131,9 @@ fn splitup(
     Vec<(Point, Point)>,
     Vec<(Point, Point)>,
     Vec<(Point, Point)>,
+    Vec<(Point, Point)>,
 ) {
-    let parts = 5;
+    let parts = 6;
 
     let mut paths_to_map = vec![Vec::with_capacity(v.len() / parts); parts];
     let mut splitter = 0;
@@ -147,6 +148,7 @@ fn splitup(
         paths_to_map.pop().unwrap(),
         paths_to_map.pop().unwrap(),
         paths_to_map.pop().unwrap(),
+        paths_to_map.pop().unwrap(),
     )
 }
 
@@ -156,10 +158,12 @@ fn join(
     mut v3: Vec<Option<Path>>,
     mut v4: Vec<Option<Path>>,
     mut v5: Vec<Option<Path>>,
+    mut v6: Vec<Option<Path>>,
 ) -> Vec<Option<Path>> {
     v1.append(&mut v2);
     v1.append(&mut v3);
     v1.append(&mut v4);
     v1.append(&mut v5);
+    v1.append(&mut v6);
     v1
 }

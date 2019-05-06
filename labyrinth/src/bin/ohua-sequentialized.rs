@@ -1,7 +1,7 @@
 #![feature(proc_macro_hygiene, fnbox)]
 use clap::{App, Arg};
 use labyrinth::parser;
-use labyrinth::types::{Maze, Path, Point};
+use labyrinth::types::{Maze, Path, Point, Field};
 use ohua_codegen::ohua;
 use ohua_runtime;
 use std::fs::{create_dir_all, File};
@@ -47,7 +47,6 @@ fn main() {
 
     let mut results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
-    let mut collisions = Vec::with_capacity(runs);
 
     for _ in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -61,7 +60,7 @@ fn main() {
         let paths2 = paths.clone();
 
         #[ohua]
-        let (filled_maze, collision_count) = modified_algos::transact_split5(maze, paths2);
+        let filled_maze = modified_algos::transact_sequentialized(maze, paths2);
 
         let end = PreciseTime::now();
 
@@ -74,7 +73,6 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
-            collisions.push(collision_count);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -84,7 +82,7 @@ fn main() {
     if json_dump {
         create_dir_all("results").unwrap();
         let filename = format!(
-            "results/ohua_split5-{}-p{}-r{}_log.json",
+            "results/ohua_sequentialized-{}-p{}-r{}_log.json",
             dimensions,
             paths.len(),
             runs
@@ -96,14 +94,12 @@ fn main() {
     \"paths\": {paths},
     \"runs\": {runs},
     \"mapped\": {mapped:?},
-    \"collisions\": {collisions:?},
     \"results\": {res:?}
 }}",
             conf = dimensions,
             paths = paths.len(),
             runs = runs,
             mapped = mapped_paths,
-            collisions = collisions,
             res = results
         ))
         .unwrap();
@@ -114,52 +110,27 @@ fn main() {
         println!("    Paths overall:      {}", paths.len());
         println!("    Runs:               {}", runs);
         println!("    Mapped:             {:?}", mapped_paths);
-        println!("    Collisions:         {:?}", collisions);
         println!("\nRouting Time: {:?} ms", results);
     }
 }
 
-fn is_not_empty(v: Vec<(Point, Point)>) -> bool {
+fn is_not_empty<T>(v: Vec<T>) -> bool {
     !v.is_empty()
 }
 
-fn splitup(
-    mut v: Vec<(Point, Point)>,
-) -> (
-    Vec<(Point, Point)>,
-    Vec<(Point, Point)>,
-    Vec<(Point, Point)>,
-    Vec<(Point, Point)>,
-    Vec<(Point, Point)>,
-) {
-    let parts = 5;
+fn insert_path(p: Option<Path>, mut maze: Maze) -> Maze {
+    if let Some(path) = p {
+        for pt in &path.path {
+            maze.grid[pt.x][pt.y][pt.z] = Field::Used;
+        }
 
-    let mut paths_to_map = vec![Vec::with_capacity(v.len() / parts); parts];
-    let mut splitter = 0;
-    for path in v.drain(..) {
-        paths_to_map[splitter].push(path);
-        splitter = (splitter + 1) % parts;
+        maze.paths.push(path);
     }
 
-    (
-        paths_to_map.pop().unwrap(),
-        paths_to_map.pop().unwrap(),
-        paths_to_map.pop().unwrap(),
-        paths_to_map.pop().unwrap(),
-        paths_to_map.pop().unwrap(),
-    )
+    maze
 }
 
-fn join(
-    mut v1: Vec<Option<Path>>,
-    mut v2: Vec<Option<Path>>,
-    mut v3: Vec<Option<Path>>,
-    mut v4: Vec<Option<Path>>,
-    mut v5: Vec<Option<Path>>,
-) -> Vec<Option<Path>> {
-    v1.append(&mut v2);
-    v1.append(&mut v3);
-    v1.append(&mut v4);
-    v1.append(&mut v5);
-    v1
+fn get_one(mut v: Vec<(Point, Point)>) -> ((Point, Point), Vec<(Point, Point)>) {
+    let elem = v.pop().unwrap();
+    (elem, v)
 }

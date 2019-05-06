@@ -7,3 +7,13 @@ pub mod stm_grid;
 
 #[cfg(not(feature = "transactional"))]
 pub mod grid;
+
+#[cfg(feature = "ohua")]
+pub fn increase(collision_count: u32) -> u32 {
+    collision_count + 1
+}
+
+#[cfg(feature = "ohua")]
+pub fn pack(maze: crate::types::Maze, collision_count: u32) -> (crate::types::Maze, u32) {
+    (maze, collision_count)
+}
