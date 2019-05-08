@@ -1,3 +1,7 @@
+# ohuac dumps
+**/*.dump
+**/*.ohuao
+
 # Created by https://www.gitignore.io/api/rust
 # Edit at https://www.gitignore.io/?templates=rust
 
@@ -17,3 +21,4 @@ Cargo.lock
 
 ### Benchmark results ###
 **/results/
+**/results*

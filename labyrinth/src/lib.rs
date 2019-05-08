@@ -9,8 +9,11 @@ pub mod stm_grid;
 pub mod grid;
 
 #[cfg(feature = "ohua")]
-pub fn increase(collision_count: u32) -> u32 {
-    collision_count + 1
+pub fn increase(
+    collision_count: u32,
+    remap_paths: Vec<(crate::types::Point, crate::types::Point)>,
+) -> u32 {
+    collision_count + remap_paths.len() as u32
 }
 
 #[cfg(feature = "ohua")]

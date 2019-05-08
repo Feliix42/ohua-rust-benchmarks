@@ -30,7 +30,7 @@ fn transact(maze: Maze, to_map: Vec<(Point, Point)>, collision_count: u32) -> (M
 
     let (remap_paths, new_maze) = update_maze(maze, paths);
 
-    let ct = increase(collision_count);
+    let ct = increase(collision_count, remap_paths);
     let ret = pack(new_maze, collision_count);
 
     // simple check for len == 0
