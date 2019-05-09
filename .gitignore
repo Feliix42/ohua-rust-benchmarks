@@ -22,3 +22,9 @@ Cargo.lock
 ### Benchmark results ###
 **/results/
 **/results*
+**/*.tar.gz
+
+### generated benchmark files ###
+labyrinth/src/modified_algos/transact_split*.ohuac
+labyrinth/src/bin/ohua-split*.rs
+labyrinth/bench-split-versions.sh
