@@ -1,8 +1,7 @@
 ns some_ns;
 
-use sf crate::is_not_empty;
 use sf labyrinth::grid::update_maze;
-use sf labyrinth::{increase, pack};
+use sf labyrinth::{increase, init_tup, is_not_empty, pack};
 use sf labyrinth::pathfinder::find_path;
 
 // goal:
@@ -19,12 +18,12 @@ use sf labyrinth::pathfinder::find_path;
 //                 else transact paths f grid'
 
 // IDEA: For now, don't track unmapped paths, just drop them
-fn main(maze: Maze, to_map: Vec<(Point, Point)>) -> (Maze, u32) {
-    transact(maze, to_map, 0)
+fn main(maze: Maze, to_map: Vec<(Point, Point)>) -> (Maze, (u32, u32)) {
+    transact(maze, to_map, init_tup())
 }
 
 
-fn transact(maze: Maze, to_map: Vec<(Point, Point)>, collision_count: u32) -> (Maze, u32) {
+fn transact(maze: Maze, to_map: Vec<(Point, Point)>, stats: (u32, u32)) -> (Maze, (u32, u32)) {
     let paths = for pair in to_map {
         find_path(maze, pair)   // -> returns Option<Path>
     };       // -> Vec<Option<Path>>
@@ -33,8 +32,8 @@ fn transact(maze: Maze, to_map: Vec<(Point, Point)>, collision_count: u32) -> (M
     // also adds mapped paths to mapped vec
     let (remap_paths, new_maze) = update_maze(maze, paths);
 
-    let ct = increase(collision_count, remap_paths);
-    let ret = pack(new_maze, collision_count);
+    let ct = increase(stats, remap_paths);
+    let ret = pack(new_maze, stats);
 
     // simple check for len == 0
     if (is_not_empty(remap_paths)) {

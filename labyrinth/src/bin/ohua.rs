@@ -48,6 +48,7 @@ fn main() {
     let mut results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
     let mut collisions = Vec::with_capacity(runs);
+    let mut iterations = Vec::with_capacity(runs);
 
     for _ in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -61,7 +62,7 @@ fn main() {
         let paths2 = paths.clone();
 
         #[ohua]
-        let (filled_maze, collision_count) = transact(maze, paths2);
+        let (filled_maze, (rollbacks, iteration_count)) = transact(maze, paths2);
 
         let end = PreciseTime::now();
 
@@ -74,7 +75,8 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
-            collisions.push(collision_count);
+            collisions.push(rollbacks);
+            iterations.push(iteration_count);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -97,6 +99,7 @@ fn main() {
     \"runs\": {runs},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
+    \"iterations\": {iterations:?},
     \"results\": {res:?}
 }}",
             conf = dimensions,
@@ -104,6 +107,7 @@ fn main() {
             runs = runs,
             mapped = mapped_paths,
             collisions = collisions,
+            iterations = iterations,
             res = results
         ))
         .unwrap();
@@ -115,10 +119,7 @@ fn main() {
         println!("    Runs:               {}", runs);
         println!("    Mapped:             {:?}", mapped_paths);
         println!("    Collisions:         {:?}", collisions);
+        println!("    Iterations:         {:?}", iterations);
         println!("\nRouting Time: {:?} ms", results);
     }
-}
-
-pub fn is_not_empty(v: Vec<(Point, Point)>) -> bool {
-    !v.is_empty()
 }
