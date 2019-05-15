@@ -32,3 +32,16 @@ pub fn init_tup() -> (u32, u32) {
 pub fn is_not_empty(v: Vec<(crate::types::Point, crate::types::Point)>) -> bool {
     !v.is_empty()
 }
+
+#[cfg(feature = "ohua")]
+pub fn join<T>(mut v1: Vec<T>, mut v2: Vec<T>) -> Vec<T> {
+    v1.append(&mut v2);
+    v1
+}
+
+#[cfg(feature = "ohua")]
+pub fn take_n<T>(mut v: Vec<T>, count: usize) -> (Vec<T>, Vec<T>) {
+    let split = if count <= v.len() { count } else { v.len() };
+    let v2 = v.split_off(split);
+    (v, v2)
+}
