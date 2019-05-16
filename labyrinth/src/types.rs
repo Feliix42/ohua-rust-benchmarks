@@ -103,8 +103,7 @@ impl Maze {
 }
 
 /// A single path in the maze.
-#[derive(Debug, Eq, PartialEq)]
-#[cfg_attr(feature = "ohua", derive(Clone))]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Path {
     /// Starting point
     pub start: Point,

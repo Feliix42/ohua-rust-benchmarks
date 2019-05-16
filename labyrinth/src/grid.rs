@@ -63,8 +63,7 @@ pub fn update_maze(mut maze: Maze, paths: Vec<Option<Path>>) -> (Vec<(Point, Poi
     (remap, maze)
 }
 
-#[cfg(feature = "ohua")]
-fn path_available(grid: &Grid, path: &Path) -> bool {
+pub fn path_available(grid: &Grid, path: &Path) -> bool {
     for pt in &path.path {
         if at_grid_coordinates(grid, pt) != &Field::Free {
             return false;
