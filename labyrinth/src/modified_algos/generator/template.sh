@@ -6,6 +6,7 @@ echo "Starting benchmarks at $(date)"
 cargo clean
 cargo build --release --bin simple_sequential --features "cli bench"
 cargo build --release --bin ohua --features "cli bench ohua"
+cargo build --release --bin threads-data-par --features "cli bench"
 {build_calls}
 
 {executions}

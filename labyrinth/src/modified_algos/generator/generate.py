@@ -67,17 +67,20 @@ echo "Running benchmarks for {inp}"
 
 echo -n "Sequential..."
 # run sequential version
-target/release/simple_sequential inputs/{inp} --json --runs {runs}
+target/release/simple_sequential inputs/{inp} --json -o data_par --runs {runs}
 
 echo " done."
 
 echo -n "Ohua..."
 # run ohua
-target/release/ohua inputs/{inp} --json --runs {runs}""".format(inp=inp,
-                                                                runs=runs)
+target/release/ohua inputs/{inp} --json -o data_par --runs {runs}
+target/release/threads-data-par inputs/{inp} --json -o data_par --runs {runs}""".format(
+            inp=inp, runs=runs)
         split_calls = ""
         for s in sizes:
-            split_calls += "\ntarget/release/ohua-split{n} inputs/{inp} --json --runs {runs}".format(
+            split_calls += """
+target/release/ohua-split{n} inputs/{inp} --json -o data_par --runs {runs}
+target/release/threads-data-par inputs/{inp} --json -o data_par -- runs {runs} -s {n}""".format(
                 n=s, inp=inp, runs=runs)
         executions += split_calls
         executions += """
