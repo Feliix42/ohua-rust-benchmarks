@@ -42,6 +42,15 @@ fn main() {
                 .short("j")
                 .help("Dump results as JSON file.")
         )
+        .arg(
+            Arg::with_name("outdir")
+                .long("outdir")
+                .short("o")
+                .help("Sets the output directory for JSON dumps")
+                .takes_value(true)
+                .default_value("results")
+                .requires("json")
+        )
         .get_matches();
 
     // thread number
@@ -50,6 +59,7 @@ fn main() {
 
     // JSON Dump?
     let json_dump = matches.is_present("json");
+    let out_dir = matches.value_of("outdir").unwrap();
 
     // #runs
     let runs = usize::from_str(matches.value_of("runs").unwrap_or("1")).unwrap();
@@ -88,9 +98,10 @@ fn main() {
     }
 
     if json_dump {
-        create_dir_all("results").unwrap();
+        create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "results/stm-{}-p{}-t{}-r{}_log.json",
+            "{}/stm-{}-p{}-t{}-r{}_log.json",
+            out_dir,
             dimensions,
             paths.len(),
             thread_number,

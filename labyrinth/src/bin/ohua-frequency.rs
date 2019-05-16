@@ -35,6 +35,15 @@ fn main() {
                 .help("Dump results as JSON file.")
         )
         .arg(
+            Arg::with_name("outdir")
+                .long("outdir")
+                .short("o")
+                .help("Sets the output directory for JSON dumps")
+                .takes_value(true)
+                .default_value("results")
+                .requires("json")
+        )
+        .arg(
             Arg::with_name("freq")
                 .long("frequency")
                 .short("f")
@@ -46,6 +55,7 @@ fn main() {
 
     // JSON Dump?
     let json_dump = matches.is_present("json");
+    let out_dir = matches.value_of("outdir").unwrap();
 
     // #runs
     let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();
@@ -96,9 +106,10 @@ fn main() {
     }
 
     if json_dump {
-        create_dir_all("results").unwrap();
+        create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "results/ohua-frequency-{}-p{}-freq{}-r{}_log.json",
+            "{}/ohua-frequency-{}-p{}-freq{}-r{}_log.json",
+            out_dir,
             dimensions,
             paths.len(),
             updates,
