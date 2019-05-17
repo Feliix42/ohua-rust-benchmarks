@@ -49,7 +49,6 @@ fn main() {
                 .help("Sets the output directory for JSON dumps")
                 .takes_value(true)
                 .default_value("results")
-                .requires("json")
         )
         .get_matches();
 
@@ -70,6 +69,7 @@ fn main() {
 
     let mut results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
+    let mut retry_counts = Vec::with_capacity(runs);
 
     for _ in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -79,7 +79,7 @@ fn main() {
         }
 
         let start = PreciseTime::now();
-        let filled_maze = route_paths(maze, paths.clone(), thread_number);
+        let (filled_maze, retries) = route_paths(maze, paths.clone(), thread_number);
         let end = PreciseTime::now();
 
         if !json_dump {
@@ -91,6 +91,7 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
+            retry_counts.push(retries);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -115,6 +116,7 @@ fn main() {
     \"threads\": {threads},
     \"runs\": {runs},
     \"mapped\": {mapped:?},
+    \"collisions\": {collisions:?},
     \"results\": {res:?}
 }}",
             conf = dimensions,
@@ -122,6 +124,7 @@ fn main() {
             threads = thread_number,
             runs = runs,
             mapped = mapped_paths,
+            collisions = retry_counts,
             res = results
         ))
         .unwrap();
@@ -133,11 +136,13 @@ fn main() {
         println!("    Paths overall:      {}", paths.len());
         println!("    Runs:               {}", runs);
         println!("    Mapped:             {:?}", mapped_paths);
+        println!("    Collisions:         {:?}", retry_counts);
         println!("\nRouting Time: {:?} ms", results);
     }
 }
 
-fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: usize) -> Maze {
+fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: usize) -> (Maze, usize) {
+    let mut global_retries = 0;
     // partition the vec
     let mut paths_to_map = vec![Vec::with_capacity(to_map.len() / thread_number); thread_number];
     let mut splitter = 0;
@@ -154,18 +159,20 @@ fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: u
     }
 
     for handle in handles {
-        let (mut mapped, mut not_mapped) = handle.join().unwrap();
+        let (mut mapped, mut not_mapped, retries) = handle.join().unwrap();
         maze.paths.append(&mut mapped);
         maze.unmappable_paths.append(&mut not_mapped);
+        global_retries += retries;
     }
 
-    maze
+    (maze, global_retries)
 }
 
 /// Attempts to route the paths from `to_map` on he grid using STM.
-fn route(grid: &StmGrid, mut to_map: Vec<(Point, Point)>) -> (Vec<Path>, Vec<(Point, Point)>) {
+fn route(grid: &StmGrid, mut to_map: Vec<(Point, Point)>) -> (Vec<Path>, Vec<(Point, Point)>, usize) {
     let mut mapped = Vec::new();
     let mut unmappable_paths = Vec::new();
+    let mut overall_retries = 0;
 
     // search for a path for all point pairs (sort out any pairs w/o path)
     for pair in to_map.drain(..) {
@@ -180,12 +187,17 @@ fn route(grid: &StmGrid, mut to_map: Vec<(Point, Point)>) -> (Vec<Path>, Vec<(Po
             }
         });
 
-        if let Some(path) = ta_result {
-            mapped.push(path);
-        } else {
-            unmappable_paths.push(pair);
+        match ta_result {
+            (Some(path), retries) => {
+                mapped.push(path);
+                overall_retries += retries;
+            }
+            (None, retries) => {
+                unmappable_paths.push(pair);
+                overall_retries += retries;
+            }
         }
     }
 
-    (mapped, unmappable_paths)
+    (mapped, unmappable_paths, overall_retries)
 }

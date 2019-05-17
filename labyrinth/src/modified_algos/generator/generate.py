@@ -80,7 +80,7 @@ target/release/threads-data-par inputs/{inp} --json -o data_par --runs {runs}"""
         for s in sizes:
             split_calls += """
 target/release/ohua-split{n} inputs/{inp} --json -o data_par --runs {runs}
-target/release/threads-data-par inputs/{inp} --json -o data_par -- runs {runs} -s {n}""".format(
+target/release/threads-data-par inputs/{inp} --json -o data_par --runs {runs} -s {n}""".format(
                 n=s, inp=inp, runs=runs)
         executions += split_calls
         executions += """
