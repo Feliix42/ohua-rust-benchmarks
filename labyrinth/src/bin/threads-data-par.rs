@@ -101,7 +101,7 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/thread-data-par-{}-p{}-t{}-r{}_log.json",
+            "{}/thread_data_par-{}-p{}-t{}-r{}_log.json",
             out_dir,
             dimensions,
             paths.len(),
