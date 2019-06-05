@@ -107,7 +107,7 @@ def main(args):
 
     for s in args[1:]:
         size = int(s)
-        assert (size > 1)
+        assert (size > 0)
 
         generate_ohuac(ohuac_template, size)
         generate_rustfile(rust_template, size)

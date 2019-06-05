@@ -141,14 +141,29 @@ fn main() {
     }
 }
 
-fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: usize) -> (Maze, usize) {
+fn route_paths(
+    mut maze: Maze,
+    mut to_map: Vec<(Point, Point)>,
+    thread_number: usize,
+) -> (Maze, usize) {
     let mut global_retries = 0;
     // partition the vec
-    let mut paths_to_map = vec![Vec::with_capacity(to_map.len() / thread_number); thread_number];
-    let mut splitter = 0;
-    for path in to_map.drain(..) {
-        paths_to_map[splitter].push(path);
-        splitter = (splitter + 1) % thread_number;
+    let l = to_map.len() / thread_number;
+    let mut rest = to_map.len() % thread_number;
+
+    let mut paths_to_map = vec![Vec::with_capacity(l); thread_number];
+
+    for t_num in 0..thread_number {
+        if rest > 0 {
+            paths_to_map[t_num] = to_map.split_off(to_map.len() - l - 1);
+            rest -= 1;
+        } else {
+            if to_map.len() <= l {
+                paths_to_map[t_num] = to_map.split_off(0);
+            } else {
+                paths_to_map[t_num] = to_map.split_off(to_map.len() - l);
+            }
+        }
     }
 
     let mut handles = Vec::new();
@@ -169,7 +184,10 @@ fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>, thread_number: u
 }
 
 /// Attempts to route the paths from `to_map` on he grid using STM.
-fn route(grid: &StmGrid, mut to_map: Vec<(Point, Point)>) -> (Vec<Path>, Vec<(Point, Point)>, usize) {
+fn route(
+    grid: &StmGrid,
+    mut to_map: Vec<(Point, Point)>,
+) -> (Vec<Path>, Vec<(Point, Point)>, usize) {
     let mut mapped = Vec::new();
     let mut unmappable_paths = Vec::new();
     let mut overall_retries = 0;

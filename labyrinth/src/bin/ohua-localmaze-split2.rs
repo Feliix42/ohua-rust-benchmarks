@@ -132,11 +132,22 @@ fn is_not_empty<T>(v: Vec<T>) -> bool {
 fn splitup(mut v: Vec<(Point, Point)>) -> (Vec<(Point, Point)>, Vec<(Point, Point)>) {
     let parts = 2;
 
-    let mut paths_to_map = vec![Vec::with_capacity(v.len() / parts); parts];
-    let mut splitter = 0;
-    for path in v.drain(..) {
-        paths_to_map[splitter].push(path);
-        splitter = (splitter + 1) % parts;
+    let l = v.len() / parts;
+    let mut rest = v.len() % parts;
+
+    let mut paths_to_map = vec![Vec::with_capacity(l); parts];
+
+    for t_num in 0..parts {
+        if rest > 0 {
+            paths_to_map[t_num] = v.split_off(v.len() - l - 1);
+            rest -= 1;
+        } else {
+            if v.len() <= l {
+                paths_to_map[t_num] = v.split_off(0);
+            } else {
+                paths_to_map[t_num] = v.split_off(v.len() - l);
+            }
+        }
     }
 
     (paths_to_map.pop().unwrap(), paths_to_map.pop().unwrap())
