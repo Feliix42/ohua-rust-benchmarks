@@ -84,7 +84,8 @@ fn main() {
         let start = PreciseTime::now();
 
         #[ohua]
-        let (filled_maze, (rollbacks, iteration_count)) = modified_algos::frequency(maze, paths2, updates);
+        let (filled_maze, (rollbacks, iteration_count)) =
+            modified_algos::frequency(maze, paths2, updates);
 
         let end = PreciseTime::now();
 

@@ -1,7 +1,7 @@
 #![feature(proc_macro_hygiene, fnbox)]
 use clap::{App, Arg};
 use labyrinth::parser;
-use labyrinth::types::{Field, Maze, Path, Point};
+use labyrinth::types::{Maze, Path, Point};
 use ohua_codegen::ohua;
 use ohua_runtime;
 use std::fs::{create_dir_all, File};
@@ -26,6 +26,7 @@ fn main() {
             .short("r")
             .takes_value(true)
             .help("The number of runs to conduct.")
+            .default_value("1")
         )
         .arg(
             Arg::with_name("json")
@@ -40,7 +41,15 @@ fn main() {
                 .help("Sets the output directory for JSON dumps")
                 .takes_value(true)
                 .default_value("results")
-                .requires("json")
+//                 .requires("json")
+        )
+        .arg(
+            Arg::with_name("freq")
+                .long("frequency")
+                .short("f")
+                .takes_value(true)
+                .help("The update frequency for the maze data structure. Determines, after how many mapped paths an update is attempted.")
+                .default_value("16")
         )
         .get_matches();
 
@@ -49,7 +58,10 @@ fn main() {
     let out_dir = matches.value_of("outdir").unwrap();
 
     // #runs
-    let runs = usize::from_str(matches.value_of("runs").unwrap_or("1")).unwrap();
+    let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();
+
+    // update frequency
+    let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
 
     // input location & parsing
     let input_file = matches.value_of("INPUT").unwrap();
@@ -57,6 +69,7 @@ fn main() {
 
     let mut results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
+    let mut collisions: Vec<u32> = Vec::with_capacity(runs);
 
     for _ in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -65,12 +78,12 @@ fn main() {
             println!("[INFO] Loaded maze data from file.");
         }
 
-        let start = PreciseTime::now();
-
         let paths2 = paths.clone();
 
+        let start = PreciseTime::now();
+
         #[ohua]
-        let filled_maze = modified_algos::transact_sequentialized(maze, paths2);
+        let (filled_maze, rollbacks) = modified_algos::split_frequency(maze, paths2, updates);
 
         let end = PreciseTime::now();
 
@@ -83,6 +96,7 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
+            collisions.push(rollbacks);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -92,10 +106,12 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua_sequentialized-{}-p{}-r{}_log.json",
+            "{}/ohua_split_freq--{}-p{}-freq{}-t{}-r{}_log.json",
             out_dir,
             dimensions,
             paths.len(),
+            updates,
+            "4",
             runs
         );
         let mut f = File::create(&filename).unwrap();
@@ -104,13 +120,18 @@ fn main() {
     \"configuration\": \"{conf}\",
     \"paths\": {paths},
     \"runs\": {runs},
+    \"workers\": 4,
+    \"update_frequency\": {freq}
     \"mapped\": {mapped:?},
+    \"collisions\": {collisions:?},
     \"results\": {res:?}
 }}",
             conf = dimensions,
             paths = paths.len(),
             runs = runs,
+            freq = updates,
             mapped = mapped_paths,
+            collisions = collisions,
             res = results
         ))
         .unwrap();
@@ -120,28 +141,58 @@ fn main() {
         println!("    Maze configuration: {}", dimensions);
         println!("    Paths overall:      {}", paths.len());
         println!("    Runs:               {}", runs);
+        println!("    Workers:            4");
+        println!("    Update frequency:   {}", updates);
         println!("    Mapped:             {:?}", mapped_paths);
+        println!("    Collisions:         {:?}", collisions);
         println!("\nRouting Time: {:?} ms", results);
     }
 }
 
-fn is_not_empty<T>(v: Vec<T>) -> bool {
-    !v.is_empty()
-}
+fn splitup(
+    mut v: Vec<(Point, Point)>,
+) -> (
+    Vec<(Point, Point)>,
+    Vec<(Point, Point)>,
+    Vec<(Point, Point)>,
+    Vec<(Point, Point)>,
+) {
+    let parts = 4;
 
-fn insert_path(p: Option<Path>, mut maze: Maze) -> Maze {
-    if let Some(path) = p {
-        for pt in &path.path {
-            maze.grid[pt.x][pt.y][pt.z] = Field::Used;
+    let l = v.len() / parts;
+    let mut rest = v.len() % parts;
+
+    let mut paths_to_map = vec![Vec::with_capacity(l); parts];
+
+    for t_num in 0..parts {
+        if rest > 0 {
+            paths_to_map[t_num] = v.split_off(v.len() - l - 1);
+            rest -= 1;
+        } else {
+            if v.len() <= l {
+                paths_to_map[t_num] = v.split_off(0);
+            } else {
+                paths_to_map[t_num] = v.split_off(v.len() - l);
+            }
         }
-
-        maze.paths.push(path);
     }
 
-    maze
+    (
+        paths_to_map.pop().unwrap(),
+        paths_to_map.pop().unwrap(),
+        paths_to_map.pop().unwrap(),
+        paths_to_map.pop().unwrap(),
+    )
 }
 
-fn get_one(mut v: Vec<(Point, Point)>) -> ((Point, Point), Vec<(Point, Point)>) {
-    let elem = v.pop().unwrap();
-    (elem, v)
+fn merge(
+    mut v1: Vec<Option<Path>>,
+    mut v2: Vec<Option<Path>>,
+    mut v3: Vec<Option<Path>>,
+    mut v4: Vec<Option<Path>>,
+) -> Vec<Option<Path>> {
+    v1.append(&mut v2);
+    v1.append(&mut v3);
+    v1.append(&mut v4);
+    v1
 }

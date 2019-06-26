@@ -1,5 +1,5 @@
 use crate::types::*;
-use stm::{StmResult, TVar, Transaction, StmError};
+use stm::{StmError, StmResult, TVar, Transaction};
 
 /// The grid the maze is set up in. Contains for every field the information about its state.
 pub type StmGrid = Vec<Vec<Vec<TVar<Field>>>>;
@@ -53,7 +53,7 @@ pub fn update_grid(grid: &StmGrid, path: &Path, transaction: &mut Transaction) -
         if at_stm_grid_coordinates(grid, pt, transaction)? == Field::Free {
             grid[pt.x][pt.y][pt.z].write(transaction, Field::Used)?;
         } else {
-            return Err(StmError::Retry)
+            return Err(StmError::Retry);
         }
     }
 

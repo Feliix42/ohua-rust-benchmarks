@@ -40,7 +40,7 @@ fn main() {
                 .help("Sets the output directory for JSON dumps")
                 .takes_value(true)
                 .default_value("results")
-                .requires("json")
+//                 .requires("json")
         )
         .get_matches();
 
@@ -57,8 +57,8 @@ fn main() {
 
     let mut results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
-    let mut collisions = Vec::with_capacity(runs);
-    let mut iterations = Vec::with_capacity(runs);
+    let mut collisions: Vec<usize> = Vec::with_capacity(runs);
+    let mut iterations: Vec<usize> = Vec::with_capacity(runs);
 
     for _ in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -72,7 +72,7 @@ fn main() {
         let paths2 = paths.clone();
 
         #[ohua]
-        let (filled_maze, (rollbacks, iteration_count)) = modified_algos::transact_split{_py_size_}(maze, paths2);
+        let filled_maze = modified_algos::transact_split{_py_size_}(maze, paths2);
 
         let end = PreciseTime::now();
 
@@ -85,8 +85,8 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
-            collisions.push(rollbacks);
-            iterations.push(iteration_count);
+            // collisions.push(rollbacks);
+            // iterations.push(iteration_count);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;

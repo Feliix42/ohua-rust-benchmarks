@@ -1,16 +1,16 @@
 ns some_ns;
 
 use sf crate::{splitup, join};
-use sf labyrinth::{increase, init_tup, is_not_empty, pack};
+use sf labyrinth::is_not_empty;
 use sf labyrinth::grid::update_maze;
 use sf labyrinth::pathfinder::find_path;
 
 // returns the mapped maze and a tuple (rollbacks, iterations)
-fn main(maze: Maze, to_map: Vec<(Point, Point)>) -> (Maze, (u32, u32)) {
-    transact(maze, to_map, init_tup())
+fn main(maze: Maze, to_map: Vec<(Point, Point)>) -> Maze {
+    transact(maze, to_map)
 }
 
-fn transact(maze: Maze, to_map: Vec<(Point, Point)>, rollbacks_iterations: (u32, u32)) -> (Maze, (u32, u32)) {
+fn transact(maze: Maze, to_map: Vec<(Point, Point)>) -> Maze {
     let ({tmlist}) = splitup(to_map);
 
 {pathparts}
@@ -19,13 +19,10 @@ fn transact(maze: Maze, to_map: Vec<(Point, Point)>, rollbacks_iterations: (u32,
 
     let (remap_paths, new_maze) = update_maze(maze, paths);
 
-    let ct = increase(rollbacks_iterations, remap_paths);
-    let ret = pack(new_maze, rollbacks_iterations);
-
     // simple check for len == 0
     if (is_not_empty(remap_paths)) {
-        transact(new_maze, remap_paths, ct)
+        transact(new_maze, remap_paths)
     } else {
-        ret
+        new_maze
     }
 }
