@@ -106,7 +106,7 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua_split_freq--{}-p{}-freq{}-t{}-r{}_log.json",
+            "{}/ohua_split_freq-{}-p{}-freq{}-t{}-r{}_log.json",
             out_dir,
             dimensions,
             paths.len(),
@@ -121,7 +121,7 @@ fn main() {
     \"paths\": {paths},
     \"runs\": {runs},
     \"workers\": 4,
-    \"update_frequency\": {freq}
+    \"update_frequency\": {freq},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
     \"results\": {res:?}
