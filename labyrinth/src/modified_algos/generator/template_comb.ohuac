@@ -6,18 +6,18 @@ use sf labyrinth::{inc_stats, is_not_empty, join, pack_stat, take_n};
 use sf labyrinth::pathfinder::find_path;
 
 // returns the mapped maze and a tuple (rollbacks, iterations)
-fn main(maze: Maze, to_map: Vec<(Point, Point)>) -> Maze {
-    transact(maze, to_map)
+fn main(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize) -> Maze {
+    transact(maze, to_map, frequency, 0)
 }
 
-fn transact(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, stats: u32) -> (Maze, usize) {
+fn transact(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, stats: usize) -> (Maze, usize) {
     let (points, still_to_map) = take_n(to_map, frequency);
 
     let ({tmlist}) = splitup(points);
 
 {pathparts}
 
-    let found_paths = join({partlist});
+    let found_paths = merge({partlist});
 
     // update the maze
     let (remap_paths, new_maze) = update_maze(maze, found_paths);

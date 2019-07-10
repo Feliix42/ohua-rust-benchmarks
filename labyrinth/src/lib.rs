@@ -20,10 +20,10 @@ pub fn increase(
 
 #[cfg(feature = "ohua")]
 pub fn inc_stats(
-    rollbacks: u32,
+    rollbacks: usize,
     remap_paths: Vec<(crate::types::Point, crate::types::Point)>,
-) -> u32 {
-    rollbacks + remap_paths.len() as u32
+) -> usize {
+    rollbacks + remap_paths.len()
 }
 
 #[cfg(feature = "ohua")]
@@ -32,7 +32,7 @@ pub fn pack(maze: crate::types::Maze, stats: (u32, u32)) -> (crate::types::Maze,
 }
 
 #[cfg(feature = "ohua")]
-pub fn pack_stat(maze: crate::types::Maze, stats: u32) -> (crate::types::Maze, u32) {
+pub fn pack_stat(maze: crate::types::Maze, stats: usize) -> (crate::types::Maze, usize) {
     (maze, stats)
 }
 

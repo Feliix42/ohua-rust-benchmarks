@@ -56,7 +56,7 @@ def generate_shellscript(sizes):
     # fixe frequencies
     frequencies = [1, 2, 3, 4, 5, 6, 7]
 
-    with open("./template.sh") as f:
+    with open("./template_comb.sh") as f:
         template = f.read()
 
     build_calls = ""
@@ -100,7 +100,7 @@ echo " done."
         for s in sizes:
             for f in frequencies:
                 split_calls += """
-target/release/split{n}-freq inputs/{inp} --json -o split_freq --runs {runs} -f {fr}
+target/release/ohua-split{n}-freq inputs/{inp} --json -o split_freq --runs {runs} -f {fr}
 echo -n "." """.format(
                 n=s, inp=inp, runs=runs, fr=int(f)*int(s))
             executions += split_calls
@@ -135,12 +135,12 @@ echo " done."
 
 def main(args):
     if len(args) < 2:
-        print("[Error] Too few arguments!\nUsage: ./generate.py [split sizes]")
+        print("[Error] Too few arguments!\nUsage: ./generate_combined.py [split sizes]")
         return
 
-    with open("./template.ohuac") as f:
+    with open("./template_comb.ohuac") as f:
         ohuac_template = f.read()
-    with open("./template.rs") as rf:
+    with open("./template_comb.rs") as rf:
         rust_template = rf.read()
 
     for s in args[1:]:
