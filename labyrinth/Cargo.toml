@@ -11,12 +11,15 @@ ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional
 # use patched version of rust-stm
 stm = { git = "https://github.com/feliix42/rust-stm", branch = "retry-count", optional = true }
 time = { version = "0.1", optional = true }
+tokio-threadpool = { version = "0.1.15", optional = true }
+futures = { version = "0.1", optional = true }
 
 [features]
 bench = ["time"]
 cli = ["clap"]
 ohua = ["ohua_codegen", "ohua_runtime"]
 transactional = ["stm"]
+future = ["ohua", "futures", "tokio-threadpool"]
 
 [[bin]]
 name = "simple_sequential"
@@ -32,3 +35,8 @@ required-features = ["ohua", "cli", "bench"]
 name = "stm"
 path = "src/bin/stm.rs"
 required-features = ["transactional", "cli", "bench"]
+
+[[bin]]
+name = "ohua_futures"
+path = "src/bin/ohua_futures.rs"
+required-features = ["ohua", "cli", "bench", "future"]
