@@ -26,5 +26,6 @@ Cargo.lock
 
 ### generated benchmark files ###
 labyrinth/src/modified_algos/transact_split*.ohuac
+labyrinth/src/modified_algos/split*_frequency.ohuac
 labyrinth/src/bin/ohua-split*.rs
 labyrinth/bench-split-versions.sh

@@ -2,7 +2,6 @@ ns some_ns;
 
 use sf labyrinth::grid::update_maze;
 use sf labyrinth::{inc_stats, is_not_empty, pack_stat, take_n, join};
-use sf labyrinth::pathfinder::find_path;
 use sf crate::{collect_and_shutdown, spawn_onto_pool, split_evenly};
 
 fn main(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, threadcount: usize, taskcount: usize) -> (Maze, usize) {
@@ -14,13 +13,13 @@ fn transact(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, threadcou
     let (points, still_to_map) = take_n(to_map, frequency);
 
     // worklist aufsplitten
-    let worklist = split_evenly(points, frequency, taskcount);
+    let worklist = split_evenly(points, taskcount);
 
     // threadpool erzeugen und threads spawnen, pool und handles zurück
-    let (pool, handles) = spawn_onto_pool(worklist, threadcount, taskcount);
+    let tokio_stuff = spawn_onto_pool(worklist, maze, threadcount);
 
     // handles collecten, shutdown auf pool callen
-    let paths = collect_and_shutdown(pool, handles);
+    let paths = collect_and_shutdown(tokio_stuff);
 
 
     let (remap_paths, new_maze) = update_maze(maze, paths);

@@ -1,6 +1,8 @@
 #![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
+use futures::future::{Future, ok};
 use labyrinth::parser;
+use labyrinth::pathfinder::find_path;
 use labyrinth::types::{Maze, Path, Point};
 use ohua_codegen::ohua;
 use ohua_runtime;
@@ -8,6 +10,7 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
+use tokio_threadpool::{Builder, SpawnHandle, ThreadPool};
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -86,7 +89,7 @@ fn main() {
 
     let mut results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
-    let mut collisions: Vec<u32> = Vec::with_capacity(runs);
+    let mut collisions: Vec<usize> = Vec::with_capacity(runs);
 
     for r in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -100,12 +103,13 @@ fn main() {
         let start = PreciseTime::now();
 
         #[ohua]
-        let (filled_maze, rollbacks) = modified_algos::futures(maze, paths2, updates);
+        let (filled_maze, rollbacks) =
+            modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
 
         let end = PreciseTime::now();
 
         if !json_dump {
-            println!("[INFO] Routing run {} complete.", r);
+            println!("[INFO] Routing run {} complete.", r+1);
         }
 
         let runtime_ms = start.to(end).num_milliseconds();
@@ -171,10 +175,57 @@ fn main() {
     }
 }
 
-fn split_evenly(points: Vec<(Point, Point)>, freq: usize, taskcount: usize) -> Vec<(Point, Point)> {
-    unimplemented!()
+/// Splits the input vector into evenly sized vectors for `taskcount` workers.
+fn split_evenly(mut points: Vec<(Point, Point)>, taskcount: usize) -> Vec<Vec<(Point, Point)>> {
+    let l = points.len() / taskcount;
+    let mut rest = points.len() % taskcount;
+
+    let mut paths_to_map = vec![Vec::with_capacity(l); taskcount];
+
+    for t_num in 0..taskcount {
+        if rest > 0 {
+            paths_to_map[t_num] = points.split_off(points.len() - l - 1);
+            rest -= 1;
+        } else {
+            if points.len() <= l {
+                paths_to_map[t_num] = points.split_off(0);
+            } else {
+                paths_to_map[t_num] = points.split_off(points.len() - l);
+            }
+        }
+    }
+
+    paths_to_map
 }
 
-fn spawn_onto_pool(worklist: Vec<(Point, Point)>, threadcount: usize, taskcount: usize) {
-    unimplemented!()
+fn vec_pathfind(maze: Maze, mut points: Vec<(Point, Point)>) -> Vec<Option<Path>> {
+    points.drain(..).map(|p| find_path(&maze, p)).collect()
+}
+
+fn spawn_onto_pool(
+    mut worklist: Vec<Vec<(Point, Point)>>,
+    maze: Maze,
+    threadcount: usize,
+) -> (ThreadPool, Vec<SpawnHandle<Vec<Option<Path>>, ()>>) {
+    let pool = Builder::new().pool_size(threadcount).build();
+    let mut handles = Vec::with_capacity(worklist.len());
+
+    for lst in worklist.drain(..) {
+        let m = maze.clone();
+        handles.push(pool.spawn_handle(ok::<_, ()>(vec_pathfind(m, lst))));
+    }
+
+    (pool, handles)
+}
+
+fn collect_and_shutdown(
+    tokio_data: (ThreadPool, Vec<SpawnHandle<Vec<Option<Path>>, ()>>),
+) -> Vec<Option<Path>> {
+    let (pool, mut handles) = tokio_data;
+
+    let results = handles.drain(..).map(|h| h.wait().unwrap()).flatten().collect();
+
+    pool.shutdown().wait().unwrap();
+
+    results
 }
