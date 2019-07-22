@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, fnbox)]
+#![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
 use labyrinth::parser;
 use labyrinth::types::{Maze, Path, Point};
