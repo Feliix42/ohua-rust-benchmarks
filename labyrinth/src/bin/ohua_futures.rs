@@ -1,6 +1,6 @@
 #![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
-use futures::future::{Future, ok};
+use futures::future::{Future, ok, lazy};
 use labyrinth::parser;
 use labyrinth::pathfinder::find_path;
 use labyrinth::types::{Maze, Path, Point};
@@ -215,7 +215,7 @@ fn spawn_onto_pool(
         let m = maze.clone();
         let (sx, rx) = mpsc::channel();
 
-        rt.spawn(ok::<_, ()>(sx.send(vec_pathfind(m, lst)).unwrap()));
+        rt.spawn(lazy(move || ok::<_, ()>(sx.send(vec_pathfind(m, lst)).unwrap())));
 
         handles.push(rx);
     }
