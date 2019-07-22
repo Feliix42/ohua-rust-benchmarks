@@ -8,9 +8,10 @@ use ohua_codegen::ohua;
 use ohua_runtime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
+use std::sync::mpsc::{Receiver, self};
 use std::str::FromStr;
 use time::PreciseTime;
-use tokio_threadpool::{Builder, SpawnHandle, ThreadPool};
+use tokio::runtime::{Builder, Runtime};
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -206,26 +207,31 @@ fn spawn_onto_pool(
     mut worklist: Vec<Vec<(Point, Point)>>,
     maze: Maze,
     threadcount: usize,
-) -> (ThreadPool, Vec<SpawnHandle<Vec<Option<Path>>, ()>>) {
-    let pool = Builder::new().pool_size(threadcount).build();
+) -> (Runtime, Vec<Receiver<Vec<Option<Path>>>>) {
+    let mut rt = Builder::new().core_threads(threadcount).build().unwrap();
     let mut handles = Vec::with_capacity(worklist.len());
 
     for lst in worklist.drain(..) {
         let m = maze.clone();
-        handles.push(pool.spawn_handle(ok::<_, ()>(vec_pathfind(m, lst))));
+        let (sx, rx) = mpsc::channel();
+
+        rt.spawn(ok::<_, ()>(sx.send(vec_pathfind(m, lst)).unwrap()));
+
+        handles.push(rx);
     }
 
-    (pool, handles)
+    (rt, handles)
 }
 
 fn collect_and_shutdown(
-    tokio_data: (ThreadPool, Vec<SpawnHandle<Vec<Option<Path>>, ()>>),
+    tokio_data: (Runtime, Vec<Receiver<Vec<Option<Path>>>>),
 ) -> Vec<Option<Path>> {
-    let (pool, mut handles) = tokio_data;
+    let (rt, mut handles) = tokio_data;
 
-    let results = handles.drain(..).map(|h| h.wait().unwrap()).flatten().collect();
+    // moved up
+    rt.shutdown_on_idle().wait().unwrap();
 
-    pool.shutdown().wait().unwrap();
+    let results = handles.drain(..).map(|h| h.recv().unwrap()).flatten().collect();
 
     results
 }
