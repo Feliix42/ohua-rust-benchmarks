@@ -8,7 +8,6 @@ use ohua_codegen::ohua;
 use ohua_runtime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{Receiver, self};
 use std::str::FromStr;
 use time::PreciseTime;
@@ -106,7 +105,7 @@ fn main() {
 
         #[ohua]
         let (filled_maze, rollbacks) =
-            modified_algos::futures_opt(maze, paths2, updates, threadcount, taskcount);
+            modified_algos::futures_one_less_op(maze, paths2, updates, threadcount, taskcount);
 
         let end = PreciseTime::now();
 
@@ -184,9 +183,9 @@ fn vec_pathfind(maze: Maze, mut points: Vec<(Point, Point)>) -> Vec<Option<Path>
 fn spawn_onto_pool(
     mut points: Vec<(Point, Point)>,
     maze: Maze,
-    runtime: Arc<Mutex<Runtime>>,
+    threadcount: usize,
     taskcount: usize,
-) -> Vec<Receiver<Vec<Option<Path>>>> {
+) -> (Runtime, Vec<Receiver<Vec<Option<Path>>>>) {
     // split worklist evenly
     let l = points.len() / taskcount;
     let mut rest = points.len() % taskcount;
@@ -206,7 +205,8 @@ fn spawn_onto_pool(
         }
     }
 
-    let mut rt = runtime.lock().unwrap();
+    // construct pool
+    let mut rt = Builder::new().core_threads(threadcount).build().unwrap();
     let mut handles = Vec::with_capacity(worklist.len());
 
     for lst in worklist.drain(..) {
@@ -218,15 +218,18 @@ fn spawn_onto_pool(
         handles.push(rx);
     }
 
-    handles
+    (rt, handles)
 }
 
-fn collect(
-    mut handles: Vec<Receiver<Vec<Option<Path>>>>,
+fn collect_and_shutdown(
+    tokio_data: (Runtime, Vec<Receiver<Vec<Option<Path>>>>),
 ) -> Vec<Option<Path>> {
-    handles.drain(..).map(|h| h.recv().unwrap()).flatten().collect()
-}
+    let (rt, mut handles) = tokio_data;
 
-fn build_runtime(threadcount: usize) -> Arc<Mutex<Runtime>> {
-    Arc::new(Mutex::new(Builder::new().core_threads(threadcount).build().unwrap()))
+    // moved up
+    rt.shutdown_on_idle().wait().unwrap();
+
+    let results = handles.drain(..).map(|h| h.recv().unwrap()).flatten().collect();
+
+    results
 }
