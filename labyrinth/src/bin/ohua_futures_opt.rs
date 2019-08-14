@@ -129,7 +129,7 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua_futures-{}-p{}-freq{}-t{}-ts{}-r{}_log.json",
+            "{}/ohua_futures_opt-{}-p{}-freq{}-t{}-ts{}-r{}_log.json",
             out_dir,
             dimensions,
             paths.len(),
