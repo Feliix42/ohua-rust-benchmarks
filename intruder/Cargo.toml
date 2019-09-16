@@ -1,0 +1,29 @@
+[package]
+name = "intruder"
+version = "0.1.0"
+authors = ["Felix Wittwer <dev@felixwittwer.de>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand_chacha = "0.2"
+clap = { version = "2.32", optional = true }
+ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
+ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
+# use patched version of rust-stm
+stm = { git = "https://github.com/feliix42/rust-stm", branch = "retry-count", optional = true }
+time = { version = "0.1", optional = true }
+tokio = { version = "0.1.22", optional = true }
+futures = { version = "0.1", optional = true }
+
+[features]
+cli = ["time", "clap"]
+ohua = ["ohua_codegen", "ohua_runtime"]
+transactional = ["stm"]
+future = ["ohua", "futures", "tokio"]
+
+[[bin]]
+name = "sequential"
+path = "src/bin/seq.rs"
+required-features = ["cli"]
