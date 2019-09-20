@@ -1,4 +1,4 @@
-use crate::detector::{ATTACK_WORDLIST, DetectorResult};
+use crate::detector::{DetectorResult, ATTACK_WORDLIST};
 use rand_chacha::rand_core::{RngCore, SeedableRng};
 use rand_chacha::ChaCha12Rng;
 use std::collections::{HashSet, VecDeque};
@@ -14,7 +14,11 @@ pub struct Packet {
     pub data: String,
 }
 
-fn split_into_packets(mut flow: String, flow_number: usize, rng: &mut ChaCha12Rng) -> VecDeque<Packet> {
+fn split_into_packets(
+    mut flow: String,
+    flow_number: usize,
+    rng: &mut ChaCha12Rng,
+) -> VecDeque<Packet> {
     let flow_length = flow.len();
     // number of packets to generate from this flow (randomly chosen)
     let packets_in_flow = rng.next_u32() as usize % flow_length + 1;
@@ -55,7 +59,7 @@ pub fn generate_stream(
     attack_percentage: u8,
     max_packet_len: u64,
     seed: u64,
-) -> VecDeque<Packet> {
+) -> (VecDeque<Packet>, HashSet<usize>) {
     // this is just asserted to be safe and b/c this is outside the benchmark itself
     assert!(attack_percentage <= 100);
 
@@ -105,5 +109,5 @@ pub fn generate_stream(
         stream.swap(i, j);
     }
 
-    stream
+    (stream, attacks)
 }
