@@ -18,7 +18,7 @@ pub enum DetectorResult {
 pub fn run_detector(flow: &str) -> DetectorResult {
     // run preprocessing
     let tmp = flow.to_lowercase();
-    // TODO: Originally, the authors also envisioned normalization from escape
+    // FIXME: Originally, the authors also envisioned normalization from escape
     // sequences, however this was not used in the benchmark code from STAMP
 
     // run the signature detection

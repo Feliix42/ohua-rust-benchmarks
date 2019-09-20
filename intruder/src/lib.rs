@@ -6,7 +6,41 @@ use std::iter::FromIterator;
 
 mod detector;
 
-pub type Packet = String;
+pub struct Packet {
+    pub flow_id: usize,
+    pub fragment_id: usize,
+    pub packets_in_flow: usize,
+    pub length: usize,
+    pub data: String,
+}
+
+fn split_into_packets(mut flow: String, flow_number: usize, rng: &mut ChaCha12Rng) -> VecDeque<Packet> {
+    let flow_length = flow.len();
+    // number of packets to generate from this flow (randomly chosen)
+    let packets_in_flow = rng.next_u32() as usize % flow_length + 1;
+    let fragment_length = (flow_length / packets_in_flow) as usize;
+
+    let mut packets = VecDeque::with_capacity(packets_in_flow);
+
+    for fid in 0..packets_in_flow {
+        let mut fragment = flow;
+        flow = if fragment_length < fragment.len() {
+            fragment.split_off(fragment_length)
+        } else {
+            fragment.split_off(fragment.len())
+        };
+
+        packets.push_back(Packet {
+            flow_id: flow_number,
+            fragment_id: fid,
+            packets_in_flow,
+            length: fragment.len(),
+            data: fragment,
+        });
+    }
+
+    packets
+}
 
 /// Generate a packet stream that is to be used as input for the intruder
 /// detection algorithm.
@@ -59,7 +93,16 @@ pub fn generate_stream(
             generated
         };
 
-        // TODO: split into packets
+        // split into packets
+        stream.append(&mut split_into_packets(flow, flow_number, &mut rng));
+    }
+
+    // Shuffle the vec by applying [#element] in-place swaps
+    let stream_length = stream.len();
+    for _ in 0..stream_length {
+        let i = rng.next_u32() as usize % stream_length;
+        let j = rng.next_u32() as usize % stream_length;
+        stream.swap(i, j);
     }
 
     stream
