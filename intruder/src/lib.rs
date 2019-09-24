@@ -4,7 +4,8 @@ use rand_chacha::ChaCha12Rng;
 use std::collections::{HashSet, VecDeque};
 use std::iter::FromIterator;
 
-mod detector;
+pub mod decoder;
+pub mod detector;
 
 pub struct Packet {
     pub flow_id: usize,

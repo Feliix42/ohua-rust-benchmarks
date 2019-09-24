@@ -1,4 +1,6 @@
 use clap::{App, Arg};
+use intruder::decoder::{decode_packet, DecoderState};
+use intruder::detector::{run_detector, DetectorResult};
 use intruder::*;
 use std::collections::VecDeque;
 use std::str::FromStr;
@@ -71,7 +73,12 @@ fn main() {
     let runtime_ms = start.to(end).num_milliseconds();
 
     // verify correctness
+    if result.len() != attacks.len() {
+        println!("[ERROR] Output verification failed. An incorrect number of attacks has been found. ({}/{})", result.len(), attacks.len());
+    }
+
     // note time
+    println!("[INFO] Run completed in {} ms.", runtime_ms);
 }
 
 /// Function that analyzes the incoming packet stream. The "benchmark" itself.
@@ -79,8 +86,20 @@ fn main() {
 ///
 /// Returns a Vec of flow IDs that contained an attack for later check
 fn analyze_stream(mut packets: VecDeque<Packet>) -> Vec<usize> {
-    unimplemented!()
-    // get a single packet from the input stream (here a loop?)
-    // decode the data (stateful!)
-    // process the output (run the detector)
+    let mut found_attacks = Vec::new();
+    let mut state = DecoderState::new();
+
+    for packet in packets.drain(..) {
+        // decode the data (state!) --> decoder.c
+        if let Some(decoded_flow) = decode_packet(packet, &mut state) {
+            // process the output -> run the detector
+            if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
+                found_attacks.push(decoded_flow.flow_id);
+            }
+        }
+    }
+
+    assert!(state.fragments_map.is_empty());
+
+    found_attacks
 }
