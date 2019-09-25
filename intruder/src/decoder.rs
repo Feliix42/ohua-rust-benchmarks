@@ -1,6 +1,7 @@
 use crate::Packet;
 use std::collections::HashMap;
 
+#[derive(PartialEq, Debug)]
 pub struct DecodedPacket {
     pub flow_id: usize,
     pub data: String,
@@ -32,8 +33,8 @@ pub fn decode_packet(packet: Packet, state: &mut DecoderState) -> Option<Decoded
         // insert the current element into the queue
         let idx = decoded
             .iter()
-            .position(|p| p.fragment_id > packet.fragment_id)
-            .unwrap_or(0);
+            .position(|p| packet.fragment_id < p.fragment_id)
+            .unwrap_or(decoded.len());
         decoded.insert(idx, packet);
 
         // reassemble the flow if all fragments are present
@@ -60,5 +61,48 @@ pub fn decode_packet(packet: Packet, state: &mut DecoderState) -> Option<Decoded
             flow_id: packet.flow_id,
             data: packet.data,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Packet;
+
+    #[test]
+    fn basic_decoding() {
+        let inp1 = Packet {
+            flow_id: 42,
+            fragment_id: 1,
+            packets_in_flow: 3,
+            length: 1,
+            data: "w".into(),
+        };
+        let inp2 = Packet {
+            flow_id: 42,
+            fragment_id: 0,
+            packets_in_flow: 3,
+            length: 1,
+            data: "t".into(),
+        };
+        let inp3 = Packet {
+            flow_id: 42,
+            fragment_id: 2,
+            packets_in_flow: 3,
+            length: 1,
+            data: "o".into(),
+        };
+
+        let mut dec = DecoderState::new();
+
+        assert_eq!(decode_packet(inp1, &mut dec), None);
+        assert_eq!(decode_packet(inp2, &mut dec), None);
+        assert_eq!(
+            decode_packet(inp3, &mut dec),
+            Some(DecodedPacket {
+                flow_id: 42,
+                data: "two".into()
+            })
+        );
     }
 }
