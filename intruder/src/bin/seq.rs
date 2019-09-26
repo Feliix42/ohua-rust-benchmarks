@@ -43,6 +43,28 @@ fn main() {
                 .takes_value(true)
                 .default_value("1")
         )
+        .arg(
+            Arg::with_name("runs")
+                .long("runs")
+                .short("r")
+                .takes_value(true)
+                .help("The number of runs to conduct.")
+                .default_value("1")
+        )
+        .arg(
+            Arg::with_name("json")
+                .long("json")
+                .short("j")
+                .help("Dump results as JSON file.")
+        )
+        .arg(
+            Arg::with_name("outdir")
+                .long("outdir")
+                .short("o")
+                .help("Sets the output directory for JSON dumps")
+                .takes_value(true)
+                .default_value("results")
+        )
         .get_matches();
 
     // parse benchmark parameters
@@ -55,6 +77,12 @@ fn main() {
     let rng_seed = u64::from_str(matches.value_of("seed").unwrap())
         .expect("provided invalid input for `seed`");
 
+    // parse runtime parameters
+    let runs =
+        usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
+    let json_dump = matches.is_present("json");
+    let out_dir = matches.value_of("outdir").unwrap();
+
     // generate the input data
     let (input, attacks) = generate_stream(flowcount, attack_percentage, max_packet_len, rng_seed);
     println!(
@@ -62,23 +90,51 @@ fn main() {
         attacks.len()
     );
 
-    // start the clock
-    let start = PreciseTime::now();
+    let mut results = Vec::with_capacity(runs);
 
-    // run the algorithm
-    let result = analyze_stream(input);
+    for r in 0..runs {
+        // start the clock
+        let start = PreciseTime::now();
 
-    // stop the clock
-    let end = PreciseTime::now();
-    let runtime_ms = start.to(end).num_milliseconds();
+        // run the algorithm
+        let result = analyze_stream(input.clone());
 
-    // verify correctness
-    if result.len() != attacks.len() {
-        println!("[ERROR] Output verification failed. An incorrect number of attacks has been found. ({}/{})", result.len(), attacks.len());
+        // stop the clock
+        let end = PreciseTime::now();
+        let runtime_ms = start.to(end).num_milliseconds();
+
+        if !json_dump {
+            println!("[INFO] Routing run {} completed.", r + 1);
+        }
+
+        // verify correctness
+        if result.len() != attacks.len() {
+            // TODO: Debug only!
+            let mut tmp = attacks.clone();
+            result.iter().map(|elem| tmp.remove(elem)).collect::<Vec<bool>>();
+
+            println!("{}", tmp.iter().nth(1).unwrap());
+
+            println!("[ERROR] Output verification failed. An incorrect number of attacks has been found. ({}/{})", result.len(), attacks.len());
+        } else {
+            results.push(runtime_ms);
+        }
     }
 
     // note time
-    println!("[INFO] Run completed in {} ms.", runtime_ms);
+    if json_dump {
+        unimplemented!()
+    } else {
+        println!("[INFO] All runs completed successfully.");
+        println!("\nStatistics:");
+        println!("    Number of flows:       {}", flowcount);
+        println!("    Percentage of attacks: {}%", attack_percentage);
+        println!("    PRNG seed:             {}", rng_seed);
+        println!("    Maximal Packet Length: {}", max_packet_len);
+        println!("    Generated Attacks:     {}", attacks.len());
+        println!("    Runs:                  {}", runs);
+        println!("\nRuntime in ms: {:?}", results);
+    }
 }
 
 /// Function that analyzes the incoming packet stream. The "benchmark" itself.

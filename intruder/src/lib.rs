@@ -7,6 +7,7 @@ use std::iter::FromIterator;
 pub mod decoder;
 pub mod detector;
 
+#[derive(Clone)]
 pub struct Packet {
     pub flow_id: usize,
     pub fragment_id: usize,
@@ -29,7 +30,7 @@ fn split_into_packets(
 
     for fid in 0..packets_in_flow {
         let mut fragment = flow;
-        flow = if fragment_length < fragment.len() {
+        flow = if fid != (packets_in_flow - 1) {
             fragment.split_off(fragment_length)
         } else {
             fragment.split_off(fragment.len())
