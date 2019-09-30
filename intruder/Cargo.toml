@@ -27,3 +27,8 @@ future = ["ohua", "futures", "tokio"]
 name = "sequential"
 path = "src/bin/seq.rs"
 required-features = ["cli"]
+
+[[bin]]
+name = "stm"
+path = "src/bin/stm.rs"
+required-features = ["transactional", "cli"]
