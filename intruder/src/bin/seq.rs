@@ -3,6 +3,8 @@ use intruder::decoder::{decode_packet, DecoderState};
 use intruder::detector::{run_detector, DetectorResult};
 use intruder::*;
 use std::collections::VecDeque;
+use std::fs::{create_dir_all, File};
+use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
 
@@ -85,19 +87,24 @@ fn main() {
 
     // generate the input data
     let (input, attacks) = generate_stream(flowcount, attack_percentage, max_packet_len, rng_seed);
-    println!(
-        "[INFO] Generated flows containing an attack: {}",
-        attacks.len()
-    );
+    if !json_dump {
+        println!(
+            "[INFO] Generated flows containing an attack: {}",
+            attacks.len()
+        );
+    }
 
     let mut results = Vec::with_capacity(runs);
 
     for r in 0..runs {
+        // prepare the data for the run
+        let input_data = input.clone();
+
         // start the clock
         let start = PreciseTime::now();
 
         // run the algorithm
-        let result = analyze_stream(input.clone());
+        let result = analyze_stream(input_data);
 
         // stop the clock
         let end = PreciseTime::now();
@@ -109,11 +116,11 @@ fn main() {
 
         // verify correctness
         if result.len() != attacks.len() {
-            // TODO: Debug only!
-            let mut tmp = attacks.clone();
-            result.iter().map(|elem| tmp.remove(elem)).collect::<Vec<bool>>();
+            // // TODO: Debug only!
+            // let mut tmp = attacks.clone();
+            // result.iter().map(|elem| tmp.remove(elem)).collect::<Vec<bool>>();
 
-            println!("{}", tmp.iter().nth(1).unwrap());
+            // println!("{}", tmp.iter().nth(1).unwrap());
 
             println!("[ERROR] Output verification failed. An incorrect number of attacks has been found. ({}/{})", result.len(), attacks.len());
         } else {
@@ -123,7 +130,31 @@ fn main() {
 
     // note time
     if json_dump {
-        unimplemented!()
+        create_dir_all(out_dir).unwrap();
+        let filename = format!(
+            "{}/seq-n{}-p{}-s{}-pl{}-r{}_log.json",
+            out_dir, flowcount, attack_percentage, rng_seed, max_packet_len, runs
+        );
+        let mut f = File::create(&filename).unwrap();
+        f.write_fmt(format_args!(
+            "{{
+    \"flow_count\": {flows},
+    \"attack_percentage\": {attack_perc},
+    \"attack_count\": {attacks},
+    \"runs\": {runs},
+    \"prng_seed\": {seed},
+    \"max_packet_len\": {packet_len},
+    \"results\": {res:?}
+}}",
+            flows = flowcount,
+            attack_perc = attack_percentage,
+            attacks = attacks.len(),
+            runs = runs,
+            seed = rng_seed,
+            packet_len = max_packet_len,
+            res = results
+        ))
+        .unwrap();
     } else {
         println!("[INFO] All runs completed successfully.");
         println!("\nStatistics:");

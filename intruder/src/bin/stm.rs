@@ -3,11 +3,14 @@ use intruder::decoder::{decode_packet, DecoderState};
 use intruder::detector::{run_detector, DetectorResult};
 use intruder::*;
 use std::collections::VecDeque;
+use std::fs::{create_dir_all, File};
+use std::io::Write;
 use std::str::FromStr;
+use stm::{atomically, TVar};
 use time::PreciseTime;
 
 fn main() {
-    let matches = App::new("Sequential Intruder Benchmark")
+    let matches = App::new("STM Intruder Benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
         .about("A Rust port of the intruder benchmark from the STAMP collection, implemented in software transactional memeory.")
@@ -90,23 +93,29 @@ fn main() {
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
-    let threads = usize::from_str(matches.value_of("threads").unwrap()).expect("Could not parse number of threads");
+    let threads = usize::from_str(matches.value_of("threads").unwrap())
+        .expect("Could not parse number of threads");
 
     // generate the input data
     let (input, attacks) = generate_stream(flowcount, attack_percentage, max_packet_len, rng_seed);
-    println!(
-        "[INFO] Generated flows containing an attack: {}",
-        attacks.len()
-    );
+    if !json_dump {
+        println!(
+            "[INFO] Generated flows containing an attack: {}",
+            attacks.len()
+        );
+    }
 
     let mut results = Vec::with_capacity(runs);
 
     for r in 0..runs {
+        // prepare the data for the run
+        let input_data = TVar::new(input.clone());
+
         // start the clock
         let start = PreciseTime::now();
 
         // run the algorithm
-        let result = analyze_stream(input.clone());
+        let result = analyze_stream(input_data);
 
         // stop the clock
         let end = PreciseTime::now();
@@ -118,12 +127,6 @@ fn main() {
 
         // verify correctness
         if result.len() != attacks.len() {
-            // TODO: Debug only!
-            let mut tmp = attacks.clone();
-            result.iter().map(|elem| tmp.remove(elem)).collect::<Vec<bool>>();
-
-            println!("{}", tmp.iter().nth(1).unwrap());
-
             println!("[ERROR] Output verification failed. An incorrect number of attacks has been found. ({}/{})", result.len(), attacks.len());
         } else {
             results.push(runtime_ms);
@@ -132,7 +135,33 @@ fn main() {
 
     // note time
     if json_dump {
-        unimplemented!()
+        create_dir_all(out_dir).unwrap();
+        let filename = format!(
+            "{}/stm-n{}-p{}-s{}-pl{}-t{}-r{}_log.json",
+            out_dir, flowcount, attack_percentage, rng_seed, max_packet_len, threads, runs
+        );
+        let mut f = File::create(&filename).unwrap();
+        f.write_fmt(format_args!(
+            "{{
+    \"flow_count\": {flows},
+    \"attack_percentage\": {attack_perc},
+    \"attack_count\": {attacks},
+    \"runs\": {runs},
+    \"prng_seed\": {seed},
+    \"max_packet_len\": {packet_len},
+    \"threadcount\": {threadcount},
+    \"results\": {res:?}
+}}",
+            flows = flowcount,
+            attack_perc = attack_percentage,
+            attacks = attacks.len(),
+            runs = runs,
+            seed = rng_seed,
+            packet_len = max_packet_len,
+            threadcount = threads,
+            res = results
+        ))
+        .unwrap();
     } else {
         println!("[INFO] All runs completed successfully.");
         println!("\nStatistics:");
@@ -141,6 +170,7 @@ fn main() {
         println!("    PRNG seed:             {}", rng_seed);
         println!("    Maximal Packet Length: {}", max_packet_len);
         println!("    Generated Attacks:     {}", attacks.len());
+        println!("    Threads used:          {}", threads);
         println!("    Runs:                  {}", runs);
         println!("\nRuntime in ms: {:?}", results);
     }
@@ -150,20 +180,45 @@ fn main() {
 /// Everything inside this function is being timed.
 ///
 /// Returns a Vec of flow IDs that contained an attack for later check
-fn analyze_stream(mut packets: VecDeque<Packet>) -> Vec<usize> {
+fn analyze_stream(
+    packets: TVar<VecDeque<Packet>>,
+    decoder_state: TVar<DecoderState>,
+) -> Vec<usize> {
     let mut found_attacks = Vec::new();
-    let mut state = DecoderState::new();
 
-    for packet in packets.drain(..) {
-        // decode the data (state!) --> decoder.c
-        if let Some(decoded_flow) = decode_packet(packet, &mut state) {
-            // process the output -> run the detector
-            if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
-                found_attacks.push(decoded_flow.flow_id);
+    loop {
+        let packet = atomically(|trans| {
+            let mut v = packets.read(trans)?;
+            if v.len() == 0 {
+                Ok(None)
+            } else {
+                let r = v.pop_front().unwrap();
+                packets.write(trans, v)?;
+                Ok(Some(r))
             }
+        });
+
+        // TODO:
+        // - Adapt the decoder
+        // - finish impl below
+
+        if let Some(p) = packet {
+            // do the algorithm
+        } else {
+            break;
         }
+        // for packet in packets.drain(..) {
+        //     // decode the data (state!) --> decoder.c
+        //     if let Some(decoded_flow) = decode_packet(packet, &mut state) {
+        //         // process the output -> run the detector
+        //         if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
+        //             found_attacks.push(decoded_flow.flow_id);
+        //         }
+        //     }
+        // }
     }
 
+    // TODO: State verification
     assert!(state.fragments_map.is_empty());
 
     found_attacks
