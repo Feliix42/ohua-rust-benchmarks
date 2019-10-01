@@ -1,11 +1,6 @@
+use super::DecodedPacket;
 use crate::Packet;
 use std::collections::HashMap;
-
-#[derive(PartialEq, Debug)]
-pub struct DecodedPacket {
-    pub flow_id: usize,
-    pub data: String,
-}
 
 pub struct DecoderState {
     pub fragments_map: HashMap<usize, Vec<Packet>>,

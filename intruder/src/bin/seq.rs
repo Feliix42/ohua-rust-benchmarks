@@ -1,5 +1,5 @@
 use clap::{App, Arg};
-use intruder::decoder::{decode_packet, DecoderState};
+use intruder::decoder::simple::{decode_packet, DecoderState};
 use intruder::detector::{run_detector, DetectorResult};
 use intruder::*;
 use std::collections::VecDeque;

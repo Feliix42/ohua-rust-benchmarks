@@ -1,11 +1,12 @@
 use clap::{App, Arg};
-use intruder::decoder::{decode_packet, DecoderState};
+use intruder::decoder::stm_decoder::{decode_packet, StmDecoderState};
 use intruder::detector::{run_detector, DetectorResult};
 use intruder::*;
 use std::collections::VecDeque;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
+use std::thread;
 use stm::{atomically, TVar};
 use time::PreciseTime;
 
@@ -115,7 +116,7 @@ fn main() {
         let start = PreciseTime::now();
 
         // run the algorithm
-        let result = analyze_stream(input_data);
+        let result = run_eval(input_data, threads);
 
         // stop the clock
         let end = PreciseTime::now();
@@ -180,10 +181,7 @@ fn main() {
 /// Everything inside this function is being timed.
 ///
 /// Returns a Vec of flow IDs that contained an attack for later check
-fn analyze_stream(
-    packets: TVar<VecDeque<Packet>>,
-    decoder_state: TVar<DecoderState>,
-) -> Vec<usize> {
+fn analyze_stream(packets: TVar<VecDeque<Packet>>, decoder_state: StmDecoderState) -> Vec<usize> {
     let mut found_attacks = Vec::new();
 
     loop {
@@ -198,28 +196,44 @@ fn analyze_stream(
             }
         });
 
-        // TODO:
-        // - Adapt the decoder
-        // - finish impl below
-
         if let Some(p) = packet {
             // do the algorithm
+            let decoder_result = atomically(|trans2| decode_packet(&p, &decoder_state, trans2));
+            if let Some(decoded_flow) = decoder_result {
+                // process the output -> run the detector
+                if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
+                    found_attacks.push(decoded_flow.flow_id);
+                }
+            }
         } else {
             break;
         }
-        // for packet in packets.drain(..) {
-        //     // decode the data (state!) --> decoder.c
-        //     if let Some(decoded_flow) = decode_packet(packet, &mut state) {
-        //         // process the output -> run the detector
-        //         if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
-        //             found_attacks.push(decoded_flow.flow_id);
-        //         }
-        //     }
-        // }
     }
 
-    // TODO: State verification
-    assert!(state.fragments_map.is_empty());
+    // State verification
+    assert!(atomically(|trans3| Ok(decoder_state
+        .fragments_map
+        .read(trans3)?
+        .is_empty())));
+
+    found_attacks
+}
+
+fn run_eval(packets: TVar<VecDeque<Packet>>, threadcount: usize) -> Vec<usize> {
+    let mut found_attacks = Vec::new();
+    let decoder_state = StmDecoderState::new();
+
+    let mut handles = Vec::with_capacity(threadcount);
+    for _ in 0..threadcount {
+        let ps = packets.clone();
+        let ds = decoder_state.clone();
+        handles.push(thread::spawn(move || analyze_stream(ps, ds)));
+    }
+
+    for handle in handles {
+        let mut attacks = handle.join().unwrap();
+        found_attacks.append(&mut attacks);
+    }
 
     found_attacks
 }
