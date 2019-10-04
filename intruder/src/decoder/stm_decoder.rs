@@ -43,6 +43,7 @@ pub fn decode_packet(
             let reconstructed_data = decoded
                 .drain(..)
                 .fold(String::new(), |acc, p| acc + &p.data);
+            decoded_tvar.write(transaction, Vec::new())?;
 
             state.fragments_map.modify(transaction, |mut f| {
                 // TODO: Remove assertion?
@@ -55,6 +56,7 @@ pub fn decode_packet(
             }))
         } else {
             decoded_tvar.write(transaction, decoded)?;
+            state.fragments_map.write(transaction, frags)?;
             Ok(None)
         }
     } else {
