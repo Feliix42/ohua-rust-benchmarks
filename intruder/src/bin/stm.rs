@@ -210,12 +210,6 @@ fn analyze_stream(packets: TVar<VecDeque<Packet>>, decoder_state: StmDecoderStat
         }
     }
 
-    // State verification
-    assert!(atomically(|trans3| Ok(decoder_state
-        .fragments_map
-        .read(trans3)?
-        .is_empty())));
-
     found_attacks
 }
 
@@ -234,6 +228,12 @@ fn run_eval(packets: TVar<VecDeque<Packet>>, threadcount: usize) -> Vec<usize> {
         let mut attacks = handle.join().unwrap();
         found_attacks.append(&mut attacks);
     }
+
+    // State verification
+    assert!(atomically(|trans3| Ok(decoder_state
+                                   .fragments_map
+                                   .read(trans3)?
+                                   .is_empty())));
 
     found_attacks
 }
