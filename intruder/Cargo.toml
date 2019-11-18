@@ -33,3 +33,8 @@ required-features = ["cli"]
 name = "stm"
 path = "src/bin/stm.rs"
 required-features = ["transactional", "cli"]
+
+[[bin]]
+name = "ohua"
+path = "src/bin/ohua.rs"
+required-features = ["ohua", "cli"]
