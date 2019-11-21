@@ -1,6 +1,6 @@
 # Labyrinth Benchmark
 
-This benchmark was originally part of the [STAMP benchmark suite]() proposed by Minh et. al. and has been ported to Rust.
+This benchmark was originally part of the [STAMP benchmark suite](https://doi.org/10.1109/IISWC.2008.4636089) proposed by Minh et. al. and has been ported to Rust.
 It's implemented in 3 variants:
 
 - in sequential form without any multithreading

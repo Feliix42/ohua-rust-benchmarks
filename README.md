@@ -5,7 +5,7 @@ This repository contains a number of benchmarks that are used to compare the per
 
 ## Running the benchmarks
 
-To run an ohua-based benchmark (and thus, for the sake of comparability all other benchmarks), you have to use `nightly` Rust until the `fnbox` feature has been stabilized.
+To run an ohua-based benchmark (and thus, for the sake of comparability all other benchmarks), you have to use `nightly` Rust until the `proc_macro_hygiene` feature has been stabilized.
 Just run
 
 ```
