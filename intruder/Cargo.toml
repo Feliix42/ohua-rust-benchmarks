@@ -38,3 +38,8 @@ required-features = ["transactional", "cli"]
 name = "ohua"
 path = "src/bin/ohua.rs"
 required-features = ["ohua", "cli"]
+
+[[bin]]
+name = "split2"
+path = "src/bin/ohua_split.rs"
+required-features = ["ohua", "cli"]
