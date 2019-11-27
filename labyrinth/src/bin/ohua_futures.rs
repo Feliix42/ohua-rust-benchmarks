@@ -1,6 +1,6 @@
 #![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
-use futures::future::{Future, ok, lazy};
+// use futures::future::{Future, ok, lazy};
 use labyrinth::parser;
 use labyrinth::pathfinder::find_path;
 use labyrinth::types::{Maze, Path, Point};
@@ -208,14 +208,14 @@ fn spawn_onto_pool(
     maze: Maze,
     threadcount: usize,
 ) -> (Runtime, Vec<Receiver<Vec<Option<Path>>>>) {
-    let mut rt = Builder::new().core_threads(threadcount).build().unwrap();
+    let rt = Builder::new().threaded_scheduler().num_threads(threadcount).build().unwrap();
     let mut handles = Vec::with_capacity(worklist.len());
 
     for lst in worklist.drain(..) {
         let m = maze.clone();
         let (sx, rx) = mpsc::channel();
 
-        rt.spawn(lazy(move || ok::<_, ()>(sx.send(vec_pathfind(m, lst)).unwrap())));
+        rt.spawn(async move { sx.send(vec_pathfind(m, lst)).unwrap() });
 
         handles.push(rx);
     }
@@ -226,10 +226,10 @@ fn spawn_onto_pool(
 fn collect_and_shutdown(
     tokio_data: (Runtime, Vec<Receiver<Vec<Option<Path>>>>),
 ) -> Vec<Option<Path>> {
-    let (rt, mut handles) = tokio_data;
+    let (_rt, mut handles) = tokio_data;
 
     // moved up
-    rt.shutdown_on_idle().wait().unwrap();
+    // rt.shutdown_on_idle().wait().unwrap();
 
     let results = handles.drain(..).map(|h| h.recv().unwrap()).flatten().collect();
 

@@ -140,6 +140,8 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
+    \"algorithm\": \"ohua-split\",
+    \"splits\": {_py_size_},
     \"flow_count\": {flows},
     \"attack_percentage\": {attack_perc},
     \"attack_count\": {attacks},
