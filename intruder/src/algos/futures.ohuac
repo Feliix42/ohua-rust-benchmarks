@@ -1,0 +1,35 @@
+ns intruder;
+
+use sf crate::{init_state, process, split_evenly, spawn_onto_pool, collect_and_shutdown, statistics};
+
+
+fn main(packets: Vec<Packet>, threadcount: usize) -> Vec<usize> {
+    // this initializes a stateful decoder that must be used throughout the program
+    // to reconstruct flows
+    let decoder = init_state();
+
+    // // Ohua allows us to simply eliminate the `get_packet_from_stream` function here
+    // // and use smap instead
+    // let output = for packet in packets {
+    //     // this is a *stateful* operation!
+    //     let decoded = decoder.process(packet);
+
+    //     // this is a purely stateless operation, taking a Option<Packet> produced in
+    //     // the last step and running it through the detector
+    //     run_detector(decoded)
+    // };
+
+    // this is a *stateful* operation!
+    let decodeds = process(decoder, packets);
+
+    // worklist aufsplitten
+    let worklist = split_evenly(decodeds, threadcount);
+
+    // threadpool erzeugen und threads spawnen, pool und handles zurück
+    let tokio_stuff = spawn_onto_pool(worklist, threadcount);
+
+    // handles collecten, shutdown auf pool callen
+    let paths = collect_and_shutdown(tokio_stuff);
+
+    statistics(paths)
+}
