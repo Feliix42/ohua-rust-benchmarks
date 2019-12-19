@@ -33,7 +33,7 @@ fn main() {
             Arg::with_name("max_length")
                 .long("length")
                 .short("l")
-                .help("Maximum length of a packet in bytes.")
+                .help("Maximum number of flows per packet.")
                 .takes_value(true)
                 .default_value("16"),
         )

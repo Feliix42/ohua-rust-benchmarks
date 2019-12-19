@@ -8,17 +8,6 @@ fn main(packets: Vec<Packet>, threadcount: usize) -> Vec<usize> {
     // to reconstruct flows
     let decoder = init_state();
 
-    // // Ohua allows us to simply eliminate the `get_packet_from_stream` function here
-    // // and use smap instead
-    // let output = for packet in packets {
-    //     // this is a *stateful* operation!
-    //     let decoded = decoder.process(packet);
-
-    //     // this is a purely stateless operation, taking a Option<Packet> produced in
-    //     // the last step and running it through the detector
-    //     run_detector(decoded)
-    // };
-
     // this is a *stateful* operation!
     let decodeds = process(decoder, packets);
 
