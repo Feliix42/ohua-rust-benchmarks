@@ -148,8 +148,8 @@ fn main() {
         // TODO: Add specification to the statistics
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua_futures-n{}-p{}-s{}-pl{}-r{}_log.json",
-            out_dir, flowcount, attack_percentage, rng_seed, max_packet_len, runs
+            "{}/ohua_futures-n{}-p{}-s{}-pl{}-t{}-r{}_log.json",
+            out_dir, flowcount, attack_percentage, rng_seed, max_packet_len, threadcount, runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
@@ -161,6 +161,7 @@ fn main() {
     \"runs\": {runs},
     \"prng_seed\": {seed},
     \"max_packet_len\": {packet_len},
+    \"threadcount\": {threadcount},
     \"results\": {res:?}
 }}",
             flows = flowcount,
@@ -169,6 +170,7 @@ fn main() {
             runs = runs,
             seed = rng_seed,
             packet_len = max_packet_len,
+            threadcount = threadcount,
             res = results
         ))
         .unwrap();
@@ -180,6 +182,7 @@ fn main() {
         println!("    PRNG seed:             {}", rng_seed);
         println!("    Maximal Packet Length: {}", max_packet_len);
         println!("    Generated Attacks:     {}", attacks.len());
+        println!("    Threads used:          {}", threadcount);
         println!("    Runs:                  {}", runs);
         println!("\nRuntime in ms: {:?}", results);
     }
