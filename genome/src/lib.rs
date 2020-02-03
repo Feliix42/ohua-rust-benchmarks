@@ -2,10 +2,11 @@ use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 
 mod bitmap;
-mod gene;
-mod segments;
+pub mod gene;
+pub mod segments;
+pub mod sequencer;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Nucleotide {
     Adenine,
     Cytosine,
