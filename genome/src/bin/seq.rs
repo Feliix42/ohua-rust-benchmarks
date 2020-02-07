@@ -73,7 +73,7 @@ fn main() {
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
 
-    // generate the gene and it's segments
+    // generate the gene and its segments
     let mut rng = ChaCha12Rng::seed_from_u64(0);
 
     let gene = Gene::create(gene_length, &mut rng);
