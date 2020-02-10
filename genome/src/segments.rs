@@ -1,8 +1,9 @@
 use crate::gene::Gene;
 use crate::Nucleotide;
-use rand_chacha::ChaCha12Rng;
 use rand::Rng;
+use rand_chacha::ChaCha12Rng;
 
+#[derive(Clone)]
 pub struct Segments {
     pub length: usize,
     pub minimal_segmentcount: usize,
@@ -12,7 +13,12 @@ pub struct Segments {
 }
 
 impl Segments {
-    pub fn create(length: usize, minimal_count: usize, gene: &mut Gene, rng: &mut ChaCha12Rng) -> Self {
+    pub fn create(
+        length: usize,
+        minimal_count: usize,
+        gene: &mut Gene,
+        rng: &mut ChaCha12Rng,
+    ) -> Self {
         let mut cont = Vec::with_capacity(minimal_count);
         let mut strings = Vec::with_capacity(length);
 
@@ -22,7 +28,7 @@ impl Segments {
         for _ in 0..minimal_count {
             let j = rng.gen_range(0, start_number);
             gene.bitmap.set_bit(j);
-            let slice = &gene.contents[j..(j+length)];
+            let slice = &gene.contents[j..(j + length)];
             strings.push(slice.to_owned());
             cont.push(slice.to_owned());
         }
@@ -38,15 +44,15 @@ impl Segments {
         let mut idx = 0;
         while idx < start_number {
             // we check, if holes that are too "large" exist
-            let upper_bound = std::cmp::min(idx+maximal_hole_size, start_number);
+            let upper_bound = std::cmp::min(idx + maximal_hole_size, start_number);
             while idx < upper_bound && !gene.bitmap.get_bit(idx) {
                 idx += 1;
             }
-            
+
             if idx == upper_bound {
                 // hole is big enough, fill it
                 idx -= 1;
-                cont.push(gene.contents[idx..(idx+length)].to_owned());
+                cont.push(gene.contents[idx..(idx + length)].to_owned());
                 gene.bitmap.set_bit(idx);
             }
             idx += 1;
@@ -57,7 +63,7 @@ impl Segments {
             length,
             minimal_segmentcount: minimal_count,
             contents: cont,
-            strings
+            strings,
         }
     }
 }

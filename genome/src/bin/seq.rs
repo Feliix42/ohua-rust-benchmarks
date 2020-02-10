@@ -1,10 +1,13 @@
 use clap::{App, Arg};
+use genome::gene::Gene;
+use genome::segments::Segments;
+use genome::sequencer;
+use rand_chacha::rand_core::SeedableRng;
+use rand_chacha::ChaCha12Rng;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
-use genome::gene::Gene;
-use genome::segments::Segments;
 
 fn main() {
     let matches = App::new("Sequential genome benchmark")
@@ -76,7 +79,77 @@ fn main() {
     // generate the gene and its segments
     let mut rng = ChaCha12Rng::seed_from_u64(0);
 
-    let gene = Gene::create(gene_length, &mut rng);
+    let mut gene = Gene::create(gene_length, &mut rng);
     let segments = Segments::create(segment_length, min_number, &mut gene, &mut rng);
-    
+    if !json_dump {
+        println!(
+            "[INFO] Generated {} gene segments.",
+            segments.contents.len()
+        );
+        // println!(
+        //     "[DEBUG] Gene (still) has {} Nucleotides.",
+        //     gene.contents.len()
+        // );
+    }
+
+    let mut results = Vec::with_capacity(runs);
+
+    for r in 0..runs {
+        // prepare the data for the run
+        let input_data = segments.clone();
+
+        // start the clock
+        let start = PreciseTime::now();
+
+        // run the algorithm
+        let result = sequencer::run_sequencer(input_data);
+
+        // stop the clock
+        let end = PreciseTime::now();
+        let runtime_ms = start.to(end).num_milliseconds();
+
+        if !json_dump {
+            println!("[INFO] Genome sequencing run {} completed.", r + 1);
+        }
+
+        if result.len() != gene.contents.len() {
+            eprintln!("[ERROR] Output verification failed. An error occured during genome sequencing. Sequenced genome length deviated from the original genome size ({}/{})", result.len(), gene.contents.len());
+        } else {
+            results.push(runtime_ms);
+        }
+    }
+
+    // generate output
+    if json_dump {
+        create_dir_all(out_dir).unwrap();
+        let filename = format!(
+            "{}/seq-g{}-n{}-s{}-r{}_log.json",
+            out_dir, gene_length, min_number, segment_length, runs
+        );
+        let mut f = File::create(&filename).unwrap();
+        f.write_fmt(format_args!(
+            "{{
+    \"algorithm\": \"sequential\",
+    \"gene_length\": {gene_len},
+    \"min_segment_count\": {min_segment},
+    \"segment_length\": {seg_len},
+    \"runs\": {runs},
+    \"results\": {res:?}
+}}",
+            gene_len = gene_length,
+            min_segment = min_number,
+            seg_len = segment_length,
+            runs = runs,
+            res = results
+        ))
+        .unwrap();
+    } else {
+        println!("[INFO] All runs completed successfully.");
+        println!("\nStatistics:");
+        println!("    Length of the generated gene: {}", gene_length);
+        println!("    Minimal number of segments:   {}", min_number);
+        println!("    Length of a gene segment:     {}", segment_length);
+        println!("    Runs:                         {}", runs);
+        println!("\nRuntime in ms: {:?}", results);
+    }
 }

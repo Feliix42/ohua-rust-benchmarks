@@ -1,20 +1,22 @@
 use crate::segments::Segments;
 use crate::Nucleotide;
+use std::cell::RefCell;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::rc::Rc;
 
-#[derive(Debug, Eq, Hash, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 struct SequencerItem {
-    pub segment: Rc<Vec<Nucleotide>>,
-    pub prev: Option<Rc<Vec<Nucleotide>>>,
-    pub next: Option<Rc<Vec<Nucleotide>>>,
+    pub segment: Vec<Nucleotide>,
+    pub prev: Option<Rc<RefCell<SequencerItem>>>,
+    pub next: Option<Rc<RefCell<SequencerItem>>>,
     pub overlap_with_prev: usize,
 }
 
 impl From<Vec<Nucleotide>> for SequencerItem {
     fn from(nucleotide_sequence: Vec<Nucleotide>) -> Self {
         SequencerItem {
-            segment: Rc::new(nucleotide_sequence),
+            segment: nucleotide_sequence,
             prev: None,
             next: None,
             overlap_with_prev: 0,
@@ -24,18 +26,19 @@ impl From<Vec<Nucleotide>> for SequencerItem {
 
 pub fn run_sequencer(mut segments: Segments) -> Vec<Nucleotide> {
     // Step 1: deduplicate all segments
-    let mut tmp: HashSet<SequencerItem> = segments
-        .contents
-        .drain(..)
-        .map(SequencerItem::from)
-        .collect();
-    
+    let mut tmp: HashSet<Vec<Nucleotide>> = segments.contents.drain(..).collect();
+
     // TODO: Isn't that super ineffective? :thinking:
-    let mut unique_segments: Vec<SequencerItem> = tmp.drain().collect();
+    let mut unique_segments: VecDeque<Rc<RefCell<SequencerItem>>> = tmp
+        .drain()
+        .map(SequencerItem::from)
+        .map(RefCell::new)
+        .map(Rc::new)
+        .collect();
     let segment_count = unique_segments.len();
 
     // Step 2: go through the prefixes and suffixes of the genomes in descending size and stitch the genome back together
-    for match_length in segments.length..0 {
+    for match_length in (1..segments.length).rev() {
         /*
          * What I want to do:
          * - loop through possible subsegment lengths
@@ -43,36 +46,41 @@ pub fn run_sequencer(mut segments: Segments) -> Vec<Nucleotide> {
          * - loop through all segments again (y) and match against the starts and ends of x and y, stitch together on match
          *
          * Question: *How* do I remove matches from the set on the go?
-         * Plot Twist: Should be parallelizable for STM and Ohua.
+         * -> Should be parallelizable for STM and Ohua.
          */
 
         for _ in 0..segment_count {
-            let mut cur_seg = unique_segments.pop().expect("No segments were generated");
+            let cs = unique_segments
+                .pop_front()
+                .expect("No segments were generated");
+            let mut cur_seg = cs.borrow_mut();
 
-            // only continue if the current segment is not 
+            // only continue if the current segment is not linked already
             if cur_seg.prev.is_none() {
-                let slice = &cur_seg.segment[(segments.length - match_length)..segments.length];
+                let slice = &cur_seg.segment[0..match_length];
 
                 // go over all items in Vec and test whether we can append our `cur_seg` to the item. If so, stop
-                for item in unique_segments.iter_mut() {
+                'inner: for it in unique_segments.iter() {
+                    let mut item = it.borrow_mut();
                     // skip the current item when it already has an appended segment
-                    if item.next.is_none() {
+                    if item.next.is_some() {
                         continue;
                     }
 
-                    // TODO: get slices from both the cur_seg and this segment and compare them for equality
-                    let cur_slice = &item.segment[(segments.length - match_length)..segments.length];
+                    let cur_slice =
+                        &item.segment[(segments.length - match_length)..segments.length];
                     if slice == cur_slice {
                         // link both items together
-                        item.next = Some(cur_seg.segment.clone());
-                        cur_seg.prev = Some(item.segment.clone());
+                        item.next = Some(cs.clone());
+                        cur_seg.prev = Some(it.clone());
                         cur_seg.overlap_with_prev = match_length;
-                        break;
-                    } 
+                        break 'inner;
+                    }
                 }
             }
 
-            unique_segments.push(cur_seg);
+            std::mem::drop(cur_seg);
+            unique_segments.push_back(cs);
         }
     }
 
@@ -80,7 +88,8 @@ pub fn run_sequencer(mut segments: Segments) -> Vec<Nucleotide> {
     println!("[TEST] checking segment links");
     let mut forward_links = 0;
     let mut backward_links = 0;
-    for item in unique_segments {
+    for it in &unique_segments {
+        let item = it.borrow();
         if item.next.is_none() {
             forward_links += 1;
         }
@@ -93,15 +102,22 @@ pub fn run_sequencer(mut segments: Segments) -> Vec<Nucleotide> {
 
     // Step 3 link together sequence
     // find first element
-    let mut cur = unique_segments.iter().find(|seg| seg.prev.is_none()).unwrap();
+    let mut cur = unique_segments
+        .iter()
+        .find(|seg| seg.borrow().prev.is_none())
+        .unwrap()
+        .clone();
     let mut reconstructed_sequence = Vec::new();
 
     loop {
-        reconstructed_sequence.extend_from_slice(&cur.segment[cur.overlap_with_prev..]);
+        let val = cur.borrow();
+        reconstructed_sequence.extend_from_slice(&val.segment[val.overlap_with_prev..]);
 
-        if cur.next.is_some() {
-            cur = cur.next.unwrap();
-            // TODO: Switch the whole datastructure to have next and prev of type `Rc<RefCell<SequencerItem>>` and segment of `Vec<Nucleotide>` again
+        if val.next.is_some() {
+            // move to the next value -> have to assign to another let binding first to drop `val` due to ownership issues
+            let next = val.next.as_ref().unwrap().clone();
+            std::mem::drop(val);
+            cur = next;
         } else {
             break;
         }
