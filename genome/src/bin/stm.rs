@@ -8,7 +8,6 @@ use rand_chacha::ChaCha12Rng;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
-use std::thread::{self, JoinHandle};
 use time::PreciseTime;
 
 fn main() {
@@ -176,22 +175,18 @@ fn run_benchmark(segments: Segments, threadcount: usize) -> Vec<Nucleotide> {
 
     // Phase 2
     let step: usize = deduplicated.len() / threadcount;
-    let mut handles = Vec::new();
-    for t_no in 1..=threadcount {
+    let mut ranges = Vec::new();
+    for t_no in 0..threadcount {
         let lower = step * t_no;
-        let upper = if t_no < threadcount {
+        let upper = if t_no+1 < threadcount {
             step * (t_no + 1)
         } else {
             deduplicated.len()
         };
-        let input = deduplicated.clone();
-        handles.push(thread::spawn(move || {
-            sequencer::run_sequencer(&input, segment_length, lower..upper)
-        }));
+        ranges.push(lower..upper);
     }
 
-    // wait for all threads to finish
-    let _: Vec<()> = handles.drain(..).map(JoinHandle::join).map(Result::unwrap).collect();
+    sequencer::run_sequencer(&deduplicated, segment_length, ranges);
 
     // Phase 3
     sequencer::reconstruct(&deduplicated)
