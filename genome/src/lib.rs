@@ -4,7 +4,11 @@ use rand::Rng;
 mod bitmap;
 pub mod gene;
 pub mod segments;
+
+#[cfg(not(feature = "transactional"))]
 pub mod sequencer;
+#[cfg(feature = "transactional")]
+pub mod stm_sequencer;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Nucleotide {

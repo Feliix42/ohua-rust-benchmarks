@@ -11,12 +11,20 @@ rand_chacha = "0.2"
 rand = "0.7"
 clap = { version = "2.32", optional = true }
 time = { version = "0.1", optional = true }
+# my own patched version of stm
+stm = { git = "https://github.com/feliix42/rust-stm", optional = true }
 
 
 [features]
 cli = ["time", "clap"]
+transactional = ["stm"]
 
 [[bin]]
 name = "sequential"
 path = "src/bin/seq.rs"
 required-features = ["cli"]
+
+[[bin]]
+name = "stm"
+path = "src/bin/stm.rs"
+required-features = ["transactional", "cli"]
