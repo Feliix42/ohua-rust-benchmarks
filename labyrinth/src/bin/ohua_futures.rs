@@ -12,6 +12,7 @@ use std::sync::mpsc::{Receiver, self};
 use std::str::FromStr;
 use time::PreciseTime;
 use tokio::runtime::{Builder, Runtime};
+use cpu_time::ProcessTime;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -89,6 +90,7 @@ fn main() {
     let (dimensions, paths) = parser::parse_file(input_file);
 
     let mut results = Vec::with_capacity(runs);
+    let mut cpu_results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
     let mut collisions: Vec<usize> = Vec::with_capacity(runs);
 
@@ -102,11 +104,13 @@ fn main() {
         let paths2 = paths.clone();
 
         let start = PreciseTime::now();
+        let cpu_start = ProcessTime::now();
 
         #[ohua]
         let (filled_maze, rollbacks) =
             modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
 
+        let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
 
         if !json_dump {
@@ -114,9 +118,11 @@ fn main() {
         }
 
         let runtime_ms = start.to(end).num_milliseconds();
+        let cpu_runtime_ms = cpu_end.duration_since(cpu_start).as_millis();
 
         if filled_maze.is_valid() {
             results.push(runtime_ms);
+            cpu_results.push(cpu_runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
             collisions.push(rollbacks);
         } else {
@@ -148,6 +154,7 @@ fn main() {
     \"update_frequency\": {freq},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
+    \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             conf = dimensions,
@@ -158,6 +165,7 @@ fn main() {
             freq = updates,
             mapped = mapped_paths,
             collisions = collisions,
+            cpu = cpu_results,
             res = results
         ))
         .unwrap();
@@ -172,7 +180,8 @@ fn main() {
         println!("    Update frequency:   {}", updates);
         println!("    Mapped:             {:?}", mapped_paths);
         println!("    Collisions:         {:?}", collisions);
-        println!("\nRouting Time: {:?} ms", results);
+        println!("CPU time used: {:?} ms", cpu_results);
+        println!("Routing Time: {:?} ms", results);
     }
 }
 

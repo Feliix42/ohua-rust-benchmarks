@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::thread;
 use stm::atomically;
 use time::PreciseTime;
+use cpu_time::ProcessTime;
 
 fn main() {
     let matches = App::new("STM Labyrinth Benchmark")
@@ -68,6 +69,7 @@ fn main() {
     let (dimensions, paths) = parser::parse_file(input_file);
 
     let mut results = Vec::with_capacity(runs);
+    let mut cpu_results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
     let mut retry_counts = Vec::with_capacity(runs);
 
@@ -79,7 +81,9 @@ fn main() {
         }
 
         let start = PreciseTime::now();
+        let cpu_start = ProcessTime::now();
         let (filled_maze, retries) = route_paths(maze, paths.clone(), thread_number);
+        let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
 
         if !json_dump {
@@ -87,9 +91,11 @@ fn main() {
         }
 
         let runtime_ms = start.to(end).num_milliseconds();
+        let cpu_runtime_ms = cpu_end.duration_since(cpu_start).as_millis();
 
         if filled_maze.is_valid() {
             results.push(runtime_ms);
+            cpu_results.push(cpu_runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
             retry_counts.push(retries);
         } else {
@@ -117,6 +123,7 @@ fn main() {
     \"runs\": {runs},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
+    \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             conf = dimensions,
@@ -125,6 +132,7 @@ fn main() {
             runs = runs,
             mapped = mapped_paths,
             collisions = retry_counts,
+            cpu = cpu_results,
             res = results
         ))
         .unwrap();
@@ -137,7 +145,8 @@ fn main() {
         println!("    Runs:               {}", runs);
         println!("    Mapped:             {:?}", mapped_paths);
         println!("    Collisions:         {:?}", retry_counts);
-        println!("\nRouting Time: {:?} ms", results);
+        println!("\nCPU time: {:?} ms", cpu_results);
+        println!("Routing Time: {:?} ms", results);
     }
 }
 
