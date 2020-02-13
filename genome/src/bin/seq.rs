@@ -8,6 +8,7 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
+use cpu_time::ProcessTime;
 
 fn main() {
     let matches = App::new("Sequential genome benchmark")
@@ -93,6 +94,7 @@ fn main() {
     }
 
     let mut results = Vec::with_capacity(runs);
+    let mut cpu_results = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -100,13 +102,16 @@ fn main() {
 
         // start the clock
         let start = PreciseTime::now();
+        let cpu_start = ProcessTime::now();
 
         // run the algorithm
         let result = sequencer::run_sequencer(input_data);
 
         // stop the clock
+        let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
         let runtime_ms = start.to(end).num_milliseconds();
+        let cpu_runtime_ms = cpu_end.duration_since(cpu_start).as_millis();
 
         if !json_dump {
             println!("[INFO] Genome sequencing run {} completed.", r + 1);
@@ -116,6 +121,7 @@ fn main() {
             eprintln!("[ERROR] Output verification failed. An error occured during genome sequencing. Sequenced genome length deviated from the original genome size ({}/{})", result.len(), gene.contents.len());
         } else {
             results.push(runtime_ms);
+            cpu_results.push(cpu_runtime_ms);
         }
     }
 
@@ -134,12 +140,14 @@ fn main() {
     \"min_segment_count\": {min_segment},
     \"segment_length\": {seg_len},
     \"runs\": {runs},
+    \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             gene_len = gene_length,
             min_segment = min_number,
             seg_len = segment_length,
             runs = runs,
+            cpu = cpu_results,
             res = results
         ))
         .unwrap();
@@ -150,6 +158,7 @@ fn main() {
         println!("    Minimal number of segments:   {}", min_number);
         println!("    Length of a gene segment:     {}", segment_length);
         println!("    Runs:                         {}", runs);
-        println!("\nRuntime in ms: {:?}", results);
+        println!("\nCPU-time used (ms): {:?}", cpu_results);
+        println!("Runtime in ms: {:?}", results);
     }
 }
