@@ -17,11 +17,14 @@ stm = { git = "https://github.com/feliix42/rust-stm", optional = true }
 # Ohua stuff
 ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
 ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
+tokio = { version = "0.2", features = ["full"], optional = true }
+
 
 [features]
 cli = ["time", "clap", "cpu-time"]
 transactional = ["stm"]
 ohua = ["ohua_codegen", "ohua_runtime"]
+future = ["ohua", "tokio"]
 
 [[bin]]
 name = "sequential"
@@ -37,3 +40,8 @@ required-features = ["transactional", "cli"]
 name = "ohua"
 path = "src/bin/ohua.rs"
 required-features = ["ohua", "cli"]
+
+[[bin]]
+name = "ohua_futures"
+path = "src/bin/ohua_futures.rs"
+required-features = ["ohua", "cli", "future"]
