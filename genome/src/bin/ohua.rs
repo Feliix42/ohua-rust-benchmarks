@@ -1,27 +1,32 @@
+#![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
+use cpu_time::ProcessTime;
 use genome::gene::Gene;
+use genome::ohua_sequencer::SequencerItem;
 use genome::segments::Segments;
-use genome::sequencer;
+use ohua_codegen::ohua;
+use ohua_runtime;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaCha12Rng;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
-use cpu_time::ProcessTime;
 
 fn main() {
-    let matches = App::new("Sequential genome benchmark")
+    let matches = App::new("Ohua genome benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
-        .about("A Rust port of the genome benchmark from the STAMP collection, implemented in a sequential manner.")
+        .about(
+            "A Rust port of the genome benchmark from the STAMP collection, implemented in Ohua.",
+        )
         .arg(
             Arg::with_name("genelength")
                 .long("gene-length")
                 .short("g")
                 .help("Length of the gene")
                 .takes_value(true)
-                .default_value("16384")
+                .default_value("16384"),
         )
         .arg(
             Arg::with_name("minnumber")
@@ -29,7 +34,7 @@ fn main() {
                 .short("n")
                 .help("The minimal number of segments")
                 .takes_value(true)
-                .default_value("4194304")    
+                .default_value("4194304"),
         )
         .arg(
             Arg::with_name("seglength")
@@ -37,7 +42,7 @@ fn main() {
                 .short("s")
                 .help("Length of a gene segment")
                 .takes_value(true)
-                .default_value("64")
+                .default_value("64"),
         )
         .arg(
             Arg::with_name("runs")
@@ -45,13 +50,13 @@ fn main() {
                 .short("r")
                 .takes_value(true)
                 .help("The number of runs to conduct.")
-                .default_value("1")
+                .default_value("1"),
         )
         .arg(
             Arg::with_name("json")
                 .long("json")
                 .short("j")
-                .help("Dump results as JSON file.")
+                .help("Dump results as JSON file."),
         )
         .arg(
             Arg::with_name("outdir")
@@ -59,7 +64,7 @@ fn main() {
                 .short("o")
                 .help("Sets the output directory for JSON dumps")
                 .takes_value(true)
-                .default_value("results")
+                .default_value("results"),
         )
         .get_matches();
 
@@ -87,10 +92,6 @@ fn main() {
             "[INFO] Generated {} gene segments.",
             segments.contents.len()
         );
-        // println!(
-        //     "[DEBUG] Gene (still) has {} Nucleotides.",
-        //     gene.contents.len()
-        // );
     }
 
     let mut results = Vec::with_capacity(runs);
@@ -99,13 +100,15 @@ fn main() {
     for r in 0..runs {
         // prepare the data for the run
         let input_data = segments.clone();
+        let initial_overlap = input_data.length - 1;
 
         // start the clock
         let start = PreciseTime::now();
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        let result = sequencer::run_sequencer(input_data);
+        #[ohua]
+        let result = algos::sequencer(input_data, initial_overlap);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -129,13 +132,13 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/seq-g{}-n{}-s{}-r{}_log.json",
+            "{}/ohua-g{}-n{}-s{}-r{}_log.json",
             out_dir, gene_length, min_number, segment_length, runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"sequential\",
+    \"algorithm\": \"ohua\",
     \"gene_length\": {gene_len},
     \"min_segment_count\": {min_segment},
     \"segment_length\": {seg_len},
@@ -161,4 +164,16 @@ fn main() {
         println!("\nCPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
     }
+}
+
+fn generate_iterator_indices(seq: Vec<SequencerItem>) -> Vec<usize> {
+    seq.iter().enumerate().rev().map(|(i, _)| i).collect()
+}
+
+fn get_overlap(cur: usize) -> (usize, usize) {
+    (cur, cur - 1)
+}
+
+fn remaining_computations(overlap: usize) -> bool {
+    overlap > 0
 }

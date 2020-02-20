@@ -1,0 +1,35 @@
+ns sequencer;
+
+use sf genome::ohua_sequencer::{deduplicate, reassemble, search_match, update_sequence};
+use sf crate::{generate_iterator_indices, get_overlap, remaining_computations};
+
+fn main(segments: Segments, starting_overlap: usize) -> Vec<Nucleotide> {
+    // Phase 1: deduplicate the genome segments (was parallel in the c impl but is in Rust sequential atm)
+    let dedup = deduplicate(segments);
+
+    // Phase 2: Sequence the genome (parallelism happens here)
+    let sequenced = match_segs(dedup, starting_overlap);
+
+    // Phase 3: Reassemble the genome
+    reassemble(sequenced)
+}
+
+fn match_segs(seq: Vec<SequencerItem>, overlap: usize) -> Vec<SequencerItem> {
+    let (o, next) = get_overlap(overlap);
+
+    let indices = generate_iterator_indices(seq);
+
+    let updates = for idx in indices {
+        search_match(seq, o, idx)
+    };
+
+    // TODO: Handle failed updates
+    // don't care for failed updates for now!
+    let updated_data = update_sequence(seq, updates, o);
+
+    if (remaining_computations(next)) {
+        match_segs(updated_data, next)
+    } else {
+        updated_data
+    }
+}

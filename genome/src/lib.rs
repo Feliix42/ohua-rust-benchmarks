@@ -5,10 +5,12 @@ mod bitmap;
 pub mod gene;
 pub mod segments;
 
-#[cfg(not(feature = "transactional"))]
+#[cfg(not(any(feature = "transactional", feature = "ohua")))]
 pub mod sequencer;
 #[cfg(feature = "transactional")]
 pub mod stm_sequencer;
+#[cfg(feature = "ohua")]
+pub mod ohua_sequencer;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Nucleotide {
