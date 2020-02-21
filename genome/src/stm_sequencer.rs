@@ -100,23 +100,25 @@ pub fn run_sequencer(
 }
 
 pub fn reconstruct(unique_segments: &VecDeque<SequencerItem>) -> Vec<Nucleotide> {
-    // TMP test
-    println!("[TEST] checking segment links");
-    atomically(|trans| {
-        let mut forward_links = 0;
-        let mut backward_links = 0;
-        for item in unique_segments {
-            if item.next.read(trans)?.is_none() {
-                forward_links += 1;
+    if cfg!(feature = "verify") {
+        // TMP test
+        println!("[TEST] checking segment links");
+        atomically(|trans| {
+            let mut forward_links = 0;
+            let mut backward_links = 0;
+            for item in unique_segments {
+                if item.next.read(trans)?.is_none() {
+                    forward_links += 1;
+                }
+                if item.prev.read(trans)?.is_none() {
+                    backward_links += 1;
+                }
             }
-            if item.prev.read(trans)?.is_none() {
-                backward_links += 1;
-            }
-        }
-        assert_eq!(forward_links, 1);
-        assert_eq!(backward_links, 1);
-        Ok(())
-    });
+            assert_eq!(forward_links, 1);
+            assert_eq!(backward_links, 1);
+            Ok(())
+        });
+    }
 
     // Step 3 link together sequence
     atomically(|trans| {

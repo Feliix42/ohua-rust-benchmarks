@@ -84,21 +84,23 @@ pub fn run_sequencer(mut segments: Segments) -> Vec<Nucleotide> {
         }
     }
 
-    // TMP test
-    println!("[TEST] checking segment links");
-    let mut forward_links = 0;
-    let mut backward_links = 0;
-    for it in &unique_segments {
-        let item = it.borrow();
-        if item.next.is_none() {
-            forward_links += 1;
+    if cfg!(feature = "verify") {
+        // TMP test
+        println!("[TEST] checking segment links");
+        let mut forward_links = 0;
+        let mut backward_links = 0;
+        for it in &unique_segments {
+            let item = it.borrow();
+            if item.next.is_none() {
+                forward_links += 1;
+            }
+            if item.prev.is_none() {
+                backward_links += 1;
+            }
         }
-        if item.prev.is_none() {
-            backward_links += 1;
-        }
+        assert_eq!(forward_links, 1);
+        assert_eq!(backward_links, 1);
     }
-    assert_eq!(forward_links, 1);
-    assert_eq!(backward_links, 1);
 
     // Step 3 link together sequence
     // find first element

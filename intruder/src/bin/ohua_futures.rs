@@ -14,6 +14,8 @@ use time::PreciseTime;
 use tokio::runtime::{Builder, Runtime};
 use std::sync::mpsc::{Receiver, self};
 
+static TASKS_PER_THREAD: usize = 2;
+
 fn main() {
     let matches = App::new("Ohua Intruder Benchmark")
         .version("1.0")
@@ -231,6 +233,7 @@ fn init_state() -> DecoderState {
 
 /// Splits the input vector into evenly sized vectors for `split_size` workers.
 fn split_evenly(mut to_split: VecDeque<DecodedPacket>, split_size: usize) -> Vec<VecDeque<DecodedPacket>> {
+    let split_size = split_size * TASKS_PER_THREAD;
     let l = to_split.len() / split_size;
     let mut rest = to_split.len() % split_size;
 

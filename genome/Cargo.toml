@@ -25,6 +25,7 @@ cli = ["time", "clap", "cpu-time"]
 transactional = ["stm"]
 ohua = ["ohua_codegen", "ohua_runtime"]
 future = ["ohua", "tokio"]
+verify = []
 
 [[bin]]
 name = "sequential"

@@ -56,20 +56,21 @@ pub fn search_match(segments: Vec<SequencerItem>, overlap: usize, elem: usize) -
 }
 
 pub fn reassemble(unique_segments: Vec<SequencerItem>) -> Vec<Nucleotide> {
-    // TMP test
-    println!("[TEST] checking segment links");
-    let mut forward_links = 0;
-    let mut backward_links = 0;
-    for item in &unique_segments {
-        if item.next.is_none() {
-            forward_links += 1;
+    if cfg!(feature = "verify") {
+        println!("[TEST] checking segment links");
+        let mut forward_links = 0;
+        let mut backward_links = 0;
+        for item in &unique_segments {
+            if item.next.is_none() {
+                forward_links += 1;
+            }
+            if item.prev.is_none() {
+                backward_links += 1;
+            }
         }
-        if item.prev.is_none() {
-            backward_links += 1;
-        }
+        assert_eq!(forward_links, 1);
+        assert_eq!(backward_links, 1);
     }
-    assert_eq!(forward_links, 1);
-    assert_eq!(backward_links, 1);
 
     // Step 3 link together sequence
     // find first element

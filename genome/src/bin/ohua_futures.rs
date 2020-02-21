@@ -15,6 +15,8 @@ use std::sync::mpsc::{self, Receiver};
 use time::PreciseTime;
 use tokio::runtime::{Builder, Runtime};
 
+static TASKS_PER_THREAD: usize = 2;
+
 fn main() {
     let matches = App::new("Ohua genome benchmark")
         .version("1.0")
@@ -189,6 +191,7 @@ fn generate_iterator_indices(seq: Vec<SequencerItem>, threadcount: usize) -> Vec
 
 /// Splits the input vector into evenly sized vectors for `split_size` workers.
 fn split_evenly(mut to_split: Vec<usize>, split_size: usize) -> Vec<Vec<usize>> {
+    let split_size = split_size * TASKS_PER_THREAD;
     let l = to_split.len() / split_size;
     let mut rest = to_split.len() % split_size;
 
