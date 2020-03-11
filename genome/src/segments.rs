@@ -6,6 +6,7 @@ use rand_chacha::ChaCha12Rng;
 #[derive(Clone)]
 pub struct Segments {
     pub length: usize,
+    pub orig_gene_length: usize,
     pub minimal_segmentcount: usize,
     pub contents: Vec<Vec<Nucleotide>>,
     // TODO: Maybe eliminate `strings` altogether?
@@ -62,6 +63,7 @@ impl Segments {
         Segments {
             length,
             minimal_segmentcount: minimal_count,
+            orig_gene_length: gene.length,
             contents: cont,
             strings,
         }

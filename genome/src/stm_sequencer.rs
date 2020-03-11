@@ -1,10 +1,10 @@
 use crate::segments::Segments;
 use crate::Nucleotide;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::thread::{self, JoinHandle};
 use stm::{atomically, TVar};
+use stm_datastructures::THashSet;
 
 #[derive(Clone, Debug)]
 pub struct SequencerItem {
@@ -25,11 +25,49 @@ impl From<Vec<Nucleotide>> for SequencerItem {
     }
 }
 
-pub fn deduplicate(mut segments: Segments) -> VecDeque<SequencerItem> {
-    // Step 1: deduplicate all segments
-    let mut tmp: HashSet<Vec<Nucleotide>> = segments.contents.drain(..).collect();
+/// Splits the input vector into evenly sized vectors for `split_size` workers.
+fn split_evenly(mut to_split: Vec<Vec<Nucleotide>>, split_size: usize) -> Vec<Vec<Vec<Nucleotide>>> {
+    let l = to_split.len() / split_size;
+    let mut rest = to_split.len() % split_size;
 
-    tmp.drain().map(SequencerItem::from).collect()
+    let mut splitted = Vec::new();
+
+    for t_num in 0..split_size {
+        splitted.push(Vec::with_capacity(l));
+        if rest > 0 {
+            splitted[t_num] = to_split.split_off(to_split.len() - l - 1);
+            rest -= 1;
+        } else {
+            if to_split.len() <= l {
+                splitted[t_num] = to_split.split_off(0);
+            } else {
+                splitted[t_num] = to_split.split_off(to_split.len() - l);
+            }
+        }
+    }
+
+    splitted
+}
+
+pub fn deduplicate(segments: Segments, threadcount: usize) -> VecDeque<SequencerItem> {
+    // Step 1: deduplicate all segments by placing them in a hashmap
+    let tmp: THashSet<Vec<Nucleotide>> = THashSet::new(segments.orig_gene_length);
+    let mut to_dedup = split_evenly(segments.contents, threadcount);
+
+    let mut handles = Vec::new();
+    for items in to_dedup.drain(..) {
+        handles.push(thread::spawn(move || {
+            for item in items {
+                atomically(|trans| tmp.insert(trans, item));
+            }
+        }));
+    }
+    let _: Vec<()> = handles.drain(..).map(|h| h.join().unwrap()).collect();
+
+    // let mut tmp_foo: HashSet<Vec<Nucleotide>> = segments.contents.drain(..).collect();
+
+    // tmp_foo.drain().map(SequencerItem::from).collect()
+    unimplemented!()
 }
 
 pub fn run_sequencer(
