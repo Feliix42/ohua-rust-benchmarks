@@ -181,18 +181,7 @@ fn run_benchmark(segments: Segments, threadcount: usize) -> Vec<Nucleotide> {
     // Phase 1
     let segment_length = segments.length;
 
-    let step: usize = segments.contents.len() / threadcount;
-    let mut ranges = Vec::new();
-    for t_no in 0..threadcount {
-        let lower = step * t_no;
-        let upper = if t_no+1 < threadcount {
-            step * (t_no + 1)
-        } else {
-            deduplicated.len()
-        };
-        ranges.push(lower..upper);
-    }
-    let deduplicated = sequencer::deduplicate(segments, ranges, threadcount);
+    let deduplicated = sequencer::deduplicate(segments, threadcount);
 
     // Phase 2
     let step: usize = deduplicated.len() / threadcount;

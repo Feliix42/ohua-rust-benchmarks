@@ -2,6 +2,7 @@ use crate::segments::Segments;
 use crate::Nucleotide;
 use std::collections::VecDeque;
 use std::ops::Range;
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use stm::{atomically, TVar};
 use stm_datastructures::THashSet;
@@ -51,23 +52,29 @@ fn split_evenly(mut to_split: Vec<Vec<Nucleotide>>, split_size: usize) -> Vec<Ve
 
 pub fn deduplicate(segments: Segments, threadcount: usize) -> VecDeque<SequencerItem> {
     // Step 1: deduplicate all segments by placing them in a hashmap
-    let tmp: THashSet<Vec<Nucleotide>> = THashSet::new(segments.orig_gene_length);
+    let tmp: Arc<THashSet<Vec<Nucleotide>>> = Arc::new(THashSet::new(segments.orig_gene_length));
     let mut to_dedup = split_evenly(segments.contents, threadcount);
 
     let mut handles = Vec::new();
     for items in to_dedup.drain(..) {
+        let local_tmp = tmp.clone();
         handles.push(thread::spawn(move || {
             for item in items {
-                atomically(|trans| tmp.insert(trans, item));
+                // the following `clone` operation on `item` is absolutely necessary, since
+                // the `Fn` closure may be called numerous times in case of a retry,
+                // requiring the cloning of the variable.
+                atomically(|trans| local_tmp.insert(trans, item.clone()));
             }
         }));
     }
     let _: Vec<()> = handles.drain(..).map(|h| h.join().unwrap()).collect();
 
-    // let mut tmp_foo: HashSet<Vec<Nucleotide>> = segments.contents.drain(..).collect();
-
-    // tmp_foo.drain().map(SequencerItem::from).collect()
-    unimplemented!()
+    // now unpack the Arc and get the values
+    let hash_set = match Arc::try_unwrap(tmp) {
+        Ok(content) => content,
+        Err(_) => panic!("Unexpectedly failed to unpack arc"),
+    };
+    atomically(|trans| hash_set.as_vec(trans)).drain(..).map(SequencerItem::from).collect()
 }
 
 pub fn run_sequencer(
