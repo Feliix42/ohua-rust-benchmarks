@@ -1,0 +1,48 @@
+ns sequencer;
+
+use sf genome::ohua_sequencer::{reassemble, update_sequence};
+use sf crate::{collect_and_shutdown, collect_and_shutdown2, generate_iterator_indices, get_overlap, partition, remaining_computations, spawn_onto_pool, spawn_onto_pool2};
+
+fn main(segments: Segments, starting_overlap: usize, threadcount: usize) -> Vec<Nucleotide> {
+    // Phase 1: deduplicate the genome segments (was parallel in the c impl but is in Rust sequential atm)
+    let deduped = dedup(segments, threadcount);
+
+    // Phase 2: Sequence the genome (parallelism happens here)
+    let sequenced = match_segs(deduped, starting_overlap, threadcount);
+
+    // Phase 3: Reassemble the genome
+    reassemble(sequenced)
+}
+
+// Phase 1
+fn dedup(segments: Segments, threadcount: usize) -> Vec<SequencerItem> {
+    let parts = partition(segments, threadcount);
+    
+    // this would normally be a loop, which is now hidden inside the tokio threadpool
+    let tokio_stuff = spawn_onto_pool2(parts, threadcount);
+
+    collect_and_shutdown2(tokio_stuff)
+}
+
+// Phase 2
+fn match_segs(seq: Vec<SequencerItem>, overlap: usize, threadcount: usize) -> Vec<SequencerItem> {
+    let (o, next) = get_overlap(overlap);
+
+    let indices = generate_iterator_indices(seq, threadcount);
+
+    // threadpool erzeugen und threads spawnen, pool und handles zurück
+    let tokio_stuff = spawn_onto_pool(indices, overlap, seq, threadcount);
+
+    // handles collecten, shutdown auf pool callen
+    let updates = collect_and_shutdown(tokio_stuff);
+
+    // TODO: Handle failed updates
+    // don't care for failed updates for now!
+    let updated_data = update_sequence(seq, updates, o);
+
+    if (remaining_computations(next)) {
+        match_segs(updated_data, next, threadcount)
+    } else {
+        updated_data
+    }
+}

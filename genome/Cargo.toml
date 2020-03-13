@@ -47,3 +47,8 @@ required-features = ["ohua", "cli"]
 name = "ohua_futures"
 path = "src/bin/ohua_futures.rs"
 required-features = ["ohua", "cli", "future"]
+
+[[bin]]
+name = "ohua_futures_partitioning"
+path = "src/bin/ohua_partitioning.rs"
+required-features = ["ohua", "cli", "future"]
