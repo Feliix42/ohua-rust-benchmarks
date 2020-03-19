@@ -1,6 +1,10 @@
 use clap::{App, Arg};
+use cpu_time::ProcessTime;
 use kmeans::{self, Value};
+use std::fs::{create_dir_all, File};
+use std::io::Write;
 use std::str::FromStr;
+use time::PreciseTime;
 
 fn main() {
     let matches = App::new("Sequential kmeans benchmark")
@@ -74,11 +78,83 @@ fn main() {
     let out_dir = matches.value_of("outdir").unwrap();
 
     // read and prepare the input data
-    let mut input_data =
+    let mut clusters =
         Value::load_from_text_file(input_path).expect("Failed to load input from file");
-    // TODO: zscore transform?
+    // apply zscore transformation
+    kmeans::apply_zscore_transform(&mut clusters);
 
-    kmeans::randomly_assign_cluster(&mut input_data, cluster_count);
+    kmeans::randomly_assign_cluster(&mut clusters, cluster_count);
 
     // run benchmark itself
+    let mut results = Vec::with_capacity(runs);
+    let mut cpu_results = Vec::with_capacity(runs);
+
+    for r in 0..runs {
+        // prepare the data for the run
+        let input_data = clusters.clone();
+
+        // start the clock
+        let start = PreciseTime::now();
+        let cpu_start = ProcessTime::now();
+
+        // run the algorithm
+        run_kmeans(input_data);
+
+        // stop the clock
+        let cpu_end = ProcessTime::now();
+        let end = PreciseTime::now();
+        let runtime_ms = start.to(end).num_milliseconds();
+        let cpu_runtime_ms = cpu_end.duration_since(cpu_start).as_millis();
+
+        if !json_dump {
+            println!("[INFO] kmeans run {} completed.", r + 1);
+        }
+
+        results.push(runtime_ms);
+        cpu_results.push(cpu_runtime_ms);
+    }
+
+    // generate output
+    if json_dump {
+        create_dir_all(out_dir).unwrap();
+        let filename = format!(
+            "{}/seq-n{}-t{}-r{}_log.json",
+            out_dir, cluster_count, threshold, runs
+        );
+        let mut f = File::create(&filename).unwrap();
+        f.write_fmt(format_args!(
+            "{{
+    \"algorithm\": \"sequential\",
+    \"cluster-count\": {cluster_count},
+    \"threshold\": {threshold},
+    \"input\": \"{input_path}\",
+    \"values-count\": {value_count},
+    \"runs\": {runs},
+    \"cpu_time\": {cpu:?},
+    \"results\": {res:?}
+}}",
+            cluster_count = cluster_count,
+            threshold = threshold,
+            input = input_path,
+            value_count = clusters.len(),
+            runs = runs,
+            cpu = cpu_results,
+            res = results
+        ))
+        .unwrap();
+    } else {
+        println!("[INFO] All runs completed successfully.");
+        println!("\nStatistics:");
+        println!("    Number of clusters:          {}", gene_length);
+        println!("    Threshold for conversion:    {}", min_number);
+        println!("    Input file used:             {}", segment_length);
+        println!("    Number of values from input: {}", clusters.len());
+        println!("    Runs:                        {}", runs);
+        println!("\nCPU-time used (ms): {:?}", cpu_results);
+        println!("Runtime in ms: {:?}", results);
+    }
+}
+
+fn run_kmeans(mut values: Vec<Value>) {
+    unimplemented!()
 }

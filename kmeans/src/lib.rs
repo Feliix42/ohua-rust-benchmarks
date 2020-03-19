@@ -46,3 +46,27 @@ pub fn randomly_assign_cluster(values: &mut Vec<Value>, cluster_count: usize) {
         val.associated_cluster = cluster;
     }
 }
+
+/// Applies a zscore transformation to all values. Requires that all values in the list have the same number of attributes
+pub fn apply_zscore_transform(values: &mut Vec<Value>) {
+    // iterate through columns in the matrix
+    for pos in 0..values[0].values.len() {
+        let mut sum = 0;
+        for val in &values {
+            sum += val.values[pos];
+        }
+
+        let sample_mean = sum / values.len();
+
+        sum = 0;
+        for val in &values {
+            sum += (val.values[pos] - sample_mean).pow(2);
+        }
+        let sample_std_derivation = (sum / values.len()).sqrt();
+
+        // now apply the zscore transformation to all values
+        for val in values.iter_mut() {
+            val.values[pos] = (val.values[pos] - sample_mean) / sample_std_derivation;
+        }
+    }
+}
