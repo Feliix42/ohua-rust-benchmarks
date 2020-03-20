@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 /// A single value (in the original STAMP benchmark referred to as object).
+#[derive(Clone, Debug)]
 pub struct Value {
     /// the contents that form the observation
     pub values: Vec<f32>,
@@ -33,17 +34,83 @@ impl Value {
 
         Ok(values)
     }
+
+    /// calcualates the multi-dimensional spatial Euclid distance square
+    fn euclidian_distance(&self, centroid: &Centroid) -> f32 {
+        let mut sum = 0f32;
+
+        for idx in 0..self.values.len() {
+            sum += (self.values[idx] - centroid.coordinates[idx]).powi(2)
+        }
+
+        sum
+    }
+
+    /// Finds the nearest centroid by using euclidian distance for calculation. Returns the index of the matching centroid
+    pub fn find_nearest_centroid(&self, centroids: &Vec<Centroid>) -> usize {
+        let mut best_fit = 0;
+        let mut best_distance = std::f32::MAX;
+
+        for idx in 0..centroids.len() {
+            let distance = self.euclidian_distance(&centroids[idx]);
+            if distance < best_distance {
+                best_distance = distance;
+                best_fit = idx;
+            }
+        }
+
+        best_fit
+    }
 }
 
-/// Assigns a cluster to each value in the input vector.
-pub fn randomly_assign_cluster(values: &mut Vec<Value>, cluster_count: usize) {
-    // initialize the PRNG -- the original implementation seeded with 7 (why?),
-    // but since we are using a different RNG that's not really relevant ¯\_(ツ)_/¯
-    let mut rng = ChaCha12Rng::seed_from_u64(0);
+#[derive(Clone, Debug)]
+pub struct Centroid {
+    pub coordinates: Vec<f32>
+}
 
-    for val in values.iter_mut() {
-        let cluster = rng.next_u64() as usize % cluster_count;
-        val.associated_cluster = cluster;
+impl Centroid {
+    pub fn randomly_generate(values: &Vec<Value>, cluster_count: usize) -> Vec<Self> {
+        // initialize the PRNG -- the original implementation seeded with 7 (why?),
+        // but since we are using a different RNG that's not really relevant ¯\_(ツ)_/¯
+        let mut rng = ChaCha12Rng::seed_from_u64(0);
+        let mut centroids = Vec::new();
+
+        let number_of_attributes = values[0].values.len();
+        for _ in 0..cluster_count {
+            let mut coords = Vec::with_capacity(number_of_attributes);
+            for attribute_idx in 0..number_of_attributes {
+                let cluster_idx = rng.next_u64() as usize % cluster_count;
+
+                coords.push(values[cluster_idx].values[attribute_idx]);
+            }
+
+            centroids.push(Self {
+                coordinates: coords
+            });
+        }
+
+        centroids
+    }
+
+    pub fn from_assignments(values: &Vec<Value>, num_centroids: usize) -> Vec<Self> {
+        let mut sums = vec![vec![0f32; values[0].values.len()]; num_centroids];
+        let mut elements_in_cluster = vec![0; num_centroids];
+
+        // form the sums for all centroids
+        for val in values {
+            for idx in 0..val.values.len() {
+                sums[val.associated_cluster][idx] += val.values[idx];
+            }
+            elements_in_cluster[val.associated_cluster] += 1;
+        }
+
+        for centroid_no in 0..num_centroids {
+            for sum in sums[centroid_no].iter_mut() {
+                *sum /= elements_in_cluster[centroid_no] as f32;
+            }
+        }
+
+        sums.drain(..).map(|coords| Self { coordinates: coords }).collect()
     }
 }
 
@@ -51,18 +118,18 @@ pub fn randomly_assign_cluster(values: &mut Vec<Value>, cluster_count: usize) {
 pub fn apply_zscore_transform(values: &mut Vec<Value>) {
     // iterate through columns in the matrix
     for pos in 0..values[0].values.len() {
-        let mut sum = 0;
-        for val in &values {
+        let mut sum = 0f32;
+        for val in values.iter() {
             sum += val.values[pos];
         }
 
-        let sample_mean = sum / values.len();
+        let sample_mean = sum / values.len() as f32;
 
-        sum = 0;
-        for val in &values {
-            sum += (val.values[pos] - sample_mean).pow(2);
+        sum = 0f32;
+        for val in values.iter() {
+            sum += (val.values[pos] - sample_mean).powi(2);
         }
-        let sample_std_derivation = (sum / values.len()).sqrt();
+        let sample_std_derivation = (sum / values.len() as f32).sqrt();
 
         // now apply the zscore transformation to all values
         for val in values.iter_mut() {

@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
-use kmeans::{self, Value};
+use kmeans::{self, Centroid, Value};
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
@@ -29,7 +29,7 @@ fn main() {
             Arg::with_name("threshold")
             .long("threshold")
             .short("t")
-            .help("Threshold below which a convergence is assumed.")
+            .help("Threshold below which a convergence is assumed. (Defined as maximum percentage of values that may change cluster in a single iteration)")
             .takes_value(true).default_value("0.05")
         )
         .arg(
@@ -81,9 +81,11 @@ fn main() {
     let mut clusters =
         Value::load_from_text_file(input_path).expect("Failed to load input from file");
     // apply zscore transformation
-    kmeans::apply_zscore_transform(&mut clusters);
+    if !dont_use_zscore {
+        kmeans::apply_zscore_transform(&mut clusters);
+    }
 
-    kmeans::randomly_assign_cluster(&mut clusters, cluster_count);
+    let centroids = Centroid::randomly_generate(&clusters, cluster_count);
 
     // run benchmark itself
     let mut results = Vec::with_capacity(runs);
@@ -92,13 +94,14 @@ fn main() {
     for r in 0..runs {
         // prepare the data for the run
         let input_data = clusters.clone();
+        let initial_centers = centroids.clone();
 
         // start the clock
         let start = PreciseTime::now();
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        run_kmeans(input_data);
+        run_kmeans(input_data, initial_centers, threshold);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -135,7 +138,7 @@ fn main() {
 }}",
             cluster_count = cluster_count,
             threshold = threshold,
-            input = input_path,
+            input_path = input_path,
             value_count = clusters.len(),
             runs = runs,
             cpu = cpu_results,
@@ -145,9 +148,9 @@ fn main() {
     } else {
         println!("[INFO] All runs completed successfully.");
         println!("\nStatistics:");
-        println!("    Number of clusters:          {}", gene_length);
-        println!("    Threshold for conversion:    {}", min_number);
-        println!("    Input file used:             {}", segment_length);
+        println!("    Number of clusters:          {}", cluster_count);
+        println!("    Threshold for conversion:    {}", threshold);
+        println!("    Input file used:             {}", input_path);
         println!("    Number of values from input: {}", clusters.len());
         println!("    Runs:                        {}", runs);
         println!("\nCPU-time used (ms): {:?}", cpu_results);
@@ -155,6 +158,27 @@ fn main() {
     }
 }
 
-fn run_kmeans(mut values: Vec<Value>) {
-    unimplemented!()
+fn run_kmeans(mut values: Vec<Value>, mut centroids: Vec<Centroid>, threshold: f32) {
+    let mut runs = 0;
+    let mut delta = std::f32::MAX;
+
+    // exit conditions: either we are below our self-set threshold or 500 iterations have passed
+    while runs < 500 && delta > threshold {
+        runs += 1;
+
+        // Step 1: Assign all clusters to a centroid
+        for val in values.iter_mut() {
+            let new_cluster = val.find_nearest_centroid(&centroids);
+            if new_cluster != val.associated_cluster {
+                delta += 1.0;
+                val.associated_cluster = new_cluster;
+            }
+        }
+        delta /= values.len() as f32;
+
+        // Step 2: Calculate new centroids
+        centroids = Centroid::from_assignments(&values, centroids.len());
+    }
+
+    println!("Finished after {} iterations.", runs);
 }
