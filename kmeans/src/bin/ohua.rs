@@ -1,16 +1,19 @@
+#![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
 use kmeans::{self, Centroid, Value};
+use ohua_codegen::ohua;
+use ohua_runtime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
 
 fn main() {
-    let matches = App::new("Sequential kmeans benchmark")
+    let matches = App::new("Ohua kmeans benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
-        .about("A Rust port of the kmeans benchmark from the STAMP collection, implemented in a sequential manner.")
+        .about("A Rust port of the kmeans benchmark from the STAMP collection, implemented using a simple Ohua algorithm (which does not perform that good).")
         .arg(
             Arg::with_name("INPUT")
                 .help("Input file to describe the grid and paths.")
@@ -101,7 +104,8 @@ fn main() {
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        run_kmeans(input_data, initial_centers, threshold);
+        #[ohua]
+        let runs_necessary = algos::kmeans(input_data, initial_centers, threshold);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -110,7 +114,11 @@ fn main() {
         let cpu_runtime_ms = cpu_end.duration_since(cpu_start).as_millis();
 
         if !json_dump {
-            println!("[INFO] kmeans run {} completed.", r + 1);
+            println!(
+                "[INFO] kmeans run {} completed ({} iterations).",
+                r + 1,
+                runs_necessary
+            );
         }
 
         results.push(runtime_ms);
@@ -121,13 +129,13 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/seq-n{}-t{}-r{}_log.json",
+            "{}/ohua-n{}-t{}-r{}_log.json",
             out_dir, cluster_count, threshold, runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"sequential\",
+    \"algorithm\": \"ohua\",
     \"cluster-count\": {cluster_count},
     \"threshold\": {threshold},
     \"input\": \"{input_path}\",
@@ -158,28 +166,34 @@ fn main() {
     }
 }
 
-fn run_kmeans(mut values: Vec<Value>, mut centroids: Vec<Centroid>, threshold: f32) {
-    let mut runs = 0;
-    let mut delta = std::f32::MAX;
+fn calc_centroids(values: Vec<Value>, old_centroids: Vec<Centroid>) -> Vec<Centroid> {
+    Centroid::from_assignments(&values, old_centroids.len())
+}
 
-    // exit conditions: either we are below our self-set threshold or 500 iterations have passed
-    while runs < 500 && delta > threshold {
-        runs += 1;
-        delta = 0f32;
+fn inc(run_no: u32) -> u32 {
+    run_no + 1
+}
 
-        // Step 1: Assign all clusters to a centroid
-        for val in values.iter_mut() {
-            let new_cluster = val.find_nearest_centroid(&centroids);
-            if new_cluster != val.associated_cluster {
-                delta += 1.0;
-                val.associated_cluster = new_cluster;
-            }
-        }
-        delta /= values.len() as f32;
+fn reassign_value(mut value: Value, centroids: Vec<Centroid>) -> (Value, f32) {
+    let mut changes = 0f32;
 
-        // Step 2: Calculate new centroids
-        centroids = Centroid::from_assignments(&values, centroids.len());
+    let new_cluster = value.find_nearest_centroid(&centroids);
+    if new_cluster != value.associated_cluster {
+        changes += 1.0;
+        value.associated_cluster = new_cluster;
     }
 
-    println!("Finished after {} iterations.", runs);
+    (value, changes)
+}
+
+fn should_continue(current_delta: f32, threshold: f32, runs: u32) -> bool {
+    current_delta > threshold && runs < 499
+}
+
+fn unpack_updates(mut values: Vec<(Value, f32)>) -> (Vec<Value>, f32) {
+    let (new_values, mut deltas): (Vec<Value>, Vec<f32>) = values.drain(..).unzip();
+
+    let current_delta = deltas.drain(..).sum::<f32>() / new_values.len() as f32;
+
+    (new_values, current_delta)
 }
