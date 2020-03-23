@@ -7,13 +7,17 @@ use ohua_runtime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
+use std::sync::mpsc::{self, Receiver};
 use time::PreciseTime;
+use tokio::runtime::{Builder, Runtime};
+
+static TASKS_PER_THREAD: usize = 2;
 
 fn main() {
-    let matches = App::new("Ohua kmeans benchmark")
+    let matches = App::new("Future-based ohua kmeans benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
-        .about("A Rust port of the kmeans benchmark from the STAMP collection, implemented using a simple Ohua algorithm (which does not perform that good).")
+        .about("A Rust port of the kmeans benchmark from the STAMP collection, implemented using a future-based Ohua algorithm.")
         .arg(
             Arg::with_name("INPUT")
                 .help("Input file to describe the grid and paths.")
@@ -22,24 +26,24 @@ fn main() {
         )
         .arg(
             Arg::with_name("clusters-count")
-            .long("clusters")
-            .short("n")
-            .help("Number of clusters")
-            .takes_value(true)
-            .default_value("40")
+                .long("clusters")
+                .short("n")
+                .help("Number of clusters")
+                .takes_value(true)
+                .default_value("40")
         )
         .arg(
             Arg::with_name("threshold")
-            .long("threshold")
-            .short("t")
-            .help("Threshold below which a convergence is assumed. (Defined as maximum percentage of values that may change cluster in a single iteration)")
-            .takes_value(true).default_value("0.05")
+                .long("threshold")
+                .short("t")
+                .help("Threshold below which a convergence is assumed. (Defined as maximum percentage of values that may change cluster in a single iteration)")
+                .takes_value(true).default_value("0.05")
         )
         .arg(
             Arg::with_name("no_zscore")
-            .short("z")
-            .help("Don't perform zscore transformations on the data")
-            .takes_value(false)
+                .short("z")
+                .help("Don't perform zscore transformations on the data")
+                .takes_value(false)
         )
         .arg(
             Arg::with_name("runs")
@@ -63,6 +67,14 @@ fn main() {
                 .takes_value(true)
                 .default_value("results")
         )
+        .arg(
+            Arg::with_name("threads")
+                .long("threads")
+                .short("p")
+                .takes_value(true)
+                .help("The number of threads to use in the futures threadpool")
+                .default_value("4")
+        )
         .get_matches();
 
     // parse benchmark parameters
@@ -79,6 +91,9 @@ fn main() {
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
+
+    let threadcount = usize::from_str(matches.value_of("threads").unwrap())
+        .expect("Provided invalid value for `threads`. Must be an uint.");
 
     // read and prepare the input data
     let mut clusters =
@@ -105,7 +120,8 @@ fn main() {
 
         // run the algorithm
         #[ohua]
-        let runs_necessary = algos::kmeans(input_data, initial_centers, threshold);
+        let runs_necessary =
+            algos::kmeans_future(input_data, initial_centers, threshold, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -129,13 +145,14 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua-n{}-t{}-r{}_log.json",
-            out_dir, cluster_count, threshold, runs
+            "{}/ohua_futures-n{}-t{}-p{}-r{}_log.json",
+            out_dir, cluster_count, threshold, threadcount, runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"ohua\",
+    \"algorithm\": \"ohua-futures\",
+    \"threadcount\": {threadcount},
     \"cluster-count\": {cluster_count},
     \"threshold\": {threshold},
     \"input\": \"{input_path}\",
@@ -145,6 +162,7 @@ fn main() {
     \"results\": {res:?}
 }}",
             cluster_count = cluster_count,
+            threadcount = threadcount,
             threshold = threshold,
             input_path = input_path,
             value_count = clusters.len(),
@@ -160,6 +178,7 @@ fn main() {
         println!("    Threshold for conversion:    {}", threshold);
         println!("    Input file used:             {}", input_path);
         println!("    Number of values from input: {}", clusters.len());
+        println!("    Threads used:                {}", threadcount);
         println!("    Runs:                        {}", runs);
         println!("\nCPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
@@ -176,16 +195,19 @@ fn inc(run_no: u32) -> u32 {
     run_no + 1
 }
 
-fn reassign_value(mut value: Value, centroids: Vec<Centroid>) -> (Value, f32) {
-    let mut changes = 0f32;
-
-    let new_cluster = value.find_nearest_centroid(&centroids);
-    if new_cluster != value.associated_cluster {
-        changes += 1.0;
-        value.associated_cluster = new_cluster;
-    }
-
-    (value, changes)
+fn reassign_values(mut values: Vec<Value>, centroids: Vec<Centroid>) -> Vec<(Value, f32)> {
+    values
+        .drain(..)
+        .map(|mut value| {
+            let new_cluster = value.find_nearest_centroid(&centroids);
+            if new_cluster != value.associated_cluster {
+                value.associated_cluster = new_cluster;
+                (value, 1.0)
+            } else {
+                (value, 0.0)
+            }
+        })
+        .collect()
 }
 
 #[inline(always)]
@@ -199,4 +221,67 @@ fn unpack_updates(mut values: Vec<(Value, f32)>) -> (Vec<Value>, f32) {
     let current_delta = deltas.drain(..).sum::<f32>() / new_values.len() as f32;
 
     (new_values, current_delta)
+}
+
+/// Splits the input vector into evenly sized vectors for `split_size` workers.
+fn splitup(mut to_split: Vec<Value>, split_size: usize) -> Vec<Vec<Value>> {
+    let split_size = split_size * TASKS_PER_THREAD;
+    let l = to_split.len() / split_size;
+    let mut rest = to_split.len() % split_size;
+
+    let mut splitted = Vec::new();
+
+    for t_num in 0..split_size {
+        splitted.push(Vec::with_capacity(l));
+        if rest > 0 {
+            splitted[t_num] = to_split.split_off(to_split.len() - l - 1);
+            rest -= 1;
+        } else {
+            if to_split.len() <= l {
+                splitted[t_num] = to_split.split_off(0);
+            } else {
+                splitted[t_num] = to_split.split_off(to_split.len() - l);
+            }
+        }
+    }
+
+    splitted
+}
+
+fn spawn_onto_pool(
+    mut values: Vec<Vec<Value>>,
+    centroids: Vec<Centroid>,
+    threadcount: usize,
+) -> (Runtime, Vec<Receiver<Vec<(Value, f32)>>>) {
+    let rt = Builder::new()
+        .threaded_scheduler()
+        .num_threads(threadcount)
+        .build()
+        .unwrap();
+    let mut handles = Vec::with_capacity(values.len());
+
+    for lst in values.drain(..) {
+        let (sx, rx) = mpsc::channel();
+        let ctr = centroids.clone();
+
+        rt.spawn(async move { sx.send(reassign_values(lst, ctr)).unwrap() });
+
+        handles.push(rx);
+    }
+
+    (rt, handles)
+}
+
+fn collect_and_shutdown(
+    tokio_data: (Runtime, Vec<Receiver<Vec<(Value, f32)>>>),
+) -> Vec<(Value, f32)> {
+    let (_rt, mut handles) = tokio_data;
+
+    let results = handles
+        .drain(..)
+        .map(|h| h.recv().unwrap())
+        .flatten()
+        .collect();
+
+    results
 }

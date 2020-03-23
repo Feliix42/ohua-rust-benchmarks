@@ -31,3 +31,8 @@ required-features = ["cli"]
 name = "ohua"
 path = "src/bin/ohua.rs"
 required-features = ["ohua", "cli"]
+
+[[bin]]
+name = "ohua_futures"
+path = "src/bin/ohua_futures.rs"
+required-features = ["ohua", "cli", "future"]
