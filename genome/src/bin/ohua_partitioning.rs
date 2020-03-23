@@ -16,6 +16,7 @@ use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::str::FromStr;
 use std::sync::mpsc::{self, Receiver};
+use std::sync::Arc;
 use time::PreciseTime;
 use tokio::runtime::{Builder, Runtime};
 
@@ -231,7 +232,7 @@ fn remaining_computations(overlap: usize) -> bool {
 fn check_items(
     mut indices: Vec<usize>,
     overlap: usize,
-    segments: Vec<SequencerItem>,
+    segments: Arc<Vec<SequencerItem>>,
 ) -> Vec<Option<(usize, usize)>> {
     indices
         .drain(..)
@@ -251,6 +252,7 @@ fn spawn_onto_pool(
         .build()
         .unwrap();
     let mut handles = Vec::with_capacity(indices.len());
+    let segments = Arc::new(segments);
 
     for lst in indices.drain(..) {
         let (sx, rx) = mpsc::channel();

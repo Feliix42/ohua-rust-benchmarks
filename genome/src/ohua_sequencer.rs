@@ -1,6 +1,7 @@
 use crate::segments::Segments;
 use crate::Nucleotide;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SequencerItem {
@@ -28,7 +29,7 @@ pub fn deduplicate(mut segments: Segments) -> Vec<SequencerItem> {
 }
 
 /// Searches a segment match for a single sequencer item with a given overlap.
-pub fn search_match(segments: Vec<SequencerItem>, overlap: usize, elem: usize) -> Option<(usize, usize)> {
+pub fn search_match(segments: Arc<Vec<SequencerItem>>, overlap: usize, elem: usize) -> Option<(usize, usize)> {
     let current = &segments[elem];
     let segments_length = current.segment.len();
 
