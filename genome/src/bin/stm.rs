@@ -8,6 +8,7 @@ use rand_chacha::ChaCha12Rng;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
+use std::sync::Arc;
 use time::PreciseTime;
 use cpu_time::ProcessTime;
 
@@ -181,7 +182,7 @@ fn run_benchmark(segments: Segments, threadcount: usize) -> Vec<Nucleotide> {
     // Phase 1
     let segment_length = segments.length;
 
-    let deduplicated = sequencer::deduplicate(segments, threadcount);
+    let deduplicated = Arc::new(sequencer::deduplicate(segments, threadcount));
 
     // Phase 2
     let step: usize = deduplicated.len() / threadcount;
@@ -196,8 +197,8 @@ fn run_benchmark(segments: Segments, threadcount: usize) -> Vec<Nucleotide> {
         ranges.push(lower..upper);
     }
 
-    sequencer::run_sequencer(&deduplicated, segment_length, ranges);
+    sequencer::run_sequencer(deduplicated.clone(), segment_length, ranges);
 
     // Phase 3
-    sequencer::reconstruct(&deduplicated)
+    sequencer::reconstruct(deduplicated.clone())
 }

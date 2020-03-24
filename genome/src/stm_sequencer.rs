@@ -78,7 +78,7 @@ pub fn deduplicate(segments: Segments, threadcount: usize) -> VecDeque<Sequencer
 }
 
 pub fn run_sequencer(
-    unique_segments: &VecDeque<SequencerItem>,
+    unique_segments: Arc<VecDeque<SequencerItem>>,
     segment_length: usize,
     iteration_ranges: Vec<Range<usize>>,
 ) {
@@ -144,14 +144,14 @@ pub fn run_sequencer(
     }
 }
 
-pub fn reconstruct(unique_segments: &VecDeque<SequencerItem>) -> Vec<Nucleotide> {
+pub fn reconstruct(unique_segments: Arc<VecDeque<SequencerItem>>) -> Vec<Nucleotide> {
     if cfg!(feature = "verify") {
         // TMP test
         println!("[TEST] checking segment links");
         atomically(|trans| {
             let mut forward_links = 0;
             let mut backward_links = 0;
-            for item in unique_segments {
+            for item in unique_segments.iter() {
                 if item.next.read(trans)?.is_none() {
                     forward_links += 1;
                 }
