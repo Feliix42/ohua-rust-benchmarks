@@ -4,6 +4,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 
+#[cfg(feature = "transactional")]
+pub mod stm_centroid;
+
 /// A single value (in the original STAMP benchmark referred to as object).
 #[derive(Clone, Debug)]
 pub struct Value {
@@ -111,6 +114,16 @@ impl Centroid {
         }
 
         sums.drain(..).map(|coords| Self { coordinates: coords }).collect()
+    }
+}
+
+#[cfg(feature = "transactional")]
+impl From<stm_centroid::ComputeCentroid> for Centroid {
+    fn from(mut other: stm_centroid::ComputeCentroid) -> Self {
+        let elements_in_centroid = other.elements_in_centroid as f32;
+        Self {
+            coordinates: other.coordinates.drain(..).map(|x| x / elements_in_centroid).collect()
+        }
     }
 }
 
