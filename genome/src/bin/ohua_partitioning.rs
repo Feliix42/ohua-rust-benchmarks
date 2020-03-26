@@ -244,13 +244,8 @@ fn spawn_onto_pool(
     mut indices: Vec<Vec<usize>>,
     overlap: usize,
     segments: Vec<SequencerItem>,
-    threadcount: usize,
-) -> (Runtime, Vec<Receiver<Vec<Option<(usize, usize)>>>>) {
-    let rt = Builder::new()
-        .threaded_scheduler()
-        .num_threads(threadcount)
-        .build()
-        .unwrap();
+    rt: Arc<Runtime>,
+) -> Vec<Receiver<Vec<Option<(usize, usize)>>>> {
     let mut handles = Vec::with_capacity(indices.len());
     let segments = Arc::new(segments);
 
@@ -263,21 +258,15 @@ fn spawn_onto_pool(
         handles.push(rx);
     }
 
-    (rt, handles)
+    handles
 }
 
-fn collect_and_shutdown(
-    tokio_data: (Runtime, Vec<Receiver<Vec<Option<(usize, usize)>>>>),
-) -> Vec<Option<(usize, usize)>> {
-    let (_rt, mut handles) = tokio_data;
-
-    let results = handles
+fn collect_work<T>(mut receivers: Vec<Receiver<Vec<T>>>) -> Vec<T> {
+    receivers
         .drain(..)
         .map(|h| h.recv().unwrap())
         .flatten()
-        .collect();
-
-    results
+        .collect()
 }
 
 fn partition(mut segments: Segments, threadcount: usize) -> Vec<Vec<Vec<Nucleotide>>> {
@@ -301,14 +290,9 @@ fn deduplicate(mut segments: Vec<Vec<Nucleotide>>) -> Vec<SequencerItem> {
 
 fn spawn_onto_pool2(
     mut segments: Vec<Vec<Vec<Nucleotide>>>,
-    threadcount: usize,
-) -> (Runtime, Vec<Receiver<Vec<SequencerItem>>>) {
-    let rt = Builder::new()
-        .threaded_scheduler()
-        .num_threads(threadcount)
-        .build()
-        .unwrap();
-    let mut handles = Vec::with_capacity(threadcount);
+    rt: Arc<Runtime>,
+) -> Vec<Receiver<Vec<SequencerItem>>> {
+    let mut handles = Vec::with_capacity(segments.len());
 
     for lst in segments.drain(..) {
         let (sx, rx) = mpsc::channel();
@@ -318,19 +302,16 @@ fn spawn_onto_pool2(
         handles.push(rx);
     }
 
-    (rt, handles)
+    handles
 }
 
-fn collect_and_shutdown2(
-    tokio_data: (Runtime, Vec<Receiver<Vec<SequencerItem>>>),
-) -> Vec<SequencerItem> {
-    let (_rt, mut handles) = tokio_data;
-
-    let results = handles
-        .drain(..)
-        .map(|h| h.recv().unwrap())
-        .flatten()
-        .collect();
-
-    results
+fn create_runtime(threadcount: usize) -> Arc<Runtime> {
+    Arc::new(
+        Builder::new()
+            .threaded_scheduler()
+            .core_threads(threadcount)
+            .thread_name("ohua-tokio-worker")
+            .build()
+            .unwrap(),
+    )
 }

@@ -8,6 +8,7 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use std::sync::mpsc::{self, Receiver};
+use std::sync::Arc;
 use time::PreciseTime;
 use tokio::runtime::{Builder, Runtime};
 
@@ -103,7 +104,7 @@ fn main() {
         kmeans::apply_zscore_transform(&mut clusters);
     }
 
-    let centroids = Centroid::randomly_generate(&clusters, cluster_count);
+    let centroids = Arc::new(Centroid::randomly_generate(&clusters, cluster_count));
 
     // run benchmark itself
     let mut results = Vec::with_capacity(runs);
@@ -133,7 +134,7 @@ fn main() {
             println!(
                 "[INFO] kmeans run {} completed ({} iterations).",
                 r + 1,
-                runs_necessary + 1
+                runs_necessary
             );
         }
 
@@ -186,8 +187,8 @@ fn main() {
 }
 
 #[inline(always)]
-fn calc_centroids(values: Vec<Value>, old_centroids: Vec<Centroid>) -> Vec<Centroid> {
-    Centroid::from_assignments(&values, old_centroids.len())
+fn calc_centroids(values: Vec<Value>, old_centroids: Arc<Vec<Centroid>>) -> Arc<Vec<Centroid>> {
+    Arc::new(Centroid::from_assignments(&values, old_centroids.len()))
 }
 
 #[inline(always)]
@@ -195,7 +196,7 @@ fn inc(run_no: u32) -> u32 {
     run_no + 1
 }
 
-fn reassign_values(mut values: Vec<Value>, centroids: Vec<Centroid>) -> Vec<(Value, f32)> {
+fn reassign_values(mut values: Vec<Value>, centroids: Arc<Vec<Centroid>>) -> Vec<(Value, f32)> {
     values
         .drain(..)
         .map(|mut value| {
@@ -212,7 +213,7 @@ fn reassign_values(mut values: Vec<Value>, centroids: Vec<Centroid>) -> Vec<(Val
 
 #[inline(always)]
 fn should_continue(current_delta: f32, threshold: f32, runs: u32) -> bool {
-    current_delta > threshold && runs < 499
+    current_delta > threshold && runs < 500
 }
 
 fn unpack_updates(mut values: Vec<(Value, f32)>) -> (Vec<Value>, f32) {
@@ -250,14 +251,9 @@ fn splitup(mut to_split: Vec<Value>, split_size: usize) -> Vec<Vec<Value>> {
 
 fn spawn_onto_pool(
     mut values: Vec<Vec<Value>>,
-    centroids: Vec<Centroid>,
-    threadcount: usize,
-) -> (Runtime, Vec<Receiver<Vec<(Value, f32)>>>) {
-    let rt = Builder::new()
-        .threaded_scheduler()
-        .num_threads(threadcount)
-        .build()
-        .unwrap();
+    centroids: Arc<Vec<Centroid>>,
+    rt: Arc<Runtime>,
+) -> Vec<Receiver<Vec<(Value, f32)>>> {
     let mut handles = Vec::with_capacity(values.len());
 
     for lst in values.drain(..) {
@@ -269,19 +265,24 @@ fn spawn_onto_pool(
         handles.push(rx);
     }
 
-    (rt, handles)
+    handles
 }
 
-fn collect_and_shutdown(
-    tokio_data: (Runtime, Vec<Receiver<Vec<(Value, f32)>>>),
-) -> Vec<(Value, f32)> {
-    let (_rt, mut handles) = tokio_data;
+fn create_runtime(threadcount: usize) -> Arc<Runtime> {
+    Arc::new(
+        Builder::new()
+            .threaded_scheduler()
+            .core_threads(threadcount)
+            .thread_name("ohua-tokio-worker")
+            .build()
+            .unwrap(),
+    )
+}
 
-    let results = handles
+fn collect_work<T>(mut receivers: Vec<Receiver<Vec<T>>>) -> Vec<T> {
+    receivers
         .drain(..)
         .map(|h| h.recv().unwrap())
         .flatten()
-        .collect();
-
-    results
+        .collect()
 }

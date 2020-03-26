@@ -5,6 +5,7 @@ use kmeans::{self, Centroid, Value};
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use stm::{atomically, TVar};
 use time::PreciseTime;
@@ -99,7 +100,7 @@ fn main() {
         kmeans::apply_zscore_transform(&mut clusters);
     }
 
-    let centroids = Centroid::randomly_generate(&clusters, cluster_count);
+    let centroids = Arc::new(Centroid::randomly_generate(&clusters, cluster_count));
 
     // run benchmark itself
     let mut results = Vec::with_capacity(runs);
@@ -177,7 +178,7 @@ fn main() {
 
 fn run_kmeans(
     mut values: Vec<Value>,
-    mut centroids: Vec<Centroid>,
+    mut centroids: Arc<Vec<Centroid>>,
     threshold: f32,
     threadcount: usize,
 ) {
@@ -254,7 +255,7 @@ fn run_kmeans(
                 })?;
             }
 
-            Ok(c)
+            Ok(Arc::new(c))
         });
     }
 
