@@ -133,7 +133,7 @@ fn main() {
             println!(
                 "[INFO] kmeans run {} completed ({} iterations).",
                 r + 1,
-                runs_necessary
+                runs_necessary + 1
             );
         }
 

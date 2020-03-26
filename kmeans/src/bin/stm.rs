@@ -208,9 +208,6 @@ fn run_kmeans(
             handles.push(thread::spawn(move || {
                 for val in workset.iter_mut() {
                     let new_cluster = val.find_nearest_centroid(&local_centroids);
-                    if new_cluster != val.associated_cluster {
-                        val.associated_cluster = new_cluster;
-                    }
                     atomically(|trans| {
                         if new_cluster != val.associated_cluster {
                             local_delta.modify(trans, |d| d + 1.0)?;
@@ -220,6 +217,9 @@ fn run_kmeans(
                             ctr
                         })
                     });
+                    if new_cluster != val.associated_cluster {
+                        val.associated_cluster = new_cluster;
+                    }
                 }
 
                 workset

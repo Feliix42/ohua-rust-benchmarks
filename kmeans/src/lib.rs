@@ -68,7 +68,7 @@ impl Value {
 
 #[derive(Clone, Debug)]
 pub struct Centroid {
-    pub coordinates: Vec<f32>
+    pub coordinates: Vec<f32>,
 }
 
 impl Centroid {
@@ -78,17 +78,12 @@ impl Centroid {
         let mut rng = ChaCha12Rng::seed_from_u64(0);
         let mut centroids = Vec::new();
 
-        let number_of_attributes = values[0].values.len();
+        let number_of_values = values.len();
         for _ in 0..cluster_count {
-            let mut coords = Vec::with_capacity(number_of_attributes);
-            for attribute_idx in 0..number_of_attributes {
-                let cluster_idx = rng.next_u64() as usize % cluster_count;
-
-                coords.push(values[cluster_idx].values[attribute_idx]);
-            }
+            let idx = rng.next_u64() as usize % number_of_values;
 
             centroids.push(Self {
-                coordinates: coords
+                coordinates: values[idx].values.clone(),
             });
         }
 
@@ -113,7 +108,11 @@ impl Centroid {
             }
         }
 
-        sums.drain(..).map(|coords| Self { coordinates: coords }).collect()
+        sums.drain(..)
+            .map(|coords| Self {
+                coordinates: coords,
+            })
+            .collect()
     }
 }
 
@@ -122,7 +121,11 @@ impl From<stm_centroid::ComputeCentroid> for Centroid {
     fn from(mut other: stm_centroid::ComputeCentroid) -> Self {
         let elements_in_centroid = other.elements_in_centroid as f32;
         Self {
-            coordinates: other.coordinates.drain(..).map(|x| x / elements_in_centroid).collect()
+            coordinates: other
+                .coordinates
+                .drain(..)
+                .map(|x| x / elements_in_centroid)
+                .collect(),
         }
     }
 }
