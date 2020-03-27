@@ -1,9 +1,10 @@
 ns intruder;
 
-use sf crate::{init_state, process, split_evenly, spawn_onto_pool, collect_and_shutdown, statistics};
+use sf crate::{create_runtime, init_state, process, split_evenly, spawn_onto_pool, collect_work, statistics};
 
 
 fn main(packets: Vec<Packet>, threadcount: usize) -> Vec<usize> {
+    let rt = create_runtime(threadcount);
     // this initializes a stateful decoder that must be used throughout the program
     // to reconstruct flows
     let decoder = init_state();
@@ -15,10 +16,10 @@ fn main(packets: Vec<Packet>, threadcount: usize) -> Vec<usize> {
     let worklist = split_evenly(decodeds, threadcount);
 
     // threadpool erzeugen und threads spawnen, pool und handles zurück
-    let tokio_stuff = spawn_onto_pool(worklist, threadcount);
+    let receivers = spawn_onto_pool(worklist, rt);
 
     // handles collecten, shutdown auf pool callen
-    let paths = collect_and_shutdown(tokio_stuff);
+    let paths = collect_work(receivers);
 
     statistics(paths)
 }

@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use cpu_time::ProcessTime;
 use intruder::decoder::stm_decoder::{decode_packet, StmDecoderState};
 use intruder::detector::{run_detector, DetectorResult};
 use intruder::*;
@@ -7,7 +8,7 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use std::thread;
-use stm::{atomically}; //, TVar};
+use stm::atomically; //, TVar};
 use time::PreciseTime;
 
 fn main() {
@@ -107,6 +108,7 @@ fn main() {
     }
 
     let mut results = Vec::with_capacity(runs);
+    let mut cpu_results = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -115,13 +117,16 @@ fn main() {
 
         // start the clock
         let start = PreciseTime::now();
+        let cpu_start = ProcessTime::now();
 
         // run the algorithm
         let result = run_eval(input_data, threads);
 
         // stop the clock
+        let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
         let runtime_ms = start.to(end).num_milliseconds();
+        let cpu_runtime_ms = cpu_end.duration_since(cpu_start).as_millis();
 
         if !json_dump {
             println!("[INFO] Routing run {} completed.", r + 1);
@@ -132,6 +137,7 @@ fn main() {
             println!("[ERROR] Output verification failed. An incorrect number of attacks has been found. ({}/{})", result.len(), attacks.len());
         } else {
             results.push(runtime_ms);
+            cpu_results.push(cpu_runtime_ms);
         }
     }
 
@@ -153,6 +159,7 @@ fn main() {
     \"prng_seed\": {seed},
     \"max_packet_len\": {packet_len},
     \"threadcount\": {threadcount},
+    \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             flows = flowcount,
@@ -162,6 +169,7 @@ fn main() {
             seed = rng_seed,
             packet_len = max_packet_len,
             threadcount = threads,
+            cpu = cpu_results,
             res = results
         ))
         .unwrap();
@@ -175,7 +183,8 @@ fn main() {
         println!("    Generated Attacks:     {}", attacks.len());
         println!("    Threads used:          {}", threads);
         println!("    Runs:                  {}", runs);
-        println!("\nRuntime in ms: {:?}", results);
+        println!("\nCPU-time used (ms): {:?}", cpu_results);
+        println!("Runtime in ms: {:?}", results);
     }
 }
 
@@ -260,9 +269,9 @@ fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
 
     // State verification
     assert!(atomically(|trans3| Ok(decoder_state
-                                   .fragments_map
-                                   .read(trans3)?
-                                   .is_empty())));
+        .fragments_map
+        .read(trans3)?
+        .is_empty())));
 
     found_attacks
 }

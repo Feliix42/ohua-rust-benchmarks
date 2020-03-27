@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use cpu_time::ProcessTime;
 use intruder::decoder::simple::{decode_packet, DecoderState};
 use intruder::detector::{run_detector, DetectorResult};
 use intruder::*;
@@ -95,6 +96,7 @@ fn main() {
     }
 
     let mut results = Vec::with_capacity(runs);
+    let mut cpu_results = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -102,13 +104,16 @@ fn main() {
 
         // start the clock
         let start = PreciseTime::now();
+        let cpu_start = ProcessTime::now();
 
         // run the algorithm
         let result = analyze_stream(input_data);
 
         // stop the clock
+        let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
         let runtime_ms = start.to(end).num_milliseconds();
+        let cpu_runtime_ms = cpu_end.duration_since(cpu_start).as_millis();
 
         if !json_dump {
             println!("[INFO] Routing run {} completed.", r + 1);
@@ -125,6 +130,7 @@ fn main() {
             println!("[ERROR] Output verification failed. An incorrect number of attacks has been found. ({}/{})", result.len(), attacks.len());
         } else {
             results.push(runtime_ms);
+            cpu_results.push(cpu_runtime_ms);
         }
     }
 
@@ -145,6 +151,7 @@ fn main() {
     \"runs\": {runs},
     \"prng_seed\": {seed},
     \"max_packet_len\": {packet_len},
+    \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             flows = flowcount,
@@ -153,6 +160,7 @@ fn main() {
             runs = runs,
             seed = rng_seed,
             packet_len = max_packet_len,
+            cpu = cpu_results,
             res = results
         ))
         .unwrap();
@@ -165,7 +173,8 @@ fn main() {
         println!("    Maximal Packet Length: {}", max_packet_len);
         println!("    Generated Attacks:     {}", attacks.len());
         println!("    Runs:                  {}", runs);
-        println!("\nRuntime in ms: {:?}", results);
+        println!("\nCPU-time used (ms): {:?}", cpu_results);
+        println!("Runtime in ms: {:?}", results);
     }
 }
 

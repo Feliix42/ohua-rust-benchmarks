@@ -1,5 +1,6 @@
 #![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
+use cpu_time::ProcessTime;
 use intruder::decoder::simple::{decode_packet, DecoderState};
 use intruder::decoder::DecodedPacket;
 use intruder::detector::{run_detector, DetectorResult};
@@ -11,8 +12,9 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
+use std::sync::mpsc::{self, Receiver};
 use tokio::runtime::{Builder, Runtime};
-use std::sync::mpsc::{Receiver, self};
+use std::sync::Arc;
 
 static TASKS_PER_THREAD: usize = 2;
 
@@ -105,7 +107,6 @@ fn main() {
 
     let threadcount = usize::from_str(matches.value_of("threads").unwrap())
         .expect("Could not parse number of threads");
-    
     // generate the input data
     let (input, attacks) = generate_stream(flowcount, attack_percentage, max_packet_len, rng_seed);
     if !json_dump {
@@ -116,22 +117,25 @@ fn main() {
     }
 
     let mut results = Vec::with_capacity(runs);
+    let mut cpu_results = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
-        // let input_data = TVar::new(input.clone());
         let input_data = input.clone();
 
         // start the clock
         let start = PreciseTime::now();
+        let cpu_start = ProcessTime::now();
 
         // run the algorithm
         #[ohua]
         let result = algos::futures(input_data, threadcount);
 
         // stop the clock
+        let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
         let runtime_ms = start.to(end).num_milliseconds();
+        let cpu_runtime_ms = cpu_end.duration_since(cpu_start).as_millis();
 
         if !json_dump {
             println!("[INFO] Routing run {} completed.", r + 1);
@@ -142,6 +146,7 @@ fn main() {
             println!("[ERROR] Output verification failed. An incorrect number of attacks has been found. ({}/{})", result.len(), attacks.len());
         } else {
             results.push(runtime_ms);
+            cpu_results.push(cpu_runtime_ms);
         }
     }
 
@@ -164,6 +169,7 @@ fn main() {
     \"prng_seed\": {seed},
     \"max_packet_len\": {packet_len},
     \"threadcount\": {threadcount},
+    \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             flows = flowcount,
@@ -173,6 +179,7 @@ fn main() {
             seed = rng_seed,
             packet_len = max_packet_len,
             threadcount = threadcount,
+            cpu = cpu_results,
             res = results
         ))
         .unwrap();
@@ -186,7 +193,8 @@ fn main() {
         println!("    Generated Attacks:     {}", attacks.len());
         println!("    Threads used:          {}", threadcount);
         println!("    Runs:                  {}", runs);
-        println!("\nRuntime in ms: {:?}", results);
+        println!("\nCPU-time used (ms): {:?}", cpu_results);
+        println!("Runtime in ms: {:?}", results);
     }
 }
 
@@ -232,7 +240,10 @@ fn init_state() -> DecoderState {
 }
 
 /// Splits the input vector into evenly sized vectors for `split_size` workers.
-fn split_evenly(mut to_split: VecDeque<DecodedPacket>, split_size: usize) -> Vec<VecDeque<DecodedPacket>> {
+fn split_evenly(
+    mut to_split: VecDeque<DecodedPacket>,
+    split_size: usize,
+) -> Vec<VecDeque<DecodedPacket>> {
     let split_size = split_size * TASKS_PER_THREAD;
     let l = to_split.len() / split_size;
     let mut rest = to_split.len() % split_size;
@@ -258,28 +269,37 @@ fn split_evenly(mut to_split: VecDeque<DecodedPacket>, split_size: usize) -> Vec
 
 fn spawn_onto_pool(
     mut worklist: Vec<VecDeque<DecodedPacket>>,
-    threadcount: usize,
-) -> (Runtime, Vec<Receiver<Vec<(DecodedPacket, DetectorResult)>>>) {
-    let rt = Builder::new().threaded_scheduler().num_threads(threadcount).build().unwrap();
+    rt: Arc<Runtime>
+) -> (Arc<Runtime>, Vec<Receiver<Vec<(DecodedPacket, DetectorResult)>>>) {
     let mut handles = Vec::with_capacity(worklist.len());
 
     for lst in worklist.drain(..) {
         let (sx, rx) = mpsc::channel();
 
         rt.spawn(async move { sx.send(vec_analyze(lst)).unwrap() });
-
         handles.push(rx);
     }
 
-    (rt, handles)
+   (rt, handles)
 }
 
-fn collect_and_shutdown(
-    tokio_data: (Runtime, Vec<Receiver<Vec<(DecodedPacket, DetectorResult)>>>),
-) -> Vec<(DecodedPacket, DetectorResult)> {
-    let (_rt, mut handles) = tokio_data;
+fn create_runtime(threadcount: usize) -> Arc<Runtime> {
+    Arc::new(
+        Builder::new()
+            .threaded_scheduler()
+            .core_threads(threadcount)
+            .thread_name("ohua-tokio-worker")
+            .build()
+            .unwrap(),
+    )
+}
 
-    let results = handles.drain(..).map(|h| h.recv().unwrap()).flatten().collect();
-
-    results
+fn collect_work<T>(
+    tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>),
+) -> Vec<T> {
+    let (_rt, mut receivers) = tokio_data;
+    receivers.drain(..)
+        .map(|h| h.recv().unwrap())
+        .flatten()
+        .collect()
 }
