@@ -253,7 +253,7 @@ fn spawn_onto_pool(
     mut values: Vec<Vec<Value>>,
     centroids: Arc<Vec<Centroid>>,
     rt: Arc<Runtime>,
-) -> Vec<Receiver<Vec<(Value, f32)>>> {
+) -> (Arc<Runtime>, Vec<Receiver<Vec<(Value, f32)>>>) {
     let mut handles = Vec::with_capacity(values.len());
 
     for lst in values.drain(..) {
@@ -265,7 +265,7 @@ fn spawn_onto_pool(
         handles.push(rx);
     }
 
-    handles
+    (rt, handles)
 }
 
 fn create_runtime(threadcount: usize) -> Arc<Runtime> {
@@ -279,7 +279,8 @@ fn create_runtime(threadcount: usize) -> Arc<Runtime> {
     )
 }
 
-fn collect_work<T>(mut receivers: Vec<Receiver<Vec<T>>>) -> Vec<T> {
+fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>)) -> Vec<T> {
+    let (_rt, mut receivers) = tokio_data;
     receivers
         .drain(..)
         .map(|h| h.recv().unwrap())

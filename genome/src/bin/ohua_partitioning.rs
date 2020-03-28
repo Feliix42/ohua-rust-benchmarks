@@ -245,7 +245,7 @@ fn spawn_onto_pool(
     overlap: usize,
     segments: Vec<SequencerItem>,
     rt: Arc<Runtime>,
-) -> Vec<Receiver<Vec<Option<(usize, usize)>>>> {
+) -> (Arc<Runtime>, Vec<Receiver<Vec<Option<(usize, usize)>>>>) {
     let mut handles = Vec::with_capacity(indices.len());
     let segments = Arc::new(segments);
 
@@ -258,10 +258,13 @@ fn spawn_onto_pool(
         handles.push(rx);
     }
 
-    handles
+    (rt, handles)
 }
 
-fn collect_work<T>(mut receivers: Vec<Receiver<Vec<T>>>) -> Vec<T> {
+fn collect_work<T>(
+    tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>),
+) -> Vec<T> {
+    let (_rt, mut receivers) = tokio_data;
     receivers
         .drain(..)
         .map(|h| h.recv().unwrap())
@@ -291,7 +294,7 @@ fn deduplicate(mut segments: Vec<Vec<Nucleotide>>) -> Vec<SequencerItem> {
 fn spawn_onto_pool2(
     mut segments: Vec<Vec<Vec<Nucleotide>>>,
     rt: Arc<Runtime>,
-) -> Vec<Receiver<Vec<SequencerItem>>> {
+) -> (Arc<Runtime>, Vec<Receiver<Vec<SequencerItem>>>) {
     let mut handles = Vec::with_capacity(segments.len());
 
     for lst in segments.drain(..) {
@@ -302,7 +305,7 @@ fn spawn_onto_pool2(
         handles.push(rx);
     }
 
-    handles
+    (rt, handles)
 }
 
 fn create_runtime(threadcount: usize) -> Arc<Runtime> {
