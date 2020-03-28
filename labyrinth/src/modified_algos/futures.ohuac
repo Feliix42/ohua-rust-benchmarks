@@ -2,24 +2,26 @@ ns some_ns;
 
 use sf labyrinth::grid::update_maze;
 use sf labyrinth::{inc_stats, is_not_empty, pack_stat, take_n, join};
-use sf crate::{collect_and_shutdown, spawn_onto_pool, split_evenly};
+use sf crate::{collect_work, create_runtime, spawn_onto_pool, split_evenly};
 
 fn main(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, threadcount: usize, taskcount: usize) -> (Maze, usize) {
-    transact(maze, to_map, frequency, threadcount, taskcount, 0)
+    let rt = create_runtime(threadcount);
+
+    transact(maze, to_map, frequency, threadcount, taskcount, rt, 0)
 }
 
-fn transact(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, threadcount: usize, taskcount: usize, stats: usize) -> (Maze, usize) {
+fn transact(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, threadcount: usize, taskcount: usize, rt: Arc<tokio::runtime::Runtime>, stats: usize) -> (Maze, usize) {
     // worklist absplitten
     let (points, still_to_map) = take_n(to_map, frequency);
 
     // worklist aufsplitten
     let worklist = split_evenly(points, taskcount);
 
-    // threadpool erzeugen und threads spawnen, pool und handles zurück
-    let tokio_stuff = spawn_onto_pool(worklist, maze, threadcount);
+    // threads spawnen, pool und handles zurück
+    let tokio_stuff = spawn_onto_pool(worklist, maze, rt);
 
-    // handles collecten, shutdown auf pool callen
-    let paths = collect_and_shutdown(tokio_stuff);
+    // handles collecten
+    let paths = collect_work(tokio_stuff);
 
 
     let (remap_paths, new_maze) = update_maze(maze, paths);
@@ -29,7 +31,7 @@ fn transact(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, threadcou
     let ret = pack_stat(new_maze, stats);
 
     if (is_not_empty(to_remap)) {
-        transact(new_maze, to_remap, frequency, threadcount, taskcount, ct)
+        transact(new_maze, to_remap, frequency, threadcount, taskcount, rt, ct)
     } else {
         ret
     }

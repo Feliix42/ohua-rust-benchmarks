@@ -1,6 +1,7 @@
 #![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
 // use futures::future::{Future, ok, lazy};
+use cpu_time::ProcessTime;
 use labyrinth::parser;
 use labyrinth::pathfinder::find_path;
 use labyrinth::types::{Maze, Path, Point};
@@ -8,11 +9,11 @@ use ohua_codegen::ohua;
 use ohua_runtime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
-use std::sync::mpsc::{Receiver, self};
 use std::str::FromStr;
+use std::sync::mpsc::{self, Receiver};
+use std::sync::Arc;
 use time::PreciseTime;
 use tokio::runtime::{Builder, Runtime};
-use cpu_time::ProcessTime;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -114,7 +115,7 @@ fn main() {
         let end = PreciseTime::now();
 
         if !json_dump {
-            println!("[INFO] Routing run {} complete.", r+1);
+            println!("[INFO] Routing run {} complete.", r + 1);
         }
 
         let runtime_ms = start.to(end).num_milliseconds();
@@ -146,10 +147,11 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
+    \"algorithm\": \"ohua-futures\",
     \"configuration\": \"{conf}\",
     \"paths\": {paths},
     \"runs\": {runs},
-    \"threads_in_pool\": {threadcount},
+    \"threadcount\": {threadcount},
     \"simultaneous_tasks\": {taskcount},
     \"update_frequency\": {freq},
     \"mapped\": {mapped:?},
@@ -180,7 +182,7 @@ fn main() {
         println!("    Update frequency:   {}", updates);
         println!("    Mapped:             {:?}", mapped_paths);
         println!("    Collisions:         {:?}", collisions);
-        println!("CPU time used: {:?} ms", cpu_results);
+        println!("\nCPU time used: {:?} ms", cpu_results);
         println!("Routing Time: {:?} ms", results);
     }
 }
@@ -208,16 +210,17 @@ fn split_evenly(mut points: Vec<(Point, Point)>, taskcount: usize) -> Vec<Vec<(P
     paths_to_map
 }
 
-fn vec_pathfind(maze: Maze, mut points: Vec<(Point, Point)>) -> Vec<Option<Path>> {
+fn vec_pathfind(maze: Arc<Maze>, mut points: Vec<(Point, Point)>) -> Vec<Option<Path>> {
     points.drain(..).map(|p| find_path(&maze, p)).collect()
 }
 
 fn spawn_onto_pool(
     mut worklist: Vec<Vec<(Point, Point)>>,
     maze: Maze,
-    threadcount: usize,
-) -> (Runtime, Vec<Receiver<Vec<Option<Path>>>>) {
-    let rt = Builder::new().threaded_scheduler().num_threads(threadcount).build().unwrap();
+    rt: Arc<Runtime>,
+) -> (Arc<Runtime>, Vec<Receiver<Vec<Option<Path>>>>) {
+    let maze = Arc::new(maze);
+
     let mut handles = Vec::with_capacity(worklist.len());
 
     for lst in worklist.drain(..) {
@@ -232,15 +235,22 @@ fn spawn_onto_pool(
     (rt, handles)
 }
 
-fn collect_and_shutdown(
-    tokio_data: (Runtime, Vec<Receiver<Vec<Option<Path>>>>),
-) -> Vec<Option<Path>> {
-    let (_rt, mut handles) = tokio_data;
+fn create_runtime(threadcount: usize) -> Arc<Runtime> {
+    Arc::new(
+        Builder::new()
+            .threaded_scheduler()
+            .core_threads(threadcount)
+            .thread_name("ohua-tokio-worker")
+            .build()
+            .unwrap(),
+    )
+}
 
-    // moved up
-    // rt.shutdown_on_idle().wait().unwrap();
-
-    let results = handles.drain(..).map(|h| h.recv().unwrap()).flatten().collect();
-
-    results
+fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>)) -> Vec<T> {
+    let (_rt, mut receivers) = tokio_data;
+    receivers
+        .drain(..)
+        .map(|h| h.recv().unwrap())
+        .flatten()
+        .collect()
 }

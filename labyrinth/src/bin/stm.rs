@@ -117,9 +117,10 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
+    \"algorithm\": \"stm\",
     \"configuration\": \"{conf}\",
     \"paths\": {paths},
-    \"threads\": {threads},
+    \"threadcount\": {threads},
     \"runs\": {runs},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
