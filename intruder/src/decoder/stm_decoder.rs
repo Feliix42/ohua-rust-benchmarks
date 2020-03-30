@@ -1,17 +1,17 @@
 use super::DecodedPacket;
 use crate::Packet;
-use std::collections::HashMap;
-use stm::{StmResult, TVar, Transaction};
+use stm::{StmResult, Transaction};
+use stm_datastructures::THashMap;
 
 #[derive(Clone)]
 pub struct StmDecoderState {
-    pub fragments_map: TVar<HashMap<usize, TVar<Vec<Packet>>>>,
+    pub fragments_map: THashMap<usize, Vec<Packet>>,
 }
 
 impl StmDecoderState {
-    pub fn new() -> Self {
+    pub fn new(bucket_no: usize) -> Self {
         Self {
-            fragments_map: TVar::new(HashMap::new()),
+            fragments_map: THashMap::new(bucket_no),
         }
     }
 }
@@ -25,10 +25,11 @@ pub fn decode_packet(
     transaction: &mut Transaction,
 ) -> StmResult<Option<DecodedPacket>> {
     if packet.packets_in_flow != 1 {
-        let mut frags = state.fragments_map.read(transaction)?;
+        // get the matching TVar (== bucket) and read it
+        let bucket = state.fragments_map.get_bucket(&packet.flow_id);
+        let mut frags = bucket.read(transaction)?;
         // this is part of a fragmented flow
-        let decoded_tvar = frags.entry(packet.flow_id).or_insert(TVar::new(Vec::new()));
-        let mut decoded = decoded_tvar.read(transaction)?;
+        let decoded = frags.entry(packet.flow_id).or_insert(Vec::new());
 
         // insert the current element into the queue
         let idx = decoded
@@ -43,20 +44,17 @@ pub fn decode_packet(
             let reconstructed_data = decoded
                 .drain(..)
                 .fold(String::new(), |acc, p| acc + &p.data);
-            decoded_tvar.write(transaction, Vec::new())?;
 
-            state.fragments_map.modify(transaction, |mut f| {
-                // TODO: Remove assertion?
-                assert!(f.remove(&flow_id).is_some());
-                f
-            })?;
+            // remove the flow from the hashmap & write that back
+            assert!(frags.remove(&flow_id).is_some());
+            bucket.write(transaction, frags)?;
+
             Ok(Some(DecodedPacket {
                 flow_id,
                 data: reconstructed_data,
             }))
         } else {
-            decoded_tvar.write(transaction, decoded)?;
-            state.fragments_map.write(transaction, frags)?;
+            bucket.write(transaction, frags)?;
             Ok(None)
         }
     } else {
@@ -74,6 +72,7 @@ pub fn decode_packet(
 mod tests {
     use super::*;
     use crate::Packet;
+    use stm::atomically;
 
     #[test]
     fn basic_decoding() {
@@ -99,12 +98,12 @@ mod tests {
             data: "o".into(),
         };
 
-        let mut dec = DecoderState::new();
+        let dec = StmDecoderState::new();
 
-        assert_eq!(decode_packet(inp1, &mut dec), None);
-        assert_eq!(decode_packet(inp2, &mut dec), None);
+        assert_eq!(atomically(|trans| decode_packet(&inp1, &dec, trans)), None);
+        assert_eq!(atomically(|trans| decode_packet(&inp2, &dec, trans)), None);
         assert_eq!(
-            decode_packet(inp3, &mut dec),
+            atomically(|trans| decode_packet(&inp3, &dec, trans)),
             Some(DecodedPacket {
                 flow_id: 42,
                 data: "two".into()

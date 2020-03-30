@@ -252,7 +252,7 @@ fn partition_input_vec(mut packets: VecDeque<Packet>, threadcount: usize) -> Vec
 
 fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
     let mut found_attacks = Vec::new();
-    let decoder_state = StmDecoderState::new();
+    let decoder_state = StmDecoderState::new(threadcount);
 
     let mut handles = Vec::with_capacity(threadcount);
     let mut inputs = partition_input_vec(packets, threadcount);
@@ -268,10 +268,9 @@ fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
     }
 
     // State verification
-    assert!(atomically(|trans3| Ok(decoder_state
+    assert!(atomically(|trans3| decoder_state
         .fragments_map
-        .read(trans3)?
-        .is_empty())));
+        .is_empty(trans3)));
 
     found_attacks
 }
