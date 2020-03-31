@@ -3,8 +3,7 @@
 set -e
 
 # the list of benchmarks
-# declare -a benches=("labyrinth" "intruder" "genome" "kmeans")
-declare -a benches=("genome")
+declare -a benches=("labyrinth" "intruder" "genome" "kmeans")
 TODAY=`date +%Y-%m-%d`
 
 echo "################################################################################"
