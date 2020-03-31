@@ -16,28 +16,27 @@ tokio = { version = "0.2", features = ["full"], optional = true }
 # futures = { version = "0.1", optional = true }
 
 [features]
-bench = ["time", "cpu-time"]
-cli = ["clap"]
+cli = ["clap", "time", "cpu-time"]
 ohua = ["ohua_codegen", "ohua_runtime"]
 transactional = ["stm"]
 future = ["ohua", "tokio"] #, "futures"]
 
 [[bin]]
-name = "simple_sequential"
+name = "sequential"
 path = "src/bin/simple_sequential.rs"
-required-features = ["cli", "bench"]
+required-features = ["cli"]
 
 [[bin]]
 name = "ohua"
 path = "src/bin/ohua.rs"
-required-features = ["ohua", "cli", "bench"]
+required-features = ["ohua", "cli"]
 
 [[bin]]
 name = "stm"
 path = "src/bin/stm.rs"
-required-features = ["transactional", "cli", "bench"]
+required-features = ["transactional", "cli"]
 
 [[bin]]
 name = "ohua_futures"
 path = "src/bin/ohua_futures.rs"
-required-features = ["ohua", "cli", "bench", "future"]
+required-features = ["ohua", "cli", "future"]

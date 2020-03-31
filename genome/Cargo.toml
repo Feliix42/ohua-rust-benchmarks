@@ -44,11 +44,11 @@ path = "src/bin/ohua.rs"
 required-features = ["ohua", "cli"]
 
 [[bin]]
-name = "ohua_futures"
+name = "ohua_futures_no_partitioning"
 path = "src/bin/ohua_futures.rs"
 required-features = ["ohua", "cli", "future"]
 
 [[bin]]
-name = "ohua_futures_partitioning"
+name = "ohua_futures"
 path = "src/bin/ohua_partitioning.rs"
 required-features = ["ohua", "cli", "future"]

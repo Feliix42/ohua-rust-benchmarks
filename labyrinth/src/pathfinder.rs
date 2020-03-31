@@ -1,3 +1,4 @@
+#[allow(unused_imports)]
 use crate::types::{at_grid_coordinates, Field, Grid, Maze, Path, Point};
 use std::collections::{HashMap, HashSet, VecDeque};
 
