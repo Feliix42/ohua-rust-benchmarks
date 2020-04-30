@@ -7,7 +7,7 @@ declare -a benches=("labyrinth" "intruder" "genome" "kmeans")
 TODAY=`date +%Y-%m-%d`
 
 echo "################################################################################"
-echo "#               Ohua-STM benchmark suite               #"
+echo "#                           Ohua-STM benchmark suite                           #"
 echo "################################################################################"
 echo ""
 

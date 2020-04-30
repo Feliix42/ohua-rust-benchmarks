@@ -50,21 +50,19 @@ def generate_shellscript(sizes):
         # "random-x32-y32-z3-n96.txt", "random-x48-y48-z3-n64.txt",
         "random-x128-y128-z5-n128.txt", "random-x256-y256-z5-n256.txt"
     ]
-    # FIXME: temporär nur 20
-    runs = "20"
+    runs = "30"
 
     # fixe frequencies
-    frequencies = [1, 2, 3, 4, 5, 6, 7]
+    frequencies = [1, 2, 3, 4, 6]
 
     with open("./template_comb.sh") as f:
         template = f.read()
 
     build_calls = ""
     for s in sizes:
-        build_calls += "cargo build --release --bin ohua-split{}-freq --features \"cli bench ohua\"\n".format(
-            s)
-        build_calls += "cargo build --release --bin ohua-split{} --features \"cli bench ohua\"\n".format(
-            s)
+        build_calls += "cargo build --release --bin ohua-split{}-freq --features \"cli ohua\"\n".format(s)
+        # build_calls += "cargo build --release --bin ohua-split{} --features \"cli ohua\"\n".format(
+            # s)
 
     executions = ""
     for inp in inputs:
@@ -77,27 +75,27 @@ target/release/simple_sequential inputs/{inp} --json -o split_freq --runs {runs}
 
 echo " done."
 
-echo -n "Ohua (split)"
+# echo -n "Ohua (split)"
 # run ohua
 """.format(
             inp=inp, runs=runs)
-        split_calls = ""
-        for s in sizes:
-            split_calls += """
-target/release/ohua-split{n} inputs/{inp} --json -o split_freq --runs {runs}
-echo -n "." """.format(
-                n=s, inp=inp, runs=runs)
-        executions += split_calls
-        executions += """
-echo " done."
+#         split_calls = ""
+#         for s in sizes:
+#             split_calls += """
+# target/release/ohua-split{n} inputs/{inp} --json -o split_freq --runs {runs}
+# echo -n "." """.format(
+#                 n=s, inp=inp, runs=runs)
+#         executions += split_calls
+#         executions += """
+# echo " done."
 
 
-"""
+# """
         executions += """echo -n "Ohua (split-freq)"
 # run ohua
 """
-        split_calls = ""
         for s in sizes:
+            split_calls = ""
             for f in frequencies:
                 split_calls += """
 target/release/ohua-split{n}-freq inputs/{inp} --json -o split_freq --runs {runs} -f {fr}
