@@ -9,6 +9,10 @@ pub mod stm_grid;
 pub mod grid;
 
 #[cfg(feature = "ohua")]
+pub mod original;
+
+
+#[cfg(feature = "ohua")]
 pub fn increase(
     inp: (u32, u32),
     remap_paths: Vec<(crate::types::Point, crate::types::Point)>,

@@ -40,3 +40,8 @@ required-features = ["transactional", "cli"]
 name = "ohua_futures"
 path = "src/bin/ohua_futures.rs"
 required-features = ["ohua", "cli", "future"]
+
+[[bin]]
+name = "ohua_futures_new"
+path = "src/bin/ohua_futures_new.rs"
+required-features = ["ohua", "cli", "future"]
