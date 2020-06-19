@@ -246,7 +246,8 @@ fn splitup(mut to_split: Vec<Value>, split_size: usize) -> Vec<Vec<Value>> {
         }
     }
 
-    splitted
+    // tmp workaround
+    splitted.drain(..).rev().collect()
 }
 
 fn spawn_onto_pool(
