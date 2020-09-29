@@ -90,6 +90,7 @@ fn main() {
     // run benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
+    let mut convergence_after = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -101,7 +102,7 @@ fn main() {
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        run_kmeans(input_data, initial_centers, threshold);
+        let iterations = run_kmeans(input_data, initial_centers, threshold);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -115,6 +116,7 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_results.push(cpu_runtime_ms);
+        convergence_after.push(iterations);
     }
 
     // generate output
@@ -133,6 +135,7 @@ fn main() {
     \"input\": \"{input_path}\",
     \"values-count\": {value_count},
     \"runs\": {runs},
+    \"converged_after\": {conv:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -141,6 +144,7 @@ fn main() {
             input_path = input_path,
             value_count = clusters.len(),
             runs = runs,
+            conv = convergence_after,
             cpu = cpu_results,
             res = results
         ))
@@ -153,12 +157,13 @@ fn main() {
         println!("    Input file used:             {}", input_path);
         println!("    Number of values from input: {}", clusters.len());
         println!("    Runs:                        {}", runs);
-        println!("\nCPU-time used (ms): {:?}", cpu_results);
+        println!("\nConvergence after: {:?}", convergence_after);
+        println!("CPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
     }
 }
 
-fn run_kmeans(mut values: Vec<Value>, mut centroids: Vec<Centroid>, threshold: f32) {
+fn run_kmeans(mut values: Vec<Value>, mut centroids: Vec<Centroid>, threshold: f32) -> usize{
     let mut runs = 0;
     let mut delta = std::f32::MAX;
 
@@ -181,5 +186,5 @@ fn run_kmeans(mut values: Vec<Value>, mut centroids: Vec<Centroid>, threshold: f
         centroids = Centroid::from_assignments(&values, centroids.len());
     }
 
-    println!("Finished after {} iterations.", runs);
+    runs
 }

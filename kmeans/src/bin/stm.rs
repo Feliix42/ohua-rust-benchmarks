@@ -105,6 +105,7 @@ fn main() {
     // run benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
+    let mut convergence_after = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -116,7 +117,7 @@ fn main() {
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        run_kmeans(input_data, initial_centers, threshold, threadcount);
+        let iterations = run_kmeans(input_data, initial_centers, threshold, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -130,6 +131,7 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_results.push(cpu_runtime_ms);
+        convergence_after.push(iterations);
     }
 
     // generate output
@@ -149,6 +151,7 @@ fn main() {
     \"values-count\": {value_count},
     \"threadcount\": {threads},
     \"runs\": {runs},
+    \"converged_after\": {conv:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -158,6 +161,7 @@ fn main() {
             value_count = clusters.len(),
             threads = threadcount,
             runs = runs,
+            conv = convergence_after,
             cpu = cpu_results,
             res = results
         ))
@@ -171,7 +175,8 @@ fn main() {
         println!("    Number of values from input: {}", clusters.len());
         println!("    Number of threads used:      {}", threadcount);
         println!("    Runs:                        {}", runs);
-        println!("\nCPU-time used (ms): {:?}", cpu_results);
+        println!("\nConvergence after: {:?}", convergence_after);
+        println!("CPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
     }
 }
@@ -181,7 +186,7 @@ fn run_kmeans(
     mut centroids: Arc<Vec<Centroid>>,
     threshold: f32,
     threadcount: usize,
-) {
+) -> usize {
     let mut runs = 0;
     let delta = TVar::new(std::f32::MAX);
     let new_centroids = ComputeCentroid::new_empty(values[0].values.len(), centroids.len());
@@ -259,7 +264,7 @@ fn run_kmeans(
         });
     }
 
-    println!("Finished after {} iterations.", runs);
+    runs
 }
 
 /// Splits the input vector into evenly sized vectors for `split_size` workers.

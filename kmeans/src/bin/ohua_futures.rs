@@ -109,6 +109,7 @@ fn main() {
     // run benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
+    let mut convergence_after = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -140,6 +141,7 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_results.push(cpu_runtime_ms);
+        convergence_after.push(runs_necessary);
     }
 
     // generate output
@@ -159,6 +161,7 @@ fn main() {
     \"input\": \"{input_path}\",
     \"values-count\": {value_count},
     \"runs\": {runs},
+    \"converged_after\": {conv:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -168,6 +171,7 @@ fn main() {
             input_path = input_path,
             value_count = clusters.len(),
             runs = runs,
+            conv = convergence_after,
             cpu = cpu_results,
             res = results
         ))
@@ -181,7 +185,8 @@ fn main() {
         println!("    Number of values from input: {}", clusters.len());
         println!("    Threads used:                {}", threadcount);
         println!("    Runs:                        {}", runs);
-        println!("\nCPU-time used (ms): {:?}", cpu_results);
+        println!("\nConvergence after: {:?}", convergence_after);
+        println!("CPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
     }
 }
