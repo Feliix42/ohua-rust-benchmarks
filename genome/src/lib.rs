@@ -1,3 +1,4 @@
+#![feature(get_mut_unchecked)]
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 

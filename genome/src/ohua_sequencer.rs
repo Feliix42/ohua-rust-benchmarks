@@ -56,12 +56,12 @@ pub fn search_match(segments: Arc<Vec<SequencerItem>>, overlap: usize, elem: usi
     None
 }
 
-pub fn reassemble(unique_segments: Vec<SequencerItem>) -> Vec<Nucleotide> {
+pub fn reassemble(unique_segments: Arc<Vec<SequencerItem>>) -> Vec<Nucleotide> {
     if cfg!(feature = "verify") {
         println!("[TEST] checking segment links");
         let mut forward_links = 0;
         let mut backward_links = 0;
-        for item in &unique_segments {
+        for item in unique_segments.iter() {
             if item.next.is_none() {
                 forward_links += 1;
             }
@@ -97,19 +97,28 @@ pub fn reassemble(unique_segments: Vec<SequencerItem>) -> Vec<Nucleotide> {
     reconstructed_sequence
 }
 
-pub fn update_sequence(mut seq: Vec<SequencerItem>, updates: Vec<Option<(usize, usize)>>, overlap: usize) -> Vec<SequencerItem> {
-    for u in updates {
-        if let Some((first, last)) = u {
-            if seq[first].next.is_some() || seq[last].prev.is_some() {
-                eprintln!("Encountered invalid match!");
-                continue;
-            }
+pub fn update_sequence(mut seq_arc: Arc<Vec<SequencerItem>>, updates: Arc<Vec<Option<(usize, usize)>>>, overlap: usize) -> Arc<Vec<SequencerItem>> {
+    //use std::borrow::Borrow;
+    //let bla: &Vec<SequencerItem> = seq_arc.borrow();
+    //let mut seq: Vec<SequencerItem> = bla.clone();
+    
+    unsafe {
+        let mut seq: &mut Vec<SequencerItem> = Arc::get_mut_unchecked(&mut seq_arc);
 
-            seq[first].next = Some(last);
-            seq[last].prev = Some(first);
-            seq[last].overlap_with_prev = overlap;
+        for u in updates.iter() {
+            if let Some((first, last)) = u {
+                if seq[*first].next.is_some() || seq[*last].prev.is_some() {
+                    eprintln!("Encountered invalid match!");
+                    continue;
+                }
+
+                seq[*first].next = Some(*last);
+                seq[*last].prev = Some(*first);
+                seq[*last].overlap_with_prev = overlap;
+            }
         }
     }
 
-    seq
+    // Arc::new(seq)
+    seq_arc
 }

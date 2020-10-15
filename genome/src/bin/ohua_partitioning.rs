@@ -189,7 +189,7 @@ fn main() {
     }
 }
 
-fn generate_iterator_indices(seq: Vec<SequencerItem>, threadcount: usize) -> Vec<Vec<usize>> {
+fn generate_iterator_indices(seq: Arc<Vec<SequencerItem>>, threadcount: usize) -> Vec<Vec<usize>> {
     let v = seq.iter().enumerate().rev().map(|(i, _)| i).collect();
     split_evenly(v, threadcount)
 }
@@ -243,11 +243,11 @@ fn check_items(
 fn spawn_onto_pool(
     mut indices: Vec<Vec<usize>>,
     overlap: usize,
-    segments: Vec<SequencerItem>,
+    segments: Arc<Vec<SequencerItem>>,
     rt: Arc<Runtime>,
 ) -> (Arc<Runtime>, Vec<Receiver<Vec<Option<(usize, usize)>>>>) {
     let mut handles = Vec::with_capacity(indices.len());
-    let segments = Arc::new(segments);
+    // let segments = Arc::new(segments);
 
     for lst in indices.drain(..) {
         let (sx, rx) = mpsc::channel();
@@ -261,15 +261,15 @@ fn spawn_onto_pool(
     (rt, handles)
 }
 
-fn collect_work<T>(
-    tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>),
-) -> Vec<T> {
+fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>)) -> Arc<Vec<T>> {
     let (_rt, mut receivers) = tokio_data;
-    receivers
-        .drain(..)
-        .map(|h| h.recv().unwrap())
-        .flatten()
-        .collect()
+    Arc::new(
+        receivers
+            .drain(..)
+            .map(|h| h.recv().unwrap())
+            .flatten()
+            .collect(),
+    )
 }
 
 fn partition(mut segments: Segments, threadcount: usize) -> Vec<Vec<Vec<Nucleotide>>> {
