@@ -10,8 +10,8 @@ use stm_datastructures::THashSet;
 #[derive(Clone, Debug)]
 pub struct SequencerItem {
     pub segment: Vec<Nucleotide>,
-    pub prev: TVar<Option<SequencerItem>>,
-    pub next: TVar<Option<SequencerItem>>,
+    pub prev: TVar<Option<usize>>,
+    pub next: TVar<Option<usize>>,
     pub overlap_with_prev: TVar<usize>,
 }
 
@@ -122,8 +122,8 @@ pub fn run_sequencer(
                                     [(segment_length - match_length)..segment_length];
                                 if slice == cur_slice {
                                     // link both items together
-                                    segments[it].next.write(trans, Some(cur_seg.clone()))?;
-                                    cur_seg.prev.write(trans, Some(segments[it].clone()))?;
+                                    segments[it].next.write(trans, Some(idx))?;
+                                    cur_seg.prev.write(trans, Some(it))?;
                                     cur_seg.overlap_with_prev.write(trans, match_length)?;
                                     break 'inner;
                                 }
@@ -171,8 +171,8 @@ pub fn reconstruct(unique_segments: Arc<VecDeque<SequencerItem>>) -> Vec<Nucleot
         let mut cur = unique_segments
             .iter()
             .find(|seg| seg.prev.read_atomic().is_none())
-            .unwrap()
-            .clone();
+            .unwrap();
+            // .clone();
 
         let mut reconstructed_sequence = Vec::new();
 
@@ -182,8 +182,8 @@ pub fn reconstruct(unique_segments: Arc<VecDeque<SequencerItem>>) -> Vec<Nucleot
 
             if cur.next.read(trans)?.is_some() {
                 // move to the next value -> have to assign to another let binding first to drop `val` due to ownership issues
-                let next = cur.next.read(trans)?.unwrap().clone();
-                cur = next;
+                let next_idx = cur.next.read(trans)?.unwrap();
+                cur = &unique_segments[next_idx];
             } else {
                 break;
             }
