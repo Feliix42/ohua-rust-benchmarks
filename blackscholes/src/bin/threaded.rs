@@ -3,6 +3,7 @@ use clap::{App, Arg};
 use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
+use std::thread::{self, JoinHandle};
 use std::str::FromStr;
 use std::time::Instant;
 
@@ -45,10 +46,20 @@ fn main() {
                 .takes_value(true)
                 .default_value("results")
         )
+        .arg(
+            Arg::with_name("threadcount")
+                .long("threads")
+                .short("t")
+                .help("Sets the number of threads to use for computation")
+                .takes_value(true)
+                .default_value("4")
+        )
         .get_matches();
 
     // parse parameters
     let input_file = matches.value_of("INPUT").unwrap();
+    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap())
+        .expect("Could not parse thread count");
 
     // parse runtime parameters
     let runs =
@@ -81,7 +92,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let res = run_blackcholes(options);
+        let res = run_blackcholes(options, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -108,17 +119,19 @@ fn main() {
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
-        let filename = format!("{}/seq-{}opt-r{}_log.json", out_dir, input_data.len(), runs);
+        let filename = format!("{}/par-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"sequential\",
+    \"algorithm\": \"threaded\",
     \"options\": {opt},
+    \"threadcount\": {threadcount},
     \"runs\": {runs},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             opt = input_data.len(),
+            threadcount = threadcount,
             runs = runs,
             cpu = cpu_time,
             res = results
@@ -130,16 +143,58 @@ fn main() {
         println!("[info] All runs completed.");
         println!("\nStatistics:");
         println!("    Number of options: {}", input_data.len());
-        println!("    Input file used: {}", input_file);
-        println!("    Runs: {}", runs);
+        println!("    Input file used:   {}", input_file);
+        println!("    Threads:           {}", threadcount);
+        println!("    Runs:              {}", runs);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
         println!("Runtime (ms): {:?}", results);
     }
 }
 
-fn run_blackcholes(options: Vec<OptionData>) -> Vec<f32> {
-    options
-        .iter()
-        .map(OptionData::calculate_black_scholes)
+fn run_blackcholes(options: Vec<OptionData>, threadcount: usize) -> Vec<f32> {
+    let mut splitted = splitup(options, threadcount);
+
+    let mut handles: Vec<JoinHandle<Vec<f32>>> = Vec::with_capacity(threadcount);
+    for items in splitted.drain(..) {
+        handles.push(
+            thread::spawn(move || {
+                items
+                    .iter()
+                    .map(OptionData::calculate_black_scholes)
+                    .collect()
+            })
+        );
+    }
+
+    handles
+        .drain(..)
+        .map(|h| h.join().unwrap())
+        .flatten()
         .collect()
 }
+
+/// Splits the input vector into evenly sized vectors for `split_size` workers.
+fn splitup(mut to_split: Vec<OptionData>, split_size: usize) -> Vec<Vec<OptionData>> {
+    // TODO: Is this the new optimized implementation?
+    let l = to_split.len() / split_size;
+    let mut rest = to_split.len() % split_size;
+
+    let mut splitted = Vec::new();
+
+    for t_num in 0..split_size {
+        splitted.push(Vec::with_capacity(l));
+        if rest > 0 {
+            splitted[t_num] = to_split.split_off(to_split.len() - l - 1);
+            rest -= 1;
+        } else {
+            if to_split.len() <= l {
+                splitted[t_num] = to_split.split_off(0);
+            } else {
+                splitted[t_num] = to_split.split_off(to_split.len() - l);
+            }
+        }
+    }
+
+    splitted
+}
+

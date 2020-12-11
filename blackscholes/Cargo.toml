@@ -17,3 +17,8 @@ cli = ["clap", "cpu-time"]
 name = "sequential"
 path = "src/bin/seq.rs"
 required-features = ["cli"]
+
+[[bin]]
+name = "par"
+path = "src/bin/threaded.rs"
+required-features = ["cli"]
