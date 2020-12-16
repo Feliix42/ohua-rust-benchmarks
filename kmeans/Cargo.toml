@@ -38,6 +38,11 @@ required-features = ["ohua", "cli"]
 
 [[bin]]
 name = "ohua_futures"
+path = "src/bin/ohua_futures_new_split.rs"
+required-features = ["ohua", "cli", "future"]
+
+[[bin]]
+name = "ohua_futures_old"
 path = "src/bin/ohua_futures.rs"
 required-features = ["ohua", "cli", "future"]
 
