@@ -2,10 +2,10 @@ ns blackscholes;
 
 use sf crate::{collect_work, create_runtime, spawn_onto_pool, splitup};
 
-fn main(options: Vec<OptionData>, threadcount: usize) -> Vec<f32> {
+fn main(split_options: Vec<OptionData>, threadcount: usize) -> Vec<f32> {
     let rt = create_runtime(threadcount);
 
-    let split_options = splitup(options, threadcount);
+    // let split_options = splitup(options, threadcount);
 
     // spawn work onto thread pool
     let receivers = spawn_onto_pool(split_options, rt);

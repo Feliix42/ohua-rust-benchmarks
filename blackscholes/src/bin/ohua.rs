@@ -78,6 +78,7 @@ fn main() {
 
     // read and parse input data
     let input_data = OptionData::load_from_file(input_file).unwrap();
+    let partitioned = splitup(input_data.clone(), threadcount);
 
     if !json_dump {
         println!("[info] Loaded {} options.", input_data.len());
@@ -93,7 +94,8 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let options = Arc::new(input_data.clone());
+        let options = partitioned.clone();
+        // let options = input_data.clone();
 
         // start the clock
         let cpu_start = ProcessTime::now();
@@ -168,7 +170,7 @@ fn run_blackscholes(options: Vec<OptionData>) -> Vec<f32> {
 }
 
 
-fn splitup<T>(vec: Arc<Vec<T>>, split_size: usize) -> Vec<Vec<T>>
+fn splitup<T>(vec: Vec<T>, split_size: usize) -> Vec<Vec<T>>
 where
     T: Clone,
 {

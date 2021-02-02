@@ -70,6 +70,7 @@ fn main() {
 
     // read and parse input data
     let input_data = OptionData::load_from_file(input_file).unwrap();
+    let partitioned = splitup(input_data.clone(), threadcount);
 
     if !json_dump {
         println!("[info] Loaded {} options.", input_data.len());
@@ -85,7 +86,8 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let options = input_data.clone();
+        let options = partitioned.clone();
+        // let options = input_data.clone();
 
         // start the clock
         let cpu_start = ProcessTime::now();
@@ -151,11 +153,11 @@ fn main() {
     }
 }
 
-fn run_blackcholes(options: Vec<OptionData>, threadcount: usize) -> Vec<f32> {
-    let mut splitted = splitup(options, threadcount);
+fn run_blackcholes(splitted: Vec<Vec<OptionData>>, threadcount: usize) -> Vec<f32> {
+    // let mut splitted = splitup(options, threadcount);
 
     let mut handles: Vec<JoinHandle<Vec<f32>>> = Vec::with_capacity(threadcount);
-    for items in splitted.drain(..) {
+    for items in splitted.into_iter() {
         handles.push(
             thread::spawn(move || {
                 items
