@@ -173,28 +173,63 @@ fn run_blackcholes(options: Vec<OptionData>, threadcount: usize) -> Vec<f32> {
         .collect()
 }
 
+//fn splitup(mut to_split: Vec<OptionData>, split_size: usize) -> Vec<Vec<OptionData>> {
+    //// TODO: Is this the new optimized implementation?
+    //let l = to_split.len() / split_size;
+    //let mut rest = to_split.len() % split_size;
+
+    //let mut splitted = Vec::new();
+
+    //for t_num in 0..split_size {
+        //splitted.push(Vec::with_capacity(l));
+        //if rest > 0 {
+            //splitted[t_num] = to_split.split_off(to_split.len() - l - 1);
+            //rest -= 1;
+        //} else {
+            //if to_split.len() <= l {
+                //splitted[t_num] = to_split.split_off(0);
+            //} else {
+                //splitted[t_num] = to_split.split_off(to_split.len() - l);
+            //}
+        //}
+    //}
+
+    //splitted
+//}
+
 /// Splits the input vector into evenly sized vectors for `split_size` workers.
-fn splitup(mut to_split: Vec<OptionData>, split_size: usize) -> Vec<Vec<OptionData>> {
-    // TODO: Is this the new optimized implementation?
-    let l = to_split.len() / split_size;
-    let mut rest = to_split.len() % split_size;
+fn splitup<T>(vec: Vec<T>, split_size: usize) -> Vec<Vec<T>>
+where
+    T: Clone,
+{
+    let size = split_size;
+    let element_count = vec.len();
+    let mut rest = element_count % size;
+    let window_len: usize = element_count / size;
+    let per_vec = if rest != 0 {
+        window_len + 1
+    } else {
+        window_len
+    };
 
-    let mut splitted = Vec::new();
+    let mut res = vec![Vec::with_capacity(per_vec); size];
 
-    for t_num in 0..split_size {
-        splitted.push(Vec::with_capacity(l));
-        if rest > 0 {
-            splitted[t_num] = to_split.split_off(to_split.len() - l - 1);
+    let mut start = 0;
+    for i in 0..size {
+        // calculate the length of the window (for even distribution of the `rest` elements)
+        let len = if rest > 0 {
             rest -= 1;
+            window_len + 1
         } else {
-            if to_split.len() <= l {
-                splitted[t_num] = to_split.split_off(0);
-            } else {
-                splitted[t_num] = to_split.split_off(to_split.len() - l);
-            }
-        }
+            window_len
+        };
+
+        let dst = start + len;
+
+        res[i].extend_from_slice(&vec[start..dst]);
+
+        start = dst;
     }
 
-    splitted
+    return res;
 }
-
