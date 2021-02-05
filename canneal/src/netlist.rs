@@ -88,7 +88,7 @@ impl NetlistElement {
 }
 
 pub struct Netlist {
-    elements: Vec<Rc<RefCell<NetlistElement>>>,
+    pub elements: Vec<Rc<RefCell<NetlistElement>>>,
     max_x: usize,
     max_y: usize,
 }
@@ -212,17 +212,17 @@ impl Netlist {
         (idx_a, idx_b)
     }
 
-    pub fn get_random_element<R: Rng>(&self, different_from: Option<Rc<RefCell<NetlistElement>>>, rng: &mut R) -> Rc<RefCell<NetlistElement>> {
+    pub fn get_random_element<R: Rng>(&self, different_from: Option<usize>, rng: &mut R) -> usize {
         assert!(self.elements.len() > 1);
 
         let mut idx = rng.gen_range(0..self.elements.len());
         if let Some(diff) = different_from {
-            while self.elements[idx] == diff {
+            while idx == diff {
                 idx = rng.gen_range(0..self.elements.len());
             }
         }
 
-        self.elements[idx].clone()
+        idx
     }
 
     /// Swap the location information for two elements, effectively swapping their positions
