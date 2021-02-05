@@ -4,11 +4,15 @@ use std::io::{self, BufRead, BufReader};
 use std::str::FromStr;
 use std::{collections::HashMap, rc::Rc};
 
+use rand::Rng;
+
+#[derive(PartialEq, Eq)]
 pub struct Location {
     pub x: usize,
     pub y: usize,
 }
 
+#[derive(PartialEq, Eq)]
 pub struct NetlistElement {
     pub item_name: Option<String>,
     pub fan_in: Vec<Rc<RefCell<NetlistElement>>>,
@@ -85,6 +89,8 @@ impl NetlistElement {
 
 pub struct Netlist {
     elements: Vec<Rc<RefCell<NetlistElement>>>,
+    max_x: usize,
+    max_y: usize,
 }
 
 impl Netlist {
@@ -185,6 +191,67 @@ impl Netlist {
             }
         }
 
-        Ok(Self { elements })
+        Ok(Self { elements, max_x, max_y })
+    }
+
+    pub fn get_element_by_name(&self, name: &str) -> Rc<RefCell<NetlistElement>> {
+        unimplemented!()
+    }
+
+    /// Selects a random pair of different elements from the element list and returns their indices
+    pub fn get_random_pair<R: Rng>(&self, rng: &mut R) -> (usize, usize) {
+        assert!(self.elements.len() > 1);
+
+        let idx_a = rng.gen_range(0..self.elements.len());
+        let mut idx_b = rng.gen_range(0..self.elements.len());
+
+        while idx_a == idx_b {
+            idx_b = rng.gen_range(0..self.elements.len());
+        }
+
+        (idx_a, idx_b)
+    }
+
+    pub fn get_random_element<R: Rng>(&self, different_from: Option<Rc<RefCell<NetlistElement>>>, rng: &mut R) -> Rc<RefCell<NetlistElement>> {
+        assert!(self.elements.len() > 1);
+
+        let mut idx = rng.gen_range(0..self.elements.len());
+        if let Some(diff) = different_from {
+            while self.elements[idx] == diff {
+                idx = rng.gen_range(0..self.elements.len());
+            }
+        }
+
+        self.elements[idx].clone()
+    }
+
+    /// Swap the location information for two elements, effectively swapping their positions
+    pub fn swap_locations(&self, idx_a: usize, idx_b: usize) {
+        let mut element_a = self.elements[idx_a].borrow_mut();
+        let mut element_b = self.elements[idx_b].borrow_mut();
+
+        std::mem::swap(&mut element_a.location, &mut element_b.location);
+    }
+
+    /// Shuffle the elements vector by randomly switching out x * y * 1000 pairs
+    pub fn shuffle<R: Rng>(&self, rng: &mut R) {
+        let bounds = self.max_x * self.max_y * 1000;
+
+        for _ in 0..bounds {
+            let (a, b) = self.get_random_pair(rng);
+            self.swap_locations(a, b);
+        }
+    }
+
+    /// Count the total routing cost for the netlist.
+    pub fn total_routing_cost(&self) -> f64 {
+        let mut cost = 0f64;
+
+        for element in &self.elements {
+            cost += element.borrow().routing_cost();
+        }
+
+        // divide by two since the `routing_cost` function considers both fan-in and fan-out.
+        cost / 2f64
     }
 }
