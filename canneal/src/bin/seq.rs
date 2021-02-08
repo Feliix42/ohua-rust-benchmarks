@@ -47,6 +47,7 @@ fn main() {
                 .long("swaps")
                 .help("The number of moves per temperature step")
                 .required(true)
+                .takes_value(true)
         )
         .arg(
             Arg::with_name("temp")
@@ -54,12 +55,14 @@ fn main() {
                 .short("t")
                 .help("The starting temperature")
                 .required(true)
+                .takes_value(true)
         )
         .arg(
             Arg::with_name("nsteps")
                 .long("max-steps")
                 .short("m")
                 .help("Maximal number of temperature steps")
+                .takes_value(true)
         )
         .get_matches();
 

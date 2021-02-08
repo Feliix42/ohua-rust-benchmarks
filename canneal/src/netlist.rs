@@ -181,12 +181,13 @@ impl Netlist {
 
         // generate the links
         for (elem, links) in elements.iter().zip(to_link.drain(..)) {
-            let mut mut_elem = elem.borrow_mut();
+            // let mut mut_elem = elem.borrow_mut();
 
             for item in links {
                 let link_target = tmp.get(&item).expect("All links must be valid");
 
-                mut_elem.fan_in.push(link_target.clone());
+                // mut_elem.fan_in.push(link_target.clone());
+                elem.borrow_mut().fan_in.push(link_target.clone());
                 link_target.borrow_mut().fan_out.push(elem.clone());
             }
         }
