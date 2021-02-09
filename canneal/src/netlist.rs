@@ -110,6 +110,7 @@ impl Netlist {
         let max_y = usize::from_str(w[2]).unwrap();
         let chip_size = max_x * max_y;
 
+        println!("Dimensions: [{}, {}]", max_x, max_y);
         // create # elements and assign them to a location
         // let mut elem_vec = Vec::with_capacity(chip_size);
         // for x in 0..max_x {
@@ -143,8 +144,6 @@ impl Netlist {
             contents.next_back();
             let fanins: Vec<String> = contents.map(String::from).collect();
 
-            println!("[debug] fan in: {:?}", fanins);
-
             // create the element
             let element = Rc::new(RefCell::new(NetlistElement::new(
                 name.to_string(),
@@ -158,26 +157,26 @@ impl Netlist {
             to_link.push(fanins);
 
             // increase the location
-            cur_y = cur_y + 1 % max_y;
+            cur_y = (cur_y + 1) % max_y;
             if cur_y == 0 {
                 cur_x += 1;
             }
         }
 
-        println!("[debug] Filled the chip until pos ({},{})", cur_x, cur_y);
+        // println!("[debug] Filled the chip until pos ({},{})", cur_x, cur_y);
 
         // fill up the elements vector with the remaining positions
         for _ in elements.len()..chip_size {
             elements.push(Rc::new(RefCell::new(NetlistElement::empty(cur_x, cur_y))));
 
             // increase the location
-            cur_y = cur_y + 1 % max_y;
+            cur_y = (cur_y + 1) % max_y;
             if cur_y == 0 {
                 cur_x += 1;
             }
         }
 
-        println!("[debug] Filled the chip until pos ({},{})", cur_x, cur_y);
+        // println!("[debug] Added empty positions until pos ({},{})", cur_x, cur_y);
 
         // generate the links
         for (elem, links) in elements.iter().zip(to_link.drain(..)) {
