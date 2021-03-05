@@ -5,10 +5,10 @@ use stm::{StmResult, TVar, Transaction};
 #[cfg(all(not(feature = "transactional"), not(feature = "ohua")))]
 pub mod netlist;
 
-#[cfg(feature = "transactional")]
-pub mod stm_netlist;
 #[cfg(feature = "ohua")]
 pub mod ohua_netlist;
+#[cfg(feature = "transactional")]
+pub mod stm_netlist;
 
 pub enum MoveDecision {
     Good,

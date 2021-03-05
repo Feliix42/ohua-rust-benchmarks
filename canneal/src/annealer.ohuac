@@ -1,0 +1,27 @@
+ns annealer;
+
+use sf crate::{create_runtime, get_rng, reduce_temp};
+
+fn main(netlist: Arc<Netlist>, starting_temp: f64, max_temperature_steps: Option<i32>, swaps_per_temp: usize, threadcount: usize) {
+    let rt = create_runtime(threadcount);
+
+    // prepare an rng
+    let rng = get_rng();
+
+    run_annealer(netlist, starting_temp, max_temperature_steps, swaps_per_temp, threadcount, rt, 0)
+}
+
+fn run_annealer(netlist: Arc<Netlist>, temp: f64, max_temperature_steps: Option<i32>, swaps_per_temp: usize, threadcount: usize, rt: Arc<Runtime>, completed_steps: usize) {
+    let new_temp = reduce_temp(temp);
+
+    let accepted_good_moves = 0;
+    let accepted_bad_moves = 0;
+
+    // TODO:
+    // - implement the inner loop, maybe with batch size option
+    // - implement the keep_going check
+    // - add recursion
+    // - add metrics for collisions (not right away if too complicated)
+    // - anything else not commented out in run_annealer function
+
+}

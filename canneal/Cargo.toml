@@ -36,7 +36,7 @@ name = "stm"
 path = "src/bin/stm.rs"
 required-features = ["transactional", "cli"]
 
-# [[bin]]
-# name = "ohua_futures"
-# path = "src/bin/ohua.rs"
-# required-features = ["ohua", "cli", "future"]
+[[bin]]
+name = "ohua_futures"
+path = "src/bin/ohua.rs"
+required-features = ["ohua", "cli", "future"]

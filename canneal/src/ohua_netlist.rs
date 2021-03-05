@@ -1,17 +1,17 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::str::FromStr;
-use std::collections::HashMap;
 
 use rand::Rng;
 
-#[derive(Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct Location {
     pub x: usize,
     pub y: usize,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct NetlistElement {
     pub item_name: Option<String>,
     pub fan_in: Vec<usize>,
@@ -37,9 +37,9 @@ impl NetlistElement {
             location: Location { x, y },
         }
     }
-
 }
 
+#[derive(Clone)]
 pub struct Netlist {
     pub elements: Vec<NetlistElement>,
     max_x: usize,
@@ -98,11 +98,7 @@ impl Netlist {
             let fanins: Vec<String> = contents.map(String::from).collect();
 
             // create the element
-            let element = NetlistElement::new(
-                name.to_string(),
-                cur_x,
-                cur_y,
-            );
+            let element = NetlistElement::new(name.to_string(), cur_x, cur_y);
             elements.push(element);
             // store the link for the second iteration
             tmp.insert(name.to_string(), elements.len() - 1);
@@ -141,7 +137,11 @@ impl Netlist {
             }
         }
 
-        Ok(Self { elements, max_x, max_y })
+        Ok(Self {
+            elements,
+            max_x,
+            max_y,
+        })
     }
 
     pub fn get_element_by_name(&self, name: &str) -> usize {
@@ -252,15 +252,13 @@ impl Netlist {
         yes_swap - no_swap
     }
 
-    pub fn calculate_delta_routing_cost(
-        &self,
-        a: usize,
-        b: usize,
-    ) -> f64 {
+    pub fn calculate_delta_routing_cost(&self, a: usize, b: usize) -> f64 {
         // TODO: WIP-ish implementation of the original
-        let mut delta_cost = self.element_swap_cost(a, &self.elements[a].location, &self.elements[b].location);
-        delta_cost += self.element_swap_cost(b, &self.elements[b].location, &self.elements[a].location);
+        let mut delta_cost =
+            self.element_swap_cost(a, &self.elements[a].location, &self.elements[b].location);
+        delta_cost +=
+            self.element_swap_cost(b, &self.elements[b].location, &self.elements[a].location);
 
         delta_cost
-}
+    }
 }
