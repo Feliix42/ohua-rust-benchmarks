@@ -2,9 +2,10 @@ use canneal::ohua_netlist::Netlist;
 use canneal::*;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
+use rand::RngCore;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaCha12Rng;
-use std::fs::{create_dir_all, File};
+use std::{fs::{create_dir_all, File}, ops::Deref, sync::mpsc};
 use std::io::Write;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -192,72 +193,6 @@ fn main() {
     }
 }
 
-// TODO: Port this to Ohua
-fn run_annealer(
-    netlist: Netlist,
-    starting_temperature: f64,
-    max_temperature_steps: Option<i32>,
-    swaps_per_temp: usize,
-) {
-    // let mut accepted_good_moves = 0;
-    // let mut accepted_bad_moves = -1;
-    // let mut temp_steps_completed = 0;
-    // let mut temperature = starting_temperature;
-
-    // calculated property in C++ version
-    // TODO: divide by threadcount
-    let moves_per_temp = swaps_per_temp;
-
-    // I'll just seed that thing with 0 for now
-    // let mut rng = ChaCha12Rng::seed_from_u64(0);
-
-    // initialize elements
-    #[allow(unused_assignments)]
-    let mut idx_a = netlist.get_random_element(None, &mut rng);
-    let mut idx_b = netlist.get_random_element(None, &mut rng);
-
-    while keep_going(
-        temp_steps_completed,
-        max_temperature_steps,
-        accepted_good_moves,
-        accepted_bad_moves,
-    ) {
-        // temperature /= 1.5;
-        // accepted_good_moves = 0;
-        // accepted_bad_moves = 0;
-
-        for _ in 0..moves_per_temp {
-            // get a single new element
-            idx_a = idx_b;
-            idx_b = netlist.get_random_element(Some(idx_a), &mut rng);
-
-            let delta_cost = calculate_delta_routing_cost(
-                &netlist.elements[idx_a].borrow(),
-                &netlist.elements[idx_b].borrow(),
-            );
-
-            match assess_move(delta_cost, temperature, &mut rng) {
-                MoveDecision::Good => {
-                    accepted_good_moves += 1;
-                    netlist.swap_locations(idx_a, idx_b);
-                }
-                MoveDecision::Bad => {
-                    accepted_bad_moves += 1;
-                    netlist.swap_locations(idx_a, idx_b);
-                }
-                MoveDecision::Rejected => (),
-            }
-        }
-
-        temp_steps_completed += 1;
-    }
-
-    println!(
-        "[info] Finished after {} temperature steps.",
-        temp_steps_completed
-    );
-}
-
 fn reduce_temp(temperature: f64) -> f64 {
     temperature / 1.5
 }
@@ -266,59 +201,110 @@ fn get_rng() -> ChaCha12Rng {
     ChaCha12Rng::seed_from_u64(0)
 }
 
-fn splitup<T>(vec: Vec<T>, split_size: usize) -> Vec<Vec<T>>
-where
-    T: Clone,
-{
-    let size = split_size * TASKS_PER_THREAD;
-    let element_count = vec.len();
-    let mut rest = element_count % size;
-    let window_len: usize = element_count / size;
-    let per_vec = if rest != 0 {
-        window_len + 1
-    } else {
-        window_len
-    };
-
-    let mut res = vec![Vec::with_capacity(per_vec); size];
-
-    let mut start = 0;
-    for i in 0..size {
-        // calculate the length of the window (for even distribution of the `rest` elements)
-        let len = if rest > 0 {
-            rest -= 1;
-            window_len + 1
-        } else {
-            window_len
-        };
-
-        let dst = start + len;
-
-        res[i].extend_from_slice(&vec[start..dst]);
-
-        start = dst;
-    }
-
-    return res;
+fn get_swaps(swaps_per_temp: usize, threadcount: usize) -> usize {
+    swaps_per_temp / (threadcount * TASKS_PER_THREAD)
 }
 
+fn increment(completed_steps: usize) -> usize {
+    completed_steps + 1
+}
 
-// fn spawn_onto_pool(
-//     mut values: Vec<Vec<OptionData>>,
-//     rt: Arc<Runtime>,
-// ) -> (Arc<Runtime>, Vec<Receiver<Vec<f32>>>) {
-//     let mut handles = Vec::with_capacity(values.len());
+/// run the inner loop and create a log of changes
+///
+/// Returns: (List of changes, good moves, bad moves)
+fn do_work(netlist: Arc<Netlist>, temperature: f64, swaps_per_step: usize, mut rng: ChaCha12Rng) -> (Vec<(usize, usize)>, usize, usize) {
+    let mut changelog = Vec::new();
+    let mut accepted_bad_moves = 0;
+    let mut accepted_good_moves = 0;
 
-//     for lst in values.drain(..) {
-//         let (sx, rx) = mpsc::channel();
+    // TODO: Keep local state
+    let mut idx_a;
+    let mut idx_b = netlist.get_random_element(None, &mut rng);
 
-//         rt.spawn(async move { sx.send(run_blackscholes(lst)).unwrap() });
+    for _ in 0..swaps_per_step {
+        // get a single new element
+        idx_a = idx_b;
+        idx_b = netlist.get_random_element(Some(idx_a), &mut rng);
 
-//         handles.push(rx);
-//     }
+        let delta_cost = netlist.calculate_delta_routing_cost(idx_a, idx_b);
 
-//     (rt, handles)
-// }
+        match assess_move(delta_cost, temperature, &mut rng) {
+            MoveDecision::Good => {
+                accepted_good_moves += 1;
+                changelog.push((idx_a, idx_b));
+                // netlist.swap_locations(idx_a, idx_b);
+            }
+            MoveDecision::Bad => {
+                accepted_bad_moves += 1;
+                changelog.push((idx_a, idx_b));
+                // netlist.swap_locations(idx_a, idx_b);
+            }
+            MoveDecision::Rejected => (),
+        }
+    }
+
+    (changelog, accepted_good_moves, accepted_bad_moves)
+}
+
+fn apply_changes(mut netlist: Arc<Netlist>, log: Vec<(usize, usize)>) -> Arc<Netlist> {
+    let mut new_netlist: Netlist = netlist.deref().to_owned();
+    let mut was_changed_before = vec![false; new_netlist.elements.len()];
+    let mut errors = 0;
+
+    for (from, to) in log {
+        // quick check to detect overwrites
+        if was_changed_before[from] {
+            errors += 1;
+        } else {
+            was_changed_before[from] = true;
+        }
+        if was_changed_before[to] {
+            errors += 1;
+        } else {
+            was_changed_before[to] = true;
+        }
+
+        new_netlist.swap_locations(from, to);
+    }
+    
+    if errors > 0 {
+        println!("Encountered {} overwrites of previous changes", errors);
+    }
+
+    Arc::new(new_netlist)
+}
+
+// this function is problematic
+fn create_rngs(mut rng: ChaCha12Rng, threadcount: usize) -> (ChaCha12Rng, Vec<ChaCha12Rng>) {
+    let mut rngs = Vec::with_capacity(threadcount);
+
+    for _ in 0..(threadcount * TASKS_PER_THREAD) {
+        rngs.push(ChaCha12Rng::seed_from_u64(rng.next_u64()));
+    }
+
+    (rng, rngs)
+}
+
+fn spawn_onto_pool(
+    netlist: Arc<Netlist>,
+    rngs: Vec<ChaCha12Rng>,
+    temperature: f64,
+    swaps_per_thread: usize,
+    rt: Arc<Runtime>,
+) -> (Arc<Runtime>, Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>) {
+    let mut handles = Vec::with_capacity(rngs.len());
+
+    for rng in rngs.into_iter() {
+        let (sx, rx) = mpsc::channel();
+        let nl = netlist.clone();
+
+        rt.spawn(async move { sx.send(do_work(nl, temperature, swaps_per_thread, rng)).unwrap() });
+
+        handles.push(rx);
+    }
+
+    (rt, handles)
+}
 
 fn create_runtime(threadcount: usize) -> Arc<Runtime> {
     Arc::new(
@@ -331,11 +317,30 @@ fn create_runtime(threadcount: usize) -> Arc<Runtime> {
     )
 }
 
-fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>)) -> Vec<T> {
+// fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>)) -> Vec<T> {
+//     let (_rt, mut receivers) = tokio_data;
+//     receivers
+//         .drain(..)
+//         .map(|h| h.recv().unwrap())
+//         .flatten()
+//         .collect()
+// }
+
+fn collect_work(tokio_data: (Arc<Runtime>, Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>)) -> (Vec<(usize, usize)>, usize, usize) {
     let (_rt, mut receivers) = tokio_data;
-    receivers
+    let res: Vec<(Vec<(usize, usize)>, usize, usize)> = receivers
         .drain(..)
         .map(|h| h.recv().unwrap())
-        .flatten()
-        .collect()
+        .collect();
+
+    let mut good = 0;
+    let mut bad = 0;
+    let mut flattened = Vec::new();
+    let _: Vec<()> = res.into_iter().map(|(mut result, good_mv, bad_mv)| {
+        flattened.append(&mut result);
+        good += good_mv;
+        bad += bad_mv;
+    }).collect();
+
+    (flattened, good, bad)
 }
