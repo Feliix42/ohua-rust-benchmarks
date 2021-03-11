@@ -191,7 +191,11 @@ impl Netlist {
             }
         }
 
-        Ok(Self { elements, max_x, max_y })
+        Ok(Self {
+            elements,
+            max_x,
+            max_y,
+        })
     }
 
     pub fn get_element_by_name(&self, name: &str) -> Rc<RefCell<NetlistElement>> {

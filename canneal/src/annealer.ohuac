@@ -25,7 +25,7 @@ fn run_annealer(netlist: Arc<Netlist>, temp: f64, max_temperature_steps: Option<
 
     let rt_data = spawn_onto_pool(netlist, rngs, new_temp, swaps_per_thread, rt);
 
-    let (log, good_moves, bad_moves) = collect_work(rt);
+    let (log, good_moves, bad_moves) = collect_work(rt_data);
 
     let new_netlist = apply_changes(netlist, log);
 

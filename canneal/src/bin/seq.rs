@@ -1,8 +1,8 @@
 use canneal::netlist::Netlist;
 use canneal::*;
-use rand_chacha::rand_core::SeedableRng;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
+use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaCha12Rng;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
@@ -70,7 +70,10 @@ fn main() {
     let input_file = matches.value_of("INPUT").unwrap();
     let swap_count = usize::from_str(matches.value_of("nswaps").unwrap()).unwrap();
     let initial_temp = usize::from_str(matches.value_of("temp").unwrap()).unwrap();
-    let steps = matches.value_of("nsteps").map(i32::from_str).map(Result::unwrap);
+    let steps = matches
+        .value_of("nsteps")
+        .map(i32::from_str)
+        .map(Result::unwrap);
 
     // parse runtime parameters
     let runs =
@@ -82,7 +85,10 @@ fn main() {
     let input_data = Netlist::new(input_file).expect("Failed to parse input file");
 
     if !json_dump {
-        println!("[info] Loaded {} netlist elements.", input_data.elements.len());
+        println!(
+            "[info] Loaded {} netlist elements.",
+            input_data.elements.len()
+        );
     }
 
     // run the benchmark itself
@@ -123,7 +129,12 @@ fn main() {
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
-        let filename = format!("{}/seq-{}opt-r{}_log.json", out_dir, input_data.elements.len(), runs);
+        let filename = format!(
+            "{}/seq-{}opt-r{}_log.json",
+            out_dir,
+            input_data.elements.len(),
+            runs
+        );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
@@ -150,7 +161,10 @@ fn main() {
 
         println!("[info] All runs completed.");
         println!("\nStatistics:");
-        println!("    Number of Netlist elements: {}", input_data.elements.len());
+        println!(
+            "    Number of Netlist elements: {}",
+            input_data.elements.len()
+        );
         println!("    Input file used: {}", input_file);
         println!("    Runs: {}", runs);
         println!("    Initial Temperature: {}", initial_temp);
@@ -219,5 +233,8 @@ fn run_annealer(
         temp_steps_completed += 1;
     }
 
-    println!("[info] Finished after {} temperature steps.", temp_steps_completed);
+    println!(
+        "[info] Finished after {} temperature steps.",
+        temp_steps_completed
+    );
 }

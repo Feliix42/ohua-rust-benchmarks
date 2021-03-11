@@ -1,16 +1,23 @@
+#![feature(proc_macro_hygiene)]
 use canneal::ohua_netlist::Netlist;
 use canneal::*;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
+use ohua_codegen::ohua;
+use ohua_runtime;
 use rand::RngCore;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaCha12Rng;
-use std::{fs::{create_dir_all, File}, ops::Deref, sync::mpsc};
 use std::io::Write;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
 use std::time::Instant;
+use std::{
+    fs::{create_dir_all, File},
+    ops::Deref,
+    sync::mpsc,
+};
 use tokio::runtime::{Builder, Runtime};
 
 static TASKS_PER_THREAD: usize = 2;
@@ -124,7 +131,8 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        // let _res = run_annealer(netlist, initial_temp as f64, steps, swap_count);
+        #[ohua]
+        let runs = annealer(netlist, initial_temp as f64, steps, swap_count, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -205,14 +213,19 @@ fn get_swaps(swaps_per_temp: usize, threadcount: usize) -> usize {
     swaps_per_temp / (threadcount * TASKS_PER_THREAD)
 }
 
-fn increment(completed_steps: usize) -> usize {
+fn increment(completed_steps: i32) -> i32 {
     completed_steps + 1
 }
 
 /// run the inner loop and create a log of changes
 ///
 /// Returns: (List of changes, good moves, bad moves)
-fn do_work(netlist: Arc<Netlist>, temperature: f64, swaps_per_step: usize, mut rng: ChaCha12Rng) -> (Vec<(usize, usize)>, usize, usize) {
+fn do_work(
+    netlist: Arc<Netlist>,
+    temperature: f64,
+    swaps_per_step: usize,
+    mut rng: ChaCha12Rng,
+) -> (Vec<(usize, usize)>, usize, usize) {
     let mut changelog = Vec::new();
     let mut accepted_bad_moves = 0;
     let mut accepted_good_moves = 0;
@@ -260,13 +273,10 @@ fn apply_changes(mut netlist: Arc<Netlist>, log: Vec<(usize, usize)>) -> Arc<Net
         }
         if was_changed_before[to] {
             errors += 1;
-        } else {
-            was_changed_before[to] = true;
         }
-
         new_netlist.swap_locations(from, to);
     }
-    
+
     if errors > 0 {
         println!("Encountered {} overwrites of previous changes", errors);
     }
@@ -291,14 +301,20 @@ fn spawn_onto_pool(
     temperature: f64,
     swaps_per_thread: usize,
     rt: Arc<Runtime>,
-) -> (Arc<Runtime>, Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>) {
+) -> (
+    Arc<Runtime>,
+    Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>,
+) {
     let mut handles = Vec::with_capacity(rngs.len());
 
     for rng in rngs.into_iter() {
         let (sx, rx) = mpsc::channel();
         let nl = netlist.clone();
 
-        rt.spawn(async move { sx.send(do_work(nl, temperature, swaps_per_thread, rng)).unwrap() });
+        rt.spawn(async move {
+            sx.send(do_work(nl, temperature, swaps_per_thread, rng))
+                .unwrap()
+        });
 
         handles.push(rx);
     }
@@ -326,21 +342,27 @@ fn create_runtime(threadcount: usize) -> Arc<Runtime> {
 //         .collect()
 // }
 
-fn collect_work(tokio_data: (Arc<Runtime>, Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>)) -> (Vec<(usize, usize)>, usize, usize) {
+fn collect_work(
+    tokio_data: (
+        Arc<Runtime>,
+        Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>,
+    ),
+) -> (Vec<(usize, usize)>, i32, i32) {
     let (_rt, mut receivers) = tokio_data;
-    let res: Vec<(Vec<(usize, usize)>, usize, usize)> = receivers
-        .drain(..)
-        .map(|h| h.recv().unwrap())
-        .collect();
+    let res: Vec<(Vec<(usize, usize)>, usize, usize)> =
+        receivers.drain(..).map(|h| h.recv().unwrap()).collect();
 
     let mut good = 0;
     let mut bad = 0;
     let mut flattened = Vec::new();
-    let _: Vec<()> = res.into_iter().map(|(mut result, good_mv, bad_mv)| {
-        flattened.append(&mut result);
-        good += good_mv;
-        bad += bad_mv;
-    }).collect();
+    let _: Vec<()> = res
+        .into_iter()
+        .map(|(mut result, good_mv, bad_mv)| {
+            flattened.append(&mut result);
+            good += good_mv;
+            bad += bad_mv;
+        })
+        .collect();
 
-    (flattened, good, bad)
+    (flattened, good as i32, bad as i32)
 }

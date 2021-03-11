@@ -304,5 +304,8 @@ fn run_annealer(
         temp_steps_completed += 1;
     }
 
-    println!("[info] Finished after {} temperature steps.", temp_steps_completed);
+    println!(
+        "[info] Finished after {} temperature steps.",
+        temp_steps_completed
+    );
 }
