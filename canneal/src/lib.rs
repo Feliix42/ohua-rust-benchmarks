@@ -89,7 +89,7 @@ pub fn keep_going(
     }
 }
 
-#[cfg(feature = "transactional")]
+#[cfg(all(feature = "transactional", not(feature = "less_tx")))]
 pub fn calculate_delta_routing_cost(
     a: &stm_netlist::NetlistElement,
     b: &stm_netlist::NetlistElement,
@@ -100,4 +100,16 @@ pub fn calculate_delta_routing_cost(
     delta_cost += b.swap_cost(&b.location, &a.location, trans)?;
 
     Ok(delta_cost)
+}
+
+#[cfg(all(feature = "transactional", feature = "less_tx"))]
+pub fn calculate_delta_routing_cost(
+    a: &stm_netlist::NetlistElement,
+    b: &stm_netlist::NetlistElement,
+) -> f64 {
+    // TODO: WIP-ish implementation of the original
+    let mut delta_cost = a.swap_cost(&a.location, &b.location);
+    delta_cost += b.swap_cost(&b.location, &a.location);
+
+    delta_cost
 }

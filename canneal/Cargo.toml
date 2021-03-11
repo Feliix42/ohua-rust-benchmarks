@@ -25,6 +25,7 @@ cli = ["clap", "cpu-time"]
 transactional = ["stm"]
 ohua = ["ohua_codegen", "ohua_runtime"]
 future = ["ohua", "tokio"]
+less_tx = []
 
 [[bin]]
 name = "sequential"
@@ -35,6 +36,11 @@ required-features = ["cli"]
 name = "stm"
 path = "src/bin/stm.rs"
 required-features = ["transactional", "cli"]
+
+[[bin]]
+name = "stm_small_tx"
+path = "src/bin/stm_small_tx.rs"
+required-features = ["transactional", "cli", "less_tx"]
 
 [[bin]]
 name = "ohua_futures"

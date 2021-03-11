@@ -1,32 +1,23 @@
-#![feature(proc_macro_hygiene)]
-use canneal::ohua_netlist::Netlist;
+use canneal::stm_netlist::Netlist;
 use canneal::*;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
-use ohua_codegen::ohua;
-use ohua_runtime;
-use rand::RngCore;
+use rand::{Rng, RngCore};
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaCha12Rng;
+use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
-use std::sync::mpsc::Receiver;
-use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
 use std::time::Instant;
-use std::{
-    fs::{create_dir_all, File},
-    ops::Deref,
-    sync::mpsc,
-};
-use tokio::runtime::{Builder, Runtime};
-
-static TASKS_PER_THREAD: usize = 2;
+use stm::{atomically, TVar};
 
 fn main() {
-    let matches = App::new("Ohua canneal benchmark")
+    let matches = App::new("STM canneal benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
-        .about("A Rust port of the canneal benchmark from the PARSEC collection, implemented using Ohua.")
+        .about("A Rust port of the canneal benchmark from the PARSEC collection, implemented using Rust-STM.")
         .arg(
             Arg::with_name("INPUT")
                 .help("Input file describing the stock options to trade.")
@@ -102,7 +93,7 @@ fn main() {
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
     let threadcount = usize::from_str(matches.value_of("threadcount").unwrap())
-        .expect("Expected valid thread count");
+        .expect("Could not parse number of threads to use");
 
     // read and parse input data
     let input_data = Netlist::new(input_file).expect("Failed to parse input file");
@@ -124,15 +115,14 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let netlist = Arc::new(input_data.clone());
+        let netlist = Netlist::new(input_file).expect("Failed to parse input file");
 
         // start the clock
         let cpu_start = ProcessTime::now();
         let start = Instant::now();
 
         // run the algorithm
-        #[ohua]
-        let runs = annealer(netlist, initial_temp as f64, steps, swap_count, threadcount);
+        let _res = run_annealer(netlist, initial_temp as f64, steps, swap_count, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -152,19 +142,19 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua-{}opt-t{}-r{}_log.json",
+            "{}/stm_small_tx-t{}-{}opt-r{}_log.json",
             out_dir,
-            input_data.elements.len(),
             threadcount,
+            input_data.elements.len(),
             runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"sequential\",
+    \"algorithm\": \"stm_small-tx\",
     \"netlist_elements\": {opt},
     \"runs\": {runs},
-    \"threadcount\": {threads},
+    \"threadcount\": {threads}
     \"initial_temperature\": {init_tmp},
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
@@ -201,168 +191,120 @@ fn main() {
     }
 }
 
-fn reduce_temp(temperature: f64) -> f64 {
-    temperature / 1.5
-}
-
-fn get_rng() -> ChaCha12Rng {
-    ChaCha12Rng::seed_from_u64(0)
-}
-
-fn get_swaps(swaps_per_temp: usize, threadcount: usize) -> usize {
-    swaps_per_temp / (threadcount * TASKS_PER_THREAD)
-}
-
-fn increment(completed_steps: i32) -> i32 {
-    completed_steps + 1
-}
-
-/// run the inner loop and create a log of changes
-///
-/// Returns: (List of changes, good moves, bad moves)
-fn do_work(
-    netlist: Arc<Netlist>,
-    temperature: f64,
-    swaps_per_step: usize,
-    mut rng: ChaCha12Rng,
-) -> (Vec<(usize, usize)>, usize, usize) {
-    let mut changelog = Vec::new();
-    let mut accepted_bad_moves = 0;
-    let mut accepted_good_moves = 0;
-
-    // TODO: Keep local state
-    let mut idx_a;
-    let mut idx_b = netlist.get_random_element(None, &mut rng);
-
-    for _ in 0..swaps_per_step {
-        // get a single new element
-        idx_a = idx_b;
-        idx_b = netlist.get_random_element(Some(idx_a), &mut rng);
-
-        let delta_cost = netlist.calculate_delta_routing_cost(idx_a, idx_b);
-
-        match assess_move(delta_cost, temperature, &mut rng) {
-            MoveDecision::Good => {
-                accepted_good_moves += 1;
-                changelog.push((idx_a, idx_b));
-                // netlist.swap_locations(idx_a, idx_b);
-            }
-            MoveDecision::Bad => {
-                accepted_bad_moves += 1;
-                changelog.push((idx_a, idx_b));
-                // netlist.swap_locations(idx_a, idx_b);
-            }
-            MoveDecision::Rejected => (),
-        }
-    }
-
-    (changelog, accepted_good_moves, accepted_bad_moves)
-}
-
-fn apply_changes(mut netlist: Arc<Netlist>, log: Vec<(usize, usize)>) -> Arc<Netlist> {
-    let mut new_netlist: Netlist = netlist.deref().to_owned();
-    let mut was_changed_before = vec![false; new_netlist.elements.len()];
-    let mut errors = 0;
-
-    for (from, to) in log {
-        // quick check to detect overwrites
-        if was_changed_before[from] {
-            errors += 1;
-        } else {
-            was_changed_before[from] = true;
-        }
-        if was_changed_before[to] {
-            errors += 1;
-        }
-        new_netlist.swap_locations(from, to);
-    }
-
-    // if errors > 0 {
-    //     println!("Encountered {} overwrites of previous changes", errors);
-    // }
-
-    Arc::new(new_netlist)
-}
-
-// this function is problematic
-fn create_rngs(mut rng: ChaCha12Rng, threadcount: usize) -> (ChaCha12Rng, Vec<ChaCha12Rng>) {
-    let mut rngs = Vec::with_capacity(threadcount);
-
-    for _ in 0..(threadcount * TASKS_PER_THREAD) {
-        rngs.push(ChaCha12Rng::seed_from_u64(rng.next_u64()));
-    }
-
-    (rng, rngs)
-}
-
-fn spawn_onto_pool(
-    netlist: Arc<Netlist>,
-    rngs: Vec<ChaCha12Rng>,
-    temperature: f64,
-    swaps_per_thread: usize,
-    rt: Arc<Runtime>,
-) -> (
-    Arc<Runtime>,
-    Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>,
+fn run_annealer(
+    global_netlist: Netlist,
+    starting_temperature: f64,
+    max_temperature_steps: Option<i32>,
+    swaps_per_temp: usize,
+    threadcount: usize,
 ) {
-    let mut handles = Vec::with_capacity(rngs.len());
+    let accepted_good_moves = TVar::new(0);
+    let accepted_bad_moves = TVar::new(-1);
+    let mut temp_steps_completed = 0;
+    let temperature = TVar::new(starting_temperature);
 
-    for rng in rngs.into_iter() {
-        let (sx, rx) = mpsc::channel();
-        let nl = netlist.clone();
+    // calculated property in C++ version
+    let moves_per_thread = swaps_per_temp / threadcount;
 
-        rt.spawn(async move {
-            sx.send(do_work(nl, temperature, swaps_per_thread, rng))
-                .unwrap()
+    // I'll just seed that thing with 0 for now
+    let mut rng = ChaCha12Rng::seed_from_u64(0);
+
+    let mut handles = Vec::new();
+    let mut start_channels = Vec::new();
+    let mut end_channels = Vec::new();
+
+    for _ in 0..threadcount {
+        // seed a thread-local rng
+        let mut thread_rng = ChaCha12Rng::seed_from_u64(rng.next_u64());
+        let netlist = global_netlist.clone();
+
+        // create 2 channels to control flow in threads
+        let (start_sx, start_rx) = mpsc::channel();
+        let (end_sx, end_rx) = mpsc::channel();
+        start_channels.push(start_sx);
+        end_channels.push(end_rx);
+
+        // clone necessary data
+        let local_tmp = temperature.clone();
+        let accepted_good = accepted_good_moves.clone();
+        let accepted_bad = accepted_bad_moves.clone();
+
+        // initialize elements
+        #[allow(unused_assignments)]
+        let mut idx_a = netlist.get_random_element(None, &mut thread_rng);
+        let mut idx_b = netlist.get_random_element(None, &mut thread_rng);
+
+        // spawn individual threads
+        let h = thread::spawn(move || loop {
+            // wait for the "go" from the main thread
+            if let Err(_) = start_rx.recv() {
+                break;
+            }
+
+            // run internal loop
+            for _ in 0..moves_per_thread {
+                // get a single new element
+                idx_a = idx_b;
+                idx_b = netlist.get_random_element(Some(idx_a), &mut thread_rng);
+
+                // atomically() requires a non-mutable item, which means I cannot use the RNG within
+                let random_value = thread_rng.gen();
+
+                let delta_cost = calculate_delta_routing_cost(
+                    &netlist.elements[idx_a].read_atomic(),
+                    &netlist.elements[idx_b].read_atomic(),
+                );
+
+                atomically(|trans| {
+                    match assess_move(delta_cost, local_tmp.read(trans)?, random_value) {
+                        MoveDecision::Good => {
+                            accepted_good.modify(trans, |x| x + 1)?;
+                            netlist.swap_locations(idx_a, idx_b, trans)
+                        }
+                        MoveDecision::Bad => {
+                            accepted_bad.modify(trans, |x| x + 1)?;
+                            netlist.swap_locations(idx_a, idx_b, trans)
+                        }
+                        MoveDecision::Rejected => Ok(()),
+                    }
+                });
+            }
+
+            // notify main thread we're done
+            end_sx.send(()).unwrap();
+        });
+        handles.push(h);
+    }
+
+    // main thread -> takes care of the decision making
+    while keep_going(
+        temp_steps_completed,
+        max_temperature_steps,
+        &accepted_good_moves,
+        &accepted_bad_moves,
+    ) {
+        // set conditions for next run
+        atomically(|trans| {
+            temperature.modify(trans, |x| x / 1.5)?;
+            accepted_good_moves.write(trans, 0)?;
+            accepted_bad_moves.write(trans, 0)
         });
 
-        handles.push(rx);
+        // run the threads
+        for sx in &start_channels {
+            sx.send(()).unwrap();
+        }
+
+        // wait for execution completion
+        for rx in &end_channels {
+            rx.recv().unwrap();
+        }
+
+        temp_steps_completed += 1;
     }
 
-    (rt, handles)
-}
-
-fn create_runtime(threadcount: usize) -> Arc<Runtime> {
-    Arc::new(
-        Builder::new()
-            .threaded_scheduler()
-            .core_threads(threadcount)
-            .thread_name("ohua-tokio-worker")
-            .build()
-            .unwrap(),
-    )
-}
-
-// fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>)) -> Vec<T> {
-//     let (_rt, mut receivers) = tokio_data;
-//     receivers
-//         .drain(..)
-//         .map(|h| h.recv().unwrap())
-//         .flatten()
-//         .collect()
-// }
-
-fn collect_work(
-    tokio_data: (
-        Arc<Runtime>,
-        Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>,
-    ),
-) -> (Vec<(usize, usize)>, i32, i32) {
-    let (_rt, mut receivers) = tokio_data;
-    let res: Vec<(Vec<(usize, usize)>, usize, usize)> =
-        receivers.drain(..).map(|h| h.recv().unwrap()).collect();
-
-    let mut good = 0;
-    let mut bad = 0;
-    let mut flattened = Vec::new();
-    let _: Vec<()> = res
-        .into_iter()
-        .map(|(mut result, good_mv, bad_mv)| {
-            flattened.append(&mut result);
-            good += good_mv;
-            bad += bad_mv;
-        })
-        .collect();
-
-    (flattened, good as i32, bad as i32)
+    println!(
+        "[info] Finished after {} temperature steps.",
+        temp_steps_completed
+    );
 }

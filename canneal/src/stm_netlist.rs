@@ -81,6 +81,7 @@ impl NetlistElement {
 
     // TODO(feliix): Is the `old` parameter even necessary?
     /// Get the cost change of swapping from the present location to a new location
+    #[cfg(not(feature = "less_tx"))]
     pub fn swap_cost(
         &self,
         old: &Location,
@@ -109,6 +110,32 @@ impl NetlistElement {
         }
 
         Ok(yes_swap - no_swap)
+    }
+
+    #[cfg(feature = "less_tx")]
+    pub fn swap_cost(&self, old: &Location, new: &Location) -> f64 {
+        let mut no_swap = 0_f64;
+        let mut yes_swap = 0_f64;
+
+        for element in &self.fan_in {
+            let el = element.read_atomic();
+            no_swap += (old.x as isize - el.location.x as isize).abs() as f64;
+            no_swap += (old.x as isize - el.location.x as isize).abs() as f64;
+
+            yes_swap += (new.y as isize - el.location.y as isize).abs() as f64;
+            yes_swap += (new.y as isize - el.location.y as isize).abs() as f64;
+        }
+
+        for element in &self.fan_out {
+            let el = element.read_atomic();
+            no_swap += (old.x as isize - el.location.x as isize).abs() as f64;
+            no_swap += (old.y as isize - el.location.y as isize).abs() as f64;
+
+            yes_swap += (new.y as isize - el.location.y as isize).abs() as f64;
+            yes_swap += (new.y as isize - el.location.y as isize).abs() as f64;
+        }
+
+        yes_swap - no_swap
     }
 }
 
