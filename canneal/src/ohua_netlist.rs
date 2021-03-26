@@ -5,13 +5,13 @@ use std::str::FromStr;
 
 use rand::Rng;
 
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Location {
     pub x: usize,
     pub y: usize,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NetlistElement {
     pub item_name: Option<String>,
     pub fan_in: Vec<usize>,
@@ -39,7 +39,7 @@ impl NetlistElement {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Netlist {
     pub elements: Vec<NetlistElement>,
     max_x: usize,
