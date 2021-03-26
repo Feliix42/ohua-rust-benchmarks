@@ -161,7 +161,7 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"sequential\",
+    \"algorithm\": \"ohua-futures\",
     \"netlist_elements\": {opt},
     \"runs\": {runs},
     \"threadcount\": {threads},

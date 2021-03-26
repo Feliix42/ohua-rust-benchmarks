@@ -152,7 +152,7 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua-{}opt-t{}-r{}_log.json",
+            "{}/ohua_unsafe-{}opt-t{}-r{}_log.json",
             out_dir,
             input_data.elements.len(),
             threadcount,
@@ -161,7 +161,7 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"sequential\",
+    \"algorithm\": \"ohua-unsafe\",
     \"netlist_elements\": {opt},
     \"runs\": {runs},
     \"threadcount\": {threads},
