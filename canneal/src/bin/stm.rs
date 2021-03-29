@@ -154,7 +154,7 @@ fn main() {
     \"algorithm\": \"stm\",
     \"netlist_elements\": {opt},
     \"runs\": {runs},
-    \"threadcount\": {threads}
+    \"threadcount\": {threads},
     \"initial_temperature\": {init_tmp},
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
