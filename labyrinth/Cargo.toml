@@ -43,6 +43,11 @@ path = "src/bin/ohua_futures.rs"
 required-features = ["ohua", "cli", "future"]
 
 [[bin]]
+name = "ohua_futures_no_opt"
+path = "src/bin/ohua_futures_naive.rs"
+required-features = ["ohua", "cli", "future"]
+
+[[bin]]
 name = "ohua_futures_new"
 path = "src/bin/ohua_futures_new.rs"
 required-features = ["ohua", "cli", "future"]
