@@ -1,4 +1,6 @@
 use crate::types::*;
+#[cfg(feature = "ohua")]
+use std::sync::Arc;
 
 /// The grid the maze is set up in. Contains for every field the information about its state.
 pub type Grid = Vec<Vec<Vec<Field>>>;
@@ -40,27 +42,31 @@ pub fn update_maze(maze: &mut Maze, path: Path) {
 
 /// Updates the grid with mapped paths.
 #[cfg(feature = "ohua")]
-pub fn update_maze(mut maze: Maze, paths: Vec<Option<Path>>) -> (Vec<(Point, Point)>, Maze) {
+pub fn update_maze(mut mz: Arc<Maze>, paths: Vec<Option<Path>>) -> (Vec<(Point, Point)>, Arc<Maze>) {
     let mut remap = Vec::new();
 
-    for p in paths {
-        // skip empty paths
-        let path = match p {
-            Some(pa) => pa,
-            None => continue,
-        };
+    assert!(Arc::strong_count(&mz) == 2);
+    unsafe {
+        let maze = Arc::get_mut_unchecked(&mut mz);
+        for p in paths {
+            // skip empty paths
+            let path = match p {
+                Some(pa) => pa,
+                None => continue,
+            };
 
-        if path_available(&maze.grid, &path) {
-            for pt in &path.path {
-                maze.grid[pt.x][pt.y][pt.z] = Field::Used;
+            if path_available(&maze.grid, &path) {
+                for pt in &path.path {
+                    maze.grid[pt.x][pt.y][pt.z] = Field::Used;
+                }
+                maze.paths.push(path);
+            } else {
+                remap.push((path.start, path.end));
             }
-            maze.paths.push(path);
-        } else {
-            remap.push((path.start, path.end));
         }
     }
 
-    (remap, maze)
+    (remap, mz)
 }
 
 pub fn path_available(grid: &Grid, path: &Path) -> bool {

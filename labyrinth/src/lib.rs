@@ -1,3 +1,7 @@
+#![cfg_attr(feature = "ohua", feature(get_mut_unchecked))]
+#[cfg(feature = "ohua")]
+use std::sync::Arc;
+
 pub mod parser;
 pub mod pathfinder;
 pub mod types;
@@ -8,8 +12,8 @@ pub mod stm_grid;
 #[cfg(not(feature = "transactional"))]
 pub mod grid;
 
-#[cfg(feature = "ohua")]
-pub mod original;
+// #[cfg(feature = "ohua")]
+// pub mod original;
 
 
 #[cfg(feature = "ohua")]
@@ -36,7 +40,7 @@ pub fn pack(maze: crate::types::Maze, stats: (u32, u32)) -> (crate::types::Maze,
 }
 
 #[cfg(feature = "ohua")]
-pub fn pack_stat(maze: crate::types::Maze, stats: usize) -> (crate::types::Maze, usize) {
+pub fn pack_stat(maze: Arc<crate::types::Maze>, stats: usize) -> (Arc<crate::types::Maze>, usize) {
     (maze, stats)
 }
 

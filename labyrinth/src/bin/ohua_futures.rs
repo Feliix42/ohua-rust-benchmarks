@@ -96,7 +96,7 @@ fn main() {
     let mut collisions: Vec<usize> = Vec::with_capacity(runs);
 
     for r in 0..runs {
-        let maze = Maze::new(dimensions.clone(), None);
+        let maze = Arc::new(Maze::new(dimensions.clone(), None));
 
         if !json_dump && r == 0 {
             println!("[INFO] Loaded maze data from file.");
@@ -216,10 +216,10 @@ fn vec_pathfind(maze: Arc<Maze>, mut points: Vec<(Point, Point)>) -> Vec<Option<
 
 fn spawn_onto_pool(
     mut worklist: Vec<Vec<(Point, Point)>>,
-    maze: Maze,
+    maze:  Arc<Maze>,
     rt: Arc<Runtime>,
 ) -> (Arc<Runtime>, Vec<Receiver<Vec<Option<Path>>>>) {
-    let maze = Arc::new(maze);
+    // let maze = Arc::new(maze);
 
     let mut handles = Vec::with_capacity(worklist.len());
 
