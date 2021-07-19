@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use cpu_time::ProcessTime;
 use labyrinth::parser;
 use labyrinth::pathfinder;
 use labyrinth::stm_grid;
@@ -9,7 +10,6 @@ use std::str::FromStr;
 use std::thread;
 use stm::atomically;
 use time::PreciseTime;
-use cpu_time::ProcessTime;
 
 fn main() {
     let matches = App::new("STM Labyrinth Benchmark")
@@ -106,9 +106,15 @@ fn main() {
 
     if json_dump {
         create_dir_all(out_dir).unwrap();
+        let algo = if cfg!(feature = "naive") {
+            "stm-naive"
+        } else {
+            "stm"
+        };
         let filename = format!(
-            "{}/stm-{}-p{}-t{}-r{}_log.json",
+            "{}/{}-{}-p{}-t{}-r{}_log.json",
             out_dir,
+            algo,
             dimensions,
             paths.len(),
             thread_number,
@@ -117,7 +123,7 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"stm\",
+    \"algorithm\": \"{algo}\",
     \"configuration\": \"{conf}\",
     \"paths\": {paths},
     \"threadcount\": {threads},
@@ -127,6 +133,7 @@ fn main() {
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
+            algo = algo,
             conf = dimensions,
             paths = paths.len(),
             threads = thread_number,
@@ -204,10 +211,20 @@ fn route(
 
     // search for a path for all point pairs (sort out any pairs w/o path)
     for pair in to_map.drain(..) {
+        #[cfg(feature = "naive")]
+        let ta_result = atomically(|trans| {
+            if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
+                stm_grid::update_grid(&grid, &path, trans)?;
+                Ok(Some(path))
+            } else {
+                Ok(None)
+            }
+        });
+
+        #[cfg(not(feature = "naive"))]
         let ta_result = atomically(|trans| {
             let copy_grid = stm_grid::create_working_copy(&grid);
             if let Some(path) = pathfinder::find_path(pair.clone(), &copy_grid) {
-                // if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
                 stm_grid::update_grid(&grid, &path, trans)?;
                 Ok(Some(path))
             } else {

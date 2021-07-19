@@ -1,5 +1,11 @@
 #[allow(unused_imports)]
 use crate::types::{at_grid_coordinates, Field, Grid, Maze, Path, Point};
+#[cfg(all(feature = "transactional", feature = "naive"))]
+use crate::stm_grid::StmGrid;
+#[cfg(all(feature = "transactional", feature = "naive"))]
+use stm::{Transaction, StmResult};
+#[cfg(all(feature = "transactional", feature = "naive"))]
+use crate::types::at_stm_grid_coordinates;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// This HashMap contains the information on how to get back from the end point to the start.
@@ -108,8 +114,59 @@ pub fn find_path(maze: &Maze, points: (Point, Point)) -> Option<Path> {
     None
 }
 
+#[cfg(all(feature = "transactional", feature = "naive"))]
+pub fn find_path(points: (Point, Point), grid: &StmGrid, transaction: &mut Transaction) -> StmResult<Option<Path>> {
+    // TODO: Add costs?
+    let (start, end) = points;
 
-#[cfg(not(feature = "ohua"))]
+    // check if the route is still available
+    if at_stm_grid_coordinates(grid, &start, transaction)? != Field::Free {
+        return Ok(None);
+    }
+
+    let mut unseen_points = VecDeque::new();
+    unseen_points.push_back(start.clone());
+    let mut visited_points = HashSet::new();
+    // the meta_info map contains the backtrack-information for the path
+    let mut meta_info: BacktrackMetaData = HashMap::new();
+    meta_info.insert(start, None);
+
+    while !unseen_points.is_empty() {
+        let current = unseen_points.pop_front().unwrap();
+
+        // stop when reacing the end node
+        if current == end {
+            return Ok(Some(generate_path(current, meta_info)));
+        }
+
+        // get a list of all possible successors
+        for child in get_successors(&current, grid) {
+            // sort out anything that has been seen or is blocked
+            match at_stm_grid_coordinates(grid, &child, transaction)? {
+                Field::Used => continue,
+                Field::Wall => continue,
+                Field::Free => (),
+            }
+
+            if visited_points.contains(&child) {
+                continue;
+            }
+
+            if !unseen_points.contains(&child) {
+                meta_info.insert(child.clone(), Some(current.clone()));
+                unseen_points.push_back(child);
+            }
+        }
+
+        visited_points.insert(current);
+    }
+
+    // All points have been processed and no path was found
+    Ok(None)
+}
+
+
+#[cfg(all(not(feature = "ohua"), not(feature = "naive")))]
 pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
     // TODO: Add costs?
     let (start, end) = points;
@@ -160,7 +217,58 @@ pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
     None
 }
 
+#[cfg(not(feature = "naive"))]
 fn get_successors(cur: &Point, grid: &Grid) -> Vec<Point> {
+    let mut res = Vec::with_capacity(6);
+
+    if cur.x > 0 {
+        res.push(Point {
+            x: cur.x - 1,
+            y: cur.y,
+            z: cur.z,
+        });
+    }
+    if cur.x < grid.len() - 1 {
+        res.push(Point {
+            x: cur.x + 1,
+            y: cur.y,
+            z: cur.z,
+        });
+    }
+    if cur.y > 0 {
+        res.push(Point {
+            x: cur.x,
+            y: cur.y - 1,
+            z: cur.z,
+        });
+    }
+    if cur.y < grid[0].len() - 1 {
+        res.push(Point {
+            x: cur.x,
+            y: cur.y + 1,
+            z: cur.z,
+        });
+    }
+    if cur.z > 0 {
+        res.push(Point {
+            x: cur.x,
+            y: cur.y,
+            z: cur.z - 1,
+        });
+    }
+    if cur.z < grid[0][0].len() - 1 {
+        res.push(Point {
+            x: cur.x,
+            y: cur.y,
+            z: cur.z + 1,
+        });
+    }
+
+    res
+}
+
+#[cfg(all(feature = "transactional", feature = "naive"))]
+fn get_successors(cur: &Point, grid: &StmGrid) -> Vec<Point> {
     let mut res = Vec::with_capacity(6);
 
     if cur.x > 0 {
