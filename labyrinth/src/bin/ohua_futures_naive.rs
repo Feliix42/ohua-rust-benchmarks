@@ -10,10 +10,11 @@ use ohua_runtime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
-use std::sync::mpsc::{self, Receiver};
 use std::sync::Arc;
 use time::PreciseTime;
 use tokio::runtime::{Builder, Runtime};
+use tokio::task::JoinHandle;
+use futures::future;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -174,10 +175,6 @@ fn main() {
     }
 }
 
-fn vec_pathfind(maze: Arc<Maze>, mut points: Vec<(Point, Point)>) -> Vec<Option<Path>> {
-    points.drain(..).map(|p| find_path(&maze, p)).collect()
-}
-
 fn spawn_onto_pool(
     mut worklist: Vec<(Point, Point)>,
     maze:  Arc<Maze>,
@@ -210,9 +207,13 @@ fn create_runtime(threadcount: usize) -> Arc<Runtime> {
 }
 
 fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<JoinHandle<T>>)) -> Vec<T> {
-    let (_rt, mut handles) = tokio_data;
-    handles
-        .into_iter()
-        .map(|h| h.await.unwrap())
-        .collect()
+    let (rt, handles) = tokio_data;
+    let handle = rt.handle();
+    handle.block_on(async {
+        future::join_all(handles).await.into_iter().map(Result::unwrap).collect()
+        // handles
+        //     .into_iter()
+        //     .map(|h| async { h.await.unwrap() })
+        //     .collect()
+    })
 }

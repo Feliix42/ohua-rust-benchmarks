@@ -27,7 +27,7 @@ fn transact(maze: Maze, to_map: Vec<(Point, Point)>, frequency: usize, threadcou
     let ret = pack_stat(new_maze, stats);
 
     if (is_not_empty(to_remap)) {
-        transact(new_maze, to_remap, frequency, threadcount)
+        transact(new_maze, to_remap, frequency, threadcount, rt, ct)
     } else {
         ret
     }
