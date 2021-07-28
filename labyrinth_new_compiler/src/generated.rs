@@ -136,6 +136,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
         );
         loop {
             // FIXME(easy): insert `mut`
+            // see sertel/ohuac-integrations#4
             let mut renew = false;
             // FIXME(complicated): I don't even know where to start here. This whole block is a
             // mess - at least from rustc's point of view. The problem has several layers:
@@ -179,6 +180,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     tasks.push(Box::new(move || -> _ {
         loop {
             // FIXME(easy): Insert `mut`
+            // see sertel/ohuac-integrations#4
             let mut renew = false;
             let its_left_0_0_0_0 = its_left_0_1_0_rx.recv()?;
             while !renew {
@@ -215,6 +217,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     tasks.push(Box::new(move || -> _ {
         loop {
             // FIXME(easy): Insert `mut`
+            // see sertel/ohuac-integrations#4
             let mut renew = false;
             // FIXME(needs triage): The `pairs_0_0_0_0` variable is assigned to `data` and then
             // used in an owned fashion. This creates serious issues, as this results in 'use after
@@ -234,6 +237,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
                     if hasSize {
                         let size = data.len();
                         // FIXME(medium-complicated): Size is dropped when fusing runSTClang-smap with the stateful
+                        // see sertel/ohua-backend#14
                         // update function
                         //size_0_2_tx.send(size)?;
                         //size_0_1_tx.send(size)?;
@@ -249,6 +253,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
                         }
                     } else {
                         // FIXME(easy): add `mut`
+                        // see sertel/ohuac-integrations#4
                         let mut size = 0;
                         for d in data {
                             d_0_0_tx.send(d)?;
@@ -290,6 +295,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     tasks.push(Box::new(move || -> _ {
         loop {
             // FIXME(easy): insert `mut`
+            // sertel/ohuac-integrations#4
             let mut renew = false;
             let lit_unit_0_0_0 = ();
             while !renew {
