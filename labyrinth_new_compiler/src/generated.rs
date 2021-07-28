@@ -223,11 +223,13 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
             // used in an owned fashion. This creates serious issues, as this results in 'use after
             // move' issues. My fix here is inserting a clone but the validity of this is yet to
             // be determined.
+            // see sertel/ohua-core#20 - FIXED
             let pairs_0_0_0_0 = pairs_0_1_0_rx.recv()?;
             while !renew {
                 let sig = ctrl_0_0_0_1_rx.recv()?;
                 let count = sig.1;
                 for _ in 0..count {
+                    // see sertel/ohua-core#20 - FIXED
                     // TODO -> here
                     let data = pairs_0_0_0_0.clone();
                     let hasSize = {
