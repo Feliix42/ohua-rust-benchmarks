@@ -80,7 +80,7 @@ fn main() {
 
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
-    let mut mapped_paths = Vec::with_capacity(runs);
+    let mut mapped_paths: Vec<usize> = Vec::with_capacity(runs);
     let mut collisions: Vec<usize> = Vec::with_capacity(runs);
 
     for r in 0..runs {
