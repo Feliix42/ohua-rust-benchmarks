@@ -4,6 +4,7 @@ use crate::benchs::*;
 use std::*;
 // FIXME(easy): manually inserted the following. Maybe fully quantify the the paths in the code or
 // add the import
+// FIXED
 use std::sync::Arc;
 use tokio::runtime::Builder;
 
@@ -290,6 +291,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
         loop {
             let var_0 = futures_0_rx.recv()?;
             // FIXME(easy): `future` argument will need a Type annotation
+            // FIXED
             let path_0_0_0 = (|future: std::sync::mpsc::Receiver<_>| future.recv().unwrap())(var_0);
             path_0_0_0_tx.send(path_0_0_0)?
         }
@@ -402,6 +404,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
         }
     }));
     // FIXME(easy): Type annotations for the JoinHandle Vec
+    // FIXED
     let mut handles: Vec<std::thread::JoinHandle<_>> = tasks
         .into_iter()
         .map(|t| {
@@ -417,7 +420,8 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     }
 
     // FIXME(easy): Need to replace receiving the result with `Try` with something that catches the `Err`
-    // variant solely yields the result 
+    // variant solely yields the result
+    // FIXED
     match c_0_0_rx.recv() {
         Ok(res) => res,
         Err(e) => panic!("{}", e),
