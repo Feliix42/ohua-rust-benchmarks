@@ -44,15 +44,15 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     let (new_its_left1_0_0_0_tx, new_its_left1_0_0_0_rx) = std::sync::mpsc::channel();
     let (rs2_0_0_0_tx, rs2_0_0_0_rx) = std::sync::mpsc::channel();
     let (maze_1_0_0_tx, maze_1_0_0_rx) = std::sync::mpsc::channel();
-    let (ctrl_0_0_0_tx, ctrl_0_0_0_rx) = std::sync::mpsc::channel();
+    let (ctrl_0_0_0_tx, ctrl_0_0_0_rx) = std::sync::mpsc::channel::<(_, _)>();
     // FIXME: This channel needs a type -> See where it could come from!
     let (maze_0_0_2_tx, maze_0_0_2_rx) = std::sync::mpsc::channel::<Maze>();
     // FIXME: Needs a type!
     let (pairs_0_0_0_tx, pairs_0_0_0_rx) = std::sync::mpsc::channel::<Vec<(Point, Point)>>();
     let (maze_0_0_1_0_tx, maze_0_0_1_0_rx) = std::sync::mpsc::channel();
-    let (ctrl_2_0_tx, ctrl_2_0_rx) = std::sync::mpsc::channel();
+    let (ctrl_2_0_tx, ctrl_2_0_rx) = std::sync::mpsc::channel::<(_, _)>();
     let (mro_0_0_1_tx, mro_0_0_1_rx) = std::sync::mpsc::channel();
-    let (ctrl_2_1_tx, ctrl_2_1_rx) = std::sync::mpsc::channel();
+    let (ctrl_2_1_tx, ctrl_2_1_rx) = std::sync::mpsc::channel::<(_, _)>();
     // FIXME: Needs a type
     let (rs_0_0_1_tx, rs_0_0_1_rx) = std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
     // FIXME(feliix42): Need type anno here!
@@ -94,16 +94,13 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     tasks.push(Box::new(move || -> _ {
         loop {
             let mut renew = false;
-            // FIXME(feliix42): This is a fun one: The mutability either needs to rest here,
-            // borrowing as mutable below *or* the `var_0` needs to be dropped down there!
             let mut rs_0_0_1_0 = rs_0_0_1_rx.recv()?;
             while !renew {
                 let sig = ctrl_2_2_rx.recv()?;
                 let count = sig.1;
                 for _ in 0..count {
-                    let var_0 = &mut rs_0_0_1_0;
                     let var_1 = r_0_0_0_rx.recv()?;
-                    var_0.push(var_1);
+                    rs_0_0_1_0.push(var_1);
                     ()
                 }
                 let renew_next_time = sig.0;
@@ -144,8 +141,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
                     ()
                 }
             } else {
-                // FIXME(feliix42): the fuck happened here? The following statement was wrongfully
-                // eliminated!
+                // FIXME(feliix42): Needs mut!
                 let mut size = 0;
                 for d in data {
                     d_1_0_tx.send(d)?;
@@ -171,44 +167,13 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
         }
     }));
     tasks.push(Box::new(move || -> _ {
-        // FIXME: That loop is still either faulty or `pairs` and the other env variables need to
-        // be handled differently!
-        // -> Maybe drop loop when looking at env vars?
-        //loop {
-            let ctrlSig = (true, 1);
-            ctrl_0_0_0_tx.send(ctrlSig)?;
-            let init_0 = maze_1_0_0_rx.recv()?;
-            maze_0_0_2_tx.send(init_0)?;
-            // FIXME(feliix42): The following function had `init_1` instead of pairs written there
-            // -- incorrectly. The same with `init_2` <-> `max_it`
-            pairs_0_0_0_tx.send(pairs)?;
-            its_left_0_0_0_tx.send(max_it)?;
-            while not_done_0_0_0_rx.recv()? {
-                maze_0_1_0_rx.recv()?;
-                let ctrlSig = (true, 1);
-                ctrl_0_0_0_tx.send(ctrlSig)?;
-                let loop_res_0 = maze_0_1_0_rx.recv()?;
-                let loop_res_1 = rs2_0_0_0_rx.recv()?;
-                let loop_res_2 = new_its_left1_0_0_0_rx.recv()?;
-                maze_0_0_2_tx.send(loop_res_0)?;
-                pairs_0_0_0_tx.send(loop_res_1)?;
-                its_left_0_0_0_tx.send(loop_res_2)?;
-                ()
-            }
-            let ctrlSig = (false, 0);
-            ctrl_0_0_0_tx.send(ctrlSig)?;
-            let finalResult = maze_0_1_0_rx.recv()?;
-            Ok(d_0_0_tx.send(finalResult)?)
-        //}
-    }));
-    tasks.push(Box::new(move || -> _ {
         loop {
             let mut renew = false;
             while !renew {
                 let sig = ctrl_0_0_0_rx.recv()?;
                 let count = sig.1;
                 for _ in 0..count {
-                    let rs_0_0_1 = Vec::new();
+                    let rs_0_0_1 = Vec::default();
                     rs_0_0_1_tx.send(rs_0_0_1)?;
                     ()
                 }
@@ -243,8 +208,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
                 let sig = ctrl_2_1_rx.recv()?;
                 let count = sig.1;
                 for _ in 0..count {
-                    let var_0 = &mro_0_0_1_0;
-                    let a_0_0 = var_0.clone();
+                    let a_0_0 = mro_0_0_1_0.clone();
                     a_0_0_tx.send(a_0_0)?;
                     ()
                 }
@@ -264,11 +228,6 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
         }
     }));
     tasks.push(Box::new(move || -> _ {
-        let maze_1_0_0 = Maze::init(salt);
-        maze_1_0_0_tx.send(maze_1_0_0)?;
-        Ok(())
-    }));
-    tasks.push(Box::new(move || -> _ {
         loop {
             let mut renew = false;
             // FIXME: Need mutable here!
@@ -277,9 +236,8 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
                 let sig = ctrl_2_0_rx.recv()?;
                 let count = sig.1;
                 for _ in 0..count {
-                    let var_0 = &mut maze_0_0_1_0_0;
                     let var_1 = path_0_0_0_rx.recv()?;
-                    let r_0_0_0 = var_0.update(var_1);
+                    let r_0_0_0 = maze_0_0_1_0_0.update(var_1);
                     r_0_0_0_tx.send(r_0_0_0)?;
                     ()
                 }
@@ -292,12 +250,37 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
         }
     }));
     tasks.push(Box::new(move || -> _ {
+        let ctrlSig = (true, 1);
+        ctrl_0_0_0_tx.send(ctrlSig)?;
+        let init_0 = maze_1_0_0_rx.recv()?;
+        maze_0_0_2_tx.send(init_0)?;
+        pairs_0_0_0_tx.send(pairs)?;
+        its_left_0_0_0_tx.send(max_it)?;
+        while not_done_0_0_0_rx.recv()? {
+            maze_0_1_0_rx.recv()?;
+            let ctrlSig = (true, 1);
+            ctrl_0_0_0_tx.send(ctrlSig)?;
+            let loop_res_0 = maze_0_1_0_rx.recv()?;
+            let loop_res_1 = rs2_0_0_0_rx.recv()?;
+            let loop_res_2 = new_its_left1_0_0_0_rx.recv()?;
+            maze_0_0_2_tx.send(loop_res_0)?;
+            pairs_0_0_0_tx.send(loop_res_1)?;
+            its_left_0_0_0_tx.send(loop_res_2)?;
+            ()
+        }
+        let ctrlSig = (false, 0);
+        ctrl_0_0_0_tx.send(ctrlSig)?;
+        let finalResult = maze_0_1_0_rx.recv()?;
+        Ok(d_0_0_tx.send(finalResult)?)
+    }));
+    tasks.push(Box::new(move || -> _ {
+        let maze_1_0_0 = Maze::init(salt);
+        maze_1_0_0_tx.send(maze_1_0_0)?;
+        Ok(())
+    }));
+    tasks.push(Box::new(move || -> _ {
         let num = size_0_3_rx.recv()?;
-        let toDrop = {
-            // FIXME(feliix42): Wot in tarnation
-            // was: let num = num - 1; ()
-            num - 1
-        };
+        let toDrop = num - 1;
         for _ in 0..toDrop {
             rs_0_0_0_0_rx.recv()?;
             ()
@@ -307,10 +290,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     }));
     tasks.push(Box::new(move || -> _ {
         let num = size_0_2_rx.recv()?;
-        let toDrop = {
-            num - 1
-            
-        };
+        let toDrop = num - 1;
         for _ in 0..toDrop {
             maze_0_0_0_0_rx.recv()?;
             ()
