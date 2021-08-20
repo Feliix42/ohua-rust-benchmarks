@@ -85,7 +85,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = maze_0_0_2_rx.recv()?;
+            let var_0 = maze_0_0_2_rx.recv()?;
             let mro_0_0_1 = var_0.clone();
             mro_0_0_1_tx.send(mro_0_0_1)?;
             maze_0_0_1_0_tx.send(var_0)?
@@ -113,7 +113,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = new_its_left_0_0_1_rx.recv()?;
+            let var_0 = new_its_left_0_0_1_rx.recv()?;
             let new_its_left1_0_0_0 = var_0.clone();
             new_its_left1_0_0_0_tx.send(new_its_left1_0_0_0)?;
             new_its_left_0_0_0_0_tx.send(var_0)?
@@ -121,7 +121,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut data = pairs_0_0_0_rx.recv()?;
+            let data = pairs_0_0_0_rx.recv()?;
             let hasSize = {
                 let tmp_has_size = data.iter().size_hint();
                 tmp_has_size.1.is_some()
@@ -141,6 +141,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
                     ()
                 }
             } else {
+                // FIXME(feliix42): Needs mut!
                 let mut size = 0;
                 for d in data {
                     d_1_0_tx.send(d)?;
@@ -202,7 +203,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     tasks.push(Box::new(move || -> _ {
         loop {
             let mut renew = false;
-            let mut mro_0_0_1_0 = mro_0_0_1_rx.recv()?;
+            let mro_0_0_1_0 = mro_0_0_1_rx.recv()?;
             while !renew {
                 let sig = ctrl_2_1_rx.recv()?;
                 let count = sig.1;
@@ -229,6 +230,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     tasks.push(Box::new(move || -> _ {
         loop {
             let mut renew = false;
+            // FIXME: Need mutable here!
             let mut maze_0_0_1_0_0 = maze_0_0_1_0_rx.recv()?;
             while !renew {
                 let sig = ctrl_2_0_rx.recv()?;
@@ -298,7 +300,7 @@ pub fn run(salt: i32, pairs: Vec<(Point, Point)>, max_it: u32) -> Maze {
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = rs1_0_0_1_rx.recv()?;
+            let var_0 = rs1_0_0_1_rx.recv()?;
             let rs2_0_0_0 = var_0.clone();
             rs2_0_0_0_tx.send(rs2_0_0_0)?;
             rs1_0_0_0_0_tx.send(var_0)?
