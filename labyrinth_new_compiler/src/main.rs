@@ -11,6 +11,7 @@ use time::PreciseTime;
 mod generated;
 mod benchs;
 mod parser;
+mod grid;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -90,7 +91,8 @@ fn main() {
             println!("[INFO] Loaded maze data from file.");
         }
 
-        let paths2 = paths.clone();
+        let paths2 = paths.clone().into_iter().map(Some).collect();
+        let dims2 = dimensions.clone();
 
         let start = PreciseTime::now();
         let cpu_start = ProcessTime::now();
@@ -98,7 +100,7 @@ fn main() {
         //#[ohua]
         //let (filled_maze, rollbacks) =
             //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
-        let filled_maze = generated::run(0, paths2, 200);
+        let filled_maze = generated::run(dims2, paths2, 200);
 
         let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
