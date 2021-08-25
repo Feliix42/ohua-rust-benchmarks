@@ -42,7 +42,6 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         }
     }
     let (e_0_0_tx, e_0_0_rx) = std::sync::mpsc::channel();
-    let (maze_0_1_0_tx, maze_0_1_0_rx) = std::sync::mpsc::channel();
     let (not_done_0_0_0_tx, not_done_0_0_0_rx) = std::sync::mpsc::channel();
     let (new_its_left_0_0_0_tx, new_its_left_0_0_0_rx) = std::sync::mpsc::channel();
     let (rs2_0_0_0_tx, rs2_0_0_0_rx) = std::sync::mpsc::channel();
@@ -52,8 +51,10 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
     let (maze_0_0_2_tx, maze_0_0_2_rx) = std::sync::mpsc::channel::<Maze>();
     let (m2_0_0_0_tx, m2_0_0_0_rx) = std::sync::mpsc::channel::<Maze>();
     // FIXME: Needs a type!
-    let (pairs_0_0_0_tx, pairs_0_0_0_rx) = std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
-    let (pairs_0_n_0_0_0_tx, pairs_0_n_0_0_0_rx) = std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
+    let (pairs_0_0_0_tx, pairs_0_0_0_rx) =
+        std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
+    let (pairs_0_n_0_0_0_tx, pairs_0_n_0_0_0_rx) =
+        std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
     let (maze_0_0_1_0_tx, maze_0_0_1_0_rx) = std::sync::mpsc::channel::<Maze>();
     let (ctrl_2_0_tx, ctrl_2_0_rx) = std::sync::mpsc::channel::<(_, _)>();
     let (mro_0_0_1_tx, mro_0_0_1_rx) = std::sync::mpsc::channel::<Arc<Maze>>();
@@ -69,27 +70,15 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
     // FIXME(feliix42): This had a generic type parameter `T` instead of Maze!
     let (r_0_0_0_tx, r_0_0_0_rx) = std::sync::mpsc::channel::<Option<(Point, Point)>>();
     let (maze_0_0_0_0_tx, maze_0_0_0_0_rx) = std::sync::mpsc::channel();
-    let (size_0_2_tx, size_0_2_rx) = std::sync::mpsc::channel();
     let (rs_0_1_0_0_tx, rs_0_1_0_0_rx) = std::sync::mpsc::channel();
-    let (size_0_3_tx, size_0_3_rx) = std::sync::mpsc::channel();
     // FIXME(feliix42): Need a type annotation!
     let (rest_0_0_0_tx, rest_0_0_0_rx) = std::sync::mpsc::channel::<Vec<_>>();
-    let (rs_0_2_0_tx, rs_0_2_0_rx) = std::sync::mpsc::channel();
     let (rs_0_0_0_0_tx, rs_0_0_0_0_rx) = std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
     let (rs1_0_0_1_tx, rs1_0_0_1_rx) = std::sync::mpsc::channel();
     let (its_left_0_0_0_tx, its_left_0_0_0_rx) = std::sync::mpsc::channel::<u32>();
-    let (rs1_0_0_0_0_tx, rs1_0_0_0_0_rx) = std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
+    let (rs1_0_0_0_0_tx, rs1_0_0_0_0_rx) =
+        std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
     let mut tasks: Vec<Box<dyn FnOnce() -> Result<(), RunError> + Send>> = Vec::new();
-    tasks.push(Box::new(move || -> _ {
-        let num = size_0_3_rx.recv()?;
-        let toDrop = num - 1;
-        for _ in 0..toDrop {
-            rs_0_1_0_0_rx.recv()?;
-            ()
-        }
-        let s = rs_0_1_0_0_rx.recv()?;
-        Ok(rs_0_2_0_tx.send(s)?)
-    }));
     tasks.push(Box::new(move || -> _ {
         loop {
             let mut renew = false;
@@ -138,6 +127,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
             ()
         }
     }));
+    let (foo_tx, foo_rx) = std::sync::mpsc::channel();
     tasks.push(Box::new(move || -> _ {
         let mut rt = std::sync::Arc::new(
             tokio::runtime::Builder::new()
@@ -146,6 +136,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
                 .build()
                 .unwrap(),
         );
+        foo_tx.send(rt.clone())?;
         loop {
             let var_1 = b_0_0_rx.recv()?;
             let var_2 = d_0_0_rx.recv()?;
@@ -158,6 +149,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
             futures_0_tx.send(futures_0)?;
             ()
         }
+        // FIXME(feliix42): Is the dropping of the RT here problematic? Most certainly!
     }));
     tasks.push(Box::new(move || -> _ {
         let ctrlSig = (true, 1);
@@ -167,10 +159,10 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         pairs_0_0_0_tx.send(pairs)?;
         its_left_0_0_0_tx.send(max_it)?;
         while not_done_0_0_0_rx.recv()? {
-            maze_0_1_0_rx.recv()?;
+            maze_0_0_0_0_rx.recv()?;
             let ctrlSig = (true, 1);
             ctrl_0_0_0_tx.send(ctrlSig)?;
-            let loop_res_0 = maze_0_1_0_rx.recv()?;
+            let loop_res_0 = maze_0_0_0_0_rx.recv()?;
             let loop_res_1 = rs2_0_0_0_rx.recv()?;
             let loop_res_2 = new_its_left_0_0_0_rx.recv()?;
             maze_0_0_2_tx.send(loop_res_0)?;
@@ -180,7 +172,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         }
         let ctrlSig = (false, 0);
         ctrl_0_0_0_tx.send(ctrlSig)?;
-        let finalResult = maze_0_1_0_rx.recv()?;
+        let finalResult = maze_0_0_0_0_rx.recv()?;
         Ok(e_0_0_tx.send(finalResult)?)
     }));
     tasks.push(Box::new(move || -> _ {
@@ -250,7 +242,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = rs_0_2_0_rx.recv()?;
+            let mut var_0 = rs_0_1_0_0_rx.recv()?;
             let var_1 = rest_0_0_0_rx.recv()?;
             let rs_0_0_0_0 = {
                 var_0.extend(var_1.into_iter());
@@ -274,16 +266,6 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         Ok(())
     }));
     tasks.push(Box::new(move || -> _ {
-        let num = size_0_2_rx.recv()?;
-        let toDrop = num - 1;
-        for _ in 0..toDrop {
-            maze_0_0_0_0_rx.recv()?;
-            ()
-        }
-        let s = maze_0_0_0_0_rx.recv()?;
-        Ok(maze_0_1_0_tx.send(s)?)
-    }));
-    tasks.push(Box::new(move || -> _ {
         loop {
             let mut var_0 = rs1_0_0_1_rx.recv()?;
             let rs2_0_0_0 = var_0.clone();
@@ -300,8 +282,6 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
             };
             if hasSize {
                 let size = data.len();
-                size_0_3_tx.send(size)?;
-                size_0_2_tx.send(size)?;
                 let ctrl = (true, size);
                 ctrl_2_2_tx.send(ctrl)?;
                 let ctrl = (true, size);
@@ -325,8 +305,6 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
                     size = size + 1;
                     ()
                 }
-                size_0_3_tx.send(size)?;
-                size_0_2_tx.send(size)?;
                 let ctrl = (true, 0);
                 ctrl_2_2_tx.send(ctrl)?;
                 let ctrl = (true, 0);
@@ -341,8 +319,9 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         loop {
             let mut var_0 = pairs_0_0_0_rx.recv()?;
             let restup = {
-                let chunk = var_0.split_off(10);
-                (chunk, var_0)
+                let sp = if var_0.len() < 10 { var_0.len() } else { 10 };
+                let chunk = var_0.split_off(sp);
+                (var_0, chunk)
             };
             let pairs_0_n_0_0_0 = restup.0;
             pairs_0_n_0_0_0_tx.send(pairs_0_n_0_0_0)?;
@@ -364,6 +343,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
             eprintln!("[Error] A worker thread of an Ohua algorithm has panicked!");
         }
     }
+    let _ = foo_rx.recv().unwrap();
     match e_0_0_rx.recv() {
         Ok(res) => res,
         Err(e) => panic!("[Ohua Runtime Internal Exception] {}", e),
