@@ -1,6 +1,9 @@
 #![allow(unused_mut, non_snake_case)]
 // just for peace of mind
 
+pub const THREADCOUNT: usize = 4;
+pub const FREQUENCY: usize = 10;
+
 use crate::benchs::*;
 use std::sync::Arc;
 
@@ -132,7 +135,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         let mut rt = std::sync::Arc::new(
             tokio::runtime::Builder::new()
                 .threaded_scheduler()
-                .core_threads(1)
+                .core_threads(THREADCOUNT)
                 .build()
                 .unwrap(),
         );
@@ -319,7 +322,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         loop {
             let mut var_0 = pairs_0_0_0_rx.recv()?;
             let restup = {
-                let sp = if var_0.len() < 10 { var_0.len() } else { 10 };
+                let sp = if var_0.len() < FREQUENCY { var_0.len() } else { FREQUENCY };
                 let chunk = var_0.split_off(sp);
                 (var_0, chunk)
             };

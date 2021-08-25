@@ -4,7 +4,6 @@ use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
-use std::sync::Arc;
 use time::PreciseTime;
 //use tokio::runtime::{Builder, Runtime};
 
@@ -72,8 +71,10 @@ fn main() {
     let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();
 
     // runtime parameters
-    let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
-    let threadcount = usize::from_str(matches.value_of("threads").unwrap()).unwrap();
+    //let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
+    //let threadcount = usize::from_str(matches.value_of("threads").unwrap()).unwrap();
+    let updates = generated::FREQUENCY;
+    let threadcount = generated::THREADCOUNT;
 
     // input location & parsing
     let input_file = matches.value_of("INPUT").unwrap();
