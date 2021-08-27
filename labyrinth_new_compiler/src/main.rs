@@ -83,6 +83,7 @@ fn main() {
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
     let mut mapped_paths: Vec<usize> = Vec::with_capacity(runs);
+    #[allow(unused_mut)]
     let mut collisions: Vec<usize> = Vec::with_capacity(runs);
 
     for r in 0..runs {
@@ -116,7 +117,7 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             cpu_results.push(cpu_runtime_ms);
-            //mapped_paths.push(filled_maze.paths.len());
+            mapped_paths.push(filled_maze.paths.len());
             //collisions.push(rollbacks);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);

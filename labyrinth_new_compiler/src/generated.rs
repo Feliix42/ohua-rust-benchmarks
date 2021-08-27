@@ -8,6 +8,7 @@ use crate::benchs::*;
 use std::sync::Arc;
 
 // FIXME(feliix42): mutable Maze here
+#[allow(dead_code)]
 pub fn fill(mut maze: Maze, pairs: Vec<Option<(Point, Point)>>, its_left: u32) -> Maze {
     // FIXME(feliix42): mutable `rs` here
     let mut rs = Vec::default();
@@ -162,7 +163,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         pairs_0_0_0_tx.send(pairs)?;
         its_left_0_0_0_tx.send(max_it)?;
         while not_done_0_0_0_rx.recv()? {
-            maze_0_0_0_0_rx.recv()?;
+            // maze_0_0_0_0_rx.recv()?;
             let ctrlSig = (true, 1);
             ctrl_0_0_0_tx.send(ctrlSig)?;
             let loop_res_0 = maze_0_0_0_0_rx.recv()?;

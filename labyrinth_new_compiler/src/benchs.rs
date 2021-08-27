@@ -31,8 +31,10 @@ impl Maze {
         }
     }
 
+    /// Updates the labyrinth structure, returns the start and end point if the update was
+    /// unsuccessful
     pub fn update(&mut self, path: Option<Path>) -> Option<(Point, Point)> {
-        let path = path.unwrap();
+        let path = path?;
 
         if path_available(&self.grid, &path) {
             for pt in &path.path {
@@ -239,8 +241,8 @@ pub fn filter_mapped(results: Vec<Option<(Point, Point)>>) -> Vec<Option<(Point,
 }
 
 pub fn calculate_done(results: Vec<Option<(Point, Point)>>, its_left: u32) -> (u32, bool) {
-    let done = results.iter().all(Option::is_none);
-    (its_left - 1, done)
+    let should_cont = (its_left > 0) && results.iter().any(Option::is_some);
+    (its_left - 1, should_cont)
 }
 
 //pub fn decrement(u: u32) -> u32 {
