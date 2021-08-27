@@ -6,7 +6,7 @@ echo "Starting benchmarks at $(date)"
 
 
 # problem sizes
-declare -a sizes=("random-x32-y32-z3-n64.txt" "random-x48-y48-z3-n64.txt" "random-x128-y128-z5-n128.txt" "random-x256-y256-z5-n256.txt")
+declare -a sizes=("random-x32-y32-z3-n96.txt" "random-x48-y48-z3-n64.txt" "random-x128-y128-z5-n128.txt" "random-x256-y256-z5-n256.txt" "random-x512-y512-z7-n512.txt")
 TODAY=`date +%Y-%m-%d`
 
 # clean and build
@@ -18,10 +18,14 @@ cd -
 
 for benchsize in "${sizes[@]}"
 do
+    IFS='-' read -ra foo <<< "$benchsize"
+    sdir="${foo[1]}"
+    mkdir -p $TODAY-labyrinth/$sdir
+
     echo "Running benchmarks for $benchsize"
 
     echo -n "  sequential"
-    ../labyrinth/target/release/sequential ../labyrinth/inputs/$benchsize --json --outdir "$TODAY-labyrinth" --runs 30 
+    ../labyrinth/target/release/sequential ../labyrinth/inputs/$benchsize --json --outdir "$TODAY-labyrinth/$sdir" --runs 30 
     echo " - done!"
 
     echo -n "  new ohua version"
@@ -31,11 +35,11 @@ do
         sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = $tcount/" src/generated.rs
         for frequency in 1 2 3 4
         do
-            mkdir -p "$TODAY-labyrinth/freq$frequency"
+            mkdir -p $TODAY-labyrinth/$sdir/freq$frequency
             echo -n "."
             sed -i "s/FREQUENCY: usize = [0-9]\+/FREQUENCY: usize = $(($tcount * $frequency))/" src/generated.rs
             cargo build --release --quiet
-            target/release/labyrinth_new_compiler ../labyrinth/inputs/$benchsize --json --outdir "$TODAY-labyrinth/freq$frequency" --runs 30
+            target/release/labyrinth_new_compiler ../labyrinth/inputs/$benchsize --json --outdir "$TODAY-labyrinth/$sdir/freq$frequency" --runs 30
         done
     done
 
