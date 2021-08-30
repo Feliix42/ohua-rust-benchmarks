@@ -1,35 +1,35 @@
 #![allow(unused_mut, non_snake_case)]
 // just for peace of mind
 
-pub const THREADCOUNT: usize = 4;
-pub const FREQUENCY: usize = 10;
+pub const THREADCOUNT: usize = 12;
+pub const FREQUENCY: usize = 1;
 
 use crate::benchs::*;
 use std::sync::Arc;
 
 // FIXME(feliix42): mutable Maze here
-#[allow(dead_code)]
-pub fn fill(mut maze: Maze, pairs: Vec<Option<(Point, Point)>>, its_left: u32) -> Maze {
-    // FIXME(feliix42): mutable `rs` here
-    let mut rs = Vec::default();
-    let m2 = maze.clone();
-    let mro = Arc::new(m2);
-    for pair in pairs {
-        let path = find_path(mro.clone(), pair);
-        let r = maze.update(path);
-        rs.push(r);
-    }
-    let rs1 = filter_mapped(rs);
-    let rs2 = rs1.clone();
-    let (new_its_left, not_done) = calculate_done(rs1, its_left);
-    if not_done {
-        fill(maze, rs2, new_its_left)
-    } else {
-        maze
-    }
-}
+//#[allow(dead_code)]
+//pub fn fill(mut maze: Maze, pairs: Vec<Option<(Point, Point)>>, its_left: u32) -> Maze {
+    //// FIXME(feliix42): mutable `rs` here
+    //let mut rs = Vec::default();
+    //let m2 = maze.clone();
+    //let mro = Arc::new(m2);
+    //for pair in pairs {
+        //let path = find_path(mro.clone(), pair);
+        //let r = maze.update(path);
+        //rs.push(r);
+    //}
+    //let rs1 = filter_mapped(rs);
+    //let rs2 = rs1.clone();
+    //let (new_its_left, not_done) = calculate_done(rs1, its_left);
+    //if not_done {
+        //fill(maze, rs2, new_its_left)
+    //} else {
+        //maze
+    //}
+//}
 
-pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -> Maze {
+pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -> (Maze, usize) {
     #[derive(Debug)]
     enum RunError {
         SendFailed,
@@ -83,6 +83,8 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
     let (rs1_0_0_0_0_tx, rs1_0_0_0_0_rx) =
         std::sync::mpsc::channel::<Vec<Option<(Point, Point)>>>();
     let mut tasks: Vec<Box<dyn FnOnce() -> Result<(), RunError> + Send>> = Vec::new();
+
+    let (retry_sender, retry_rx) = std::sync::mpsc::channel::<usize>();
     tasks.push(Box::new(move || -> _ {
         loop {
             let var_0 = rs_0_0_0_0_rx.recv()?;
@@ -313,6 +315,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         }
     }));
     tasks.push(Box::new(move || -> _ {
+        let s = retry_sender;
         loop {
             let mut renew = false;
             let mut maze_0_0_1_0_0 = maze_0_0_1_0_rx.recv()?;
@@ -321,7 +324,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
                 let count = sig.1;
                 for _ in 0..count {
                     let var_1 = path_0_0_0_rx.recv()?;
-                    let r_0_0_0 = maze_0_0_1_0_0.update(var_1);
+                    let r_0_0_0 = maze_0_0_1_0_0.update(var_1, &s);
                     r_0_0_0_tx.send(r_0_0_0)?;
                     ()
                 }
@@ -348,7 +351,10 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
     }
     let _ = foo_rx.recv().unwrap();
     match e_0_0_rx.recv() {
-        Ok(res) => res,
+        Ok(res) => {
+            let count = Iterator::sum(retry_rx.iter());
+            (res, count)
+        },
         Err(e) => panic!("[Ohua Runtime Internal Exception] {}", e),
     }
 }

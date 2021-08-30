@@ -102,7 +102,7 @@ fn main() {
         //#[ohua]
         //let (filled_maze, rollbacks) =
             //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
-        let filled_maze = generated::run(dims2, paths2, 200);
+        let (filled_maze, retries) = generated::run(dims2, paths2, 200);
 
         let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
@@ -118,7 +118,7 @@ fn main() {
             results.push(runtime_ms);
             cpu_results.push(cpu_runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
-            //collisions.push(rollbacks);
+            collisions.push(retries);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;

@@ -33,7 +33,7 @@ impl Maze {
 
     /// Updates the labyrinth structure, returns the start and end point if the update was
     /// unsuccessful
-    pub fn update(&mut self, path: Option<Path>) -> Option<(Point, Point)> {
+    pub fn update(&mut self, path: Option<Path>, retry_sender: &std::sync::mpsc::Sender<usize>) -> Option<(Point, Point)> {
         let path = path?;
 
         if path_available(&self.grid, &path) {
@@ -43,6 +43,7 @@ impl Maze {
             self.paths.push(path);
             None
         } else {
+            retry_sender.send(1).unwrap();
             Some((path.start, path.end))
         }
     }
