@@ -1,3 +1,4 @@
+#![allow(unused_mut, non_snake_case)]
 use crate::types::*;
 
 pub const THREADCOUNT: usize = 12;
