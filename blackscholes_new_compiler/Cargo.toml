@@ -1,0 +1,14 @@
+[package]
+name = "blackscholes_new_compiler"
+version = "0.1.0"
+authors = ["Felix Wittwer <dev@felixwittwer.de>"]
+edition = "2018"
+resolver = "2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "2.33"
+time = "0.1"
+cpu-time = "1.0"
+tokio = { version = "0.2", features = ["full"] }
