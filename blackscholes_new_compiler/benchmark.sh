@@ -6,7 +6,7 @@ echo "Starting benchmarks at $(date)"
 
 
 # problem sizes
-declare -a sizes=("in_4K_simsmall.txt" "in_16K_simmedium.txt" "in_64K_simlarge.txt" "in_10M_native.txt")
+declare -a sizes=("in_4K_simsmall.txt" "in_16K_simmedium.txt" "in_64K_simlarge.txt" "in_10M_native.txt" "in_20M.txt")
 TODAY=`date +%Y-%m-%d`
 
 # clean and build
