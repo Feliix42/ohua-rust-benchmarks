@@ -26,6 +26,7 @@ pub fn calculate(options: Vec<Vec<OptionData>>) -> Vec<f32> {
     let (futures_0_tx, futures_0_rx) = std::sync::mpsc::channel::<std::sync::mpsc::Receiver<_>>();
     let (i_0_0_0_tx, i_0_0_0_rx) = std::sync::mpsc::channel();
     let (results_0_1_0_tx, results_0_1_0_rx) = std::sync::mpsc::channel::<Vec<Vec<f32>>>();
+    let (tokio_tx, tokio_rx) = std::sync::mpsc::channel();
     let mut tasks: Vec<Box<dyn FnOnce() -> Result<(), RunError> + Send>> = Vec::new();
     tasks.push(Box::new(move || -> _ {
         let mut rt = std::sync::Arc::new(
@@ -35,6 +36,7 @@ pub fn calculate(options: Vec<Vec<OptionData>>) -> Vec<f32> {
                 .build()
                 .unwrap(),
         );
+        tokio_tx.send(rt.clone()).unwrap();
         loop {
             let var_1 = d_1_0_rx.recv()?;
             let futures_0 = {
@@ -130,6 +132,7 @@ pub fn calculate(options: Vec<Vec<OptionData>>) -> Vec<f32> {
             eprintln!("[Error] A worker thread of an Ohua algorithm has panicked!");
         }
     }
+    let _ = tokio_rx.recv().unwrap();
     match b_0_0_rx.recv() {
         Ok(res) => res,
         Err(e) => panic!("[Ohua Runtime Internal Exception] {}", e),
