@@ -145,7 +145,7 @@ fn main() {
     }
 }
 
-fn splitup<T>(vec: Vec<T>, split_size: usize) -> Vec<Vec<T>>
+fn splitup<T>(vec: Vec<T>, split_size: usize) -> Vec<Box<Vec<T>>>
 where
     T: Clone,
 {
@@ -178,5 +178,5 @@ where
         start = dst;
     }
 
-    return res;
+    return res.into_iter().map(Box::new).collect();
 }

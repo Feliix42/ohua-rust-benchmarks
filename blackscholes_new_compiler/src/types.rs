@@ -91,11 +91,11 @@ impl OptionData {
     }
 }
 
-pub fn batch_calculate_black_scholes(opts: Vec<OptionData>) -> Vec<f32> {
-     opts.into_iter().map(calculate_black_scholes).collect()
+pub fn batch_calculate_black_scholes(opts: Box<Vec<OptionData>>) -> Vec<f32> {
+    (*opts).iter().map(calculate_black_scholes).collect()
 }
 
-pub fn calculate_black_scholes(opt: OptionData) -> f32 {
+pub fn calculate_black_scholes(opt: &OptionData) -> f32 {
     // just the 1:1 copyover of the calculation in the C version
     let x_sqrt_time = opt.time.sqrt();
     let x_log_term = (opt.spot / opt.strike).ln();

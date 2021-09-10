@@ -3,7 +3,7 @@ use crate::types::*;
 
 pub const THREADCOUNT: usize = 12;
 
-pub fn calculate(options: Vec<Vec<OptionData>>) -> Vec<f32> {
+pub fn calculate(options: Vec<Box<Vec<OptionData>>>) -> Vec<f32> {
     #[derive(Debug)]
     enum RunError {
         SendFailed,
@@ -22,7 +22,7 @@ pub fn calculate(options: Vec<Vec<OptionData>>) -> Vec<f32> {
     let (b_0_0_tx, b_0_0_rx) = std::sync::mpsc::channel();
     let (results_0_0_1_tx, results_0_0_1_rx) = std::sync::mpsc::channel();
     let (ctrl_0_0_tx, ctrl_0_0_rx) = std::sync::mpsc::channel::<(_, _)>();
-    let (d_1_0_tx, d_1_0_rx) = std::sync::mpsc::channel::<Vec<OptionData>>();
+    let (d_1_0_tx, d_1_0_rx) = std::sync::mpsc::channel::<Box<Vec<OptionData>>>();
     let (futures_0_tx, futures_0_rx) = std::sync::mpsc::channel::<std::sync::mpsc::Receiver<_>>();
     let (i_0_0_0_tx, i_0_0_0_rx) = std::sync::mpsc::channel();
     let (results_0_1_0_tx, results_0_1_0_rx) = std::sync::mpsc::channel::<Vec<Vec<f32>>>();
