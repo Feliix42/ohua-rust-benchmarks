@@ -32,7 +32,7 @@ pub fn calculate(options: Vec<Vec<OptionData>>) -> Vec<f32> {
         let mut rt = std::sync::Arc::new(
             tokio::runtime::Builder::new()
                 .threaded_scheduler()
-                .core_threads(1)
+                .core_threads(THREADCOUNT)
                 .build()
                 .unwrap(),
         );
