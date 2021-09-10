@@ -91,6 +91,10 @@ impl OptionData {
     }
 }
 
+pub fn batch_calculate_black_scholes(opts: Vec<OptionData>) -> Vec<f32> {
+     opts.into_iter().map(calculate_black_scholes).collect()
+}
+
 pub fn calculate_black_scholes(opt: OptionData) -> f32 {
     // just the 1:1 copyover of the calculation in the C version
     let x_sqrt_time = opt.time.sqrt();
@@ -174,3 +178,8 @@ pub fn verify_all_results(options: &[OptionData], results: &[f32]) -> usize {
 //pub fn id<T>(item: T) -> T {
     //item
 //}
+
+#[inline(always)]
+pub fn unpack(v: Vec<Vec<f32>>) -> Vec<f32> {
+    v.into_iter().flatten().collect()
+}

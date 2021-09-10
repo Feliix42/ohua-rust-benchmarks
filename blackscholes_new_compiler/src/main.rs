@@ -78,7 +78,7 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let options = input_data.clone();
+        let options = splitup(input_data.clone(), threadcount);
         // let options = input_data.clone();
 
         // start the clock
@@ -143,4 +143,40 @@ fn main() {
         println!("\nCPU-time used (ms): {:?}", cpu_time);
         println!("Runtime (ms): {:?}", results);
     }
+}
+
+fn splitup<T>(vec: Vec<T>, split_size: usize) -> Vec<Vec<T>>
+where
+    T: Clone,
+{
+    let size = split_size * 2; // magic number to oversaturate workers
+    let element_count = vec.len();
+    let mut rest = element_count % size;
+    let window_len: usize = element_count / size;
+    let per_vec = if rest != 0 {
+        window_len + 1
+    } else {
+        window_len
+    };
+
+    let mut res = vec![Vec::with_capacity(per_vec); size];
+
+    let mut start = 0;
+    for i in 0..size {
+        // calculate the length of the window (for even distribution of the `rest` elements)
+        let len = if rest > 0 {
+            rest -= 1;
+            window_len + 1
+        } else {
+            window_len
+        };
+
+        let dst = start + len;
+
+        res[i].extend_from_slice(&vec[start..dst]);
+
+        start = dst;
+    }
+
+    return res;
 }
