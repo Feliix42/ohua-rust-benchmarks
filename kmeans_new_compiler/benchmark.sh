@@ -10,8 +10,8 @@ declare -a sizes=("random-n65536-d32-c16.txt")
 TODAY=`date +%Y-%m-%d`
 
 # reset
-sed -i "s/while runs < 200 { \/\//while runs < 500/" ../kmeans/src/bin/seq.rs
-sed -i -e 's/\/\/current_delta > threshold/current_delta > threshold/g' -e 's/runs < 200/\/\/ runs < 200/g' src/types.rs
+#sed -i "s/while runs < 200 { \/\//while runs < 500/" ../kmeans/src/bin/seq.rs
+#sed -i -e 's/\/\/current_delta > threshold/current_delta > threshold/g' -e 's/runs < 200/\/\/ runs < 200/g' src/types.rs
 
 # clean and build
 cd ../kmeans
