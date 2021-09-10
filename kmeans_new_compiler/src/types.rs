@@ -167,7 +167,7 @@ pub fn reassign_values(mut values: Vec<Value>, centroids: Arc<Vec<Centroid>>) ->
 #[inline(always)]
 pub fn should_continue(current_delta: f32, threshold: f32, runs: u32) -> bool {
     current_delta > threshold && runs < 500
-    // runs < 500
+    // runs < 200
 }
 
 pub fn evaluate_results(values: Vec<(Vec<Value>, u32)>) -> (Vec<Vec<Value>>, f32) {
