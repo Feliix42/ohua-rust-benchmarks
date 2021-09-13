@@ -4,10 +4,11 @@ use std::io::{self, BufRead, BufReader};
 use std::str::FromStr;
 use std::sync::Arc;
 use rand_chacha::ChaCha12Rng;
+use rand_chacha::rand_core::SeedableRng;
 
 use rand::Rng;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Location {
     pub x: usize,
     pub y: usize,
@@ -44,8 +45,8 @@ impl NetlistElement {
 #[derive(Clone, Debug)]
 pub struct Netlist {
     pub elements: Vec<NetlistElement>,
-    max_x: usize,
-    max_y: usize,
+    pub max_x: usize,
+    pub max_y: usize,
 }
 
 impl Netlist {
@@ -283,10 +284,43 @@ pub fn reduce_temp(temperature: f64) -> f64 {
     temperature / 1.5
 }
 
-pub fn process_move(item: (usize, usize), netlist: Arc<Netlist>) -> (MoveDecision, (usize, usize)) {
-    unimplemented!()
+pub fn process_move(item: (usize, usize), netlist: Arc<Netlist>, temperature: f64) -> (MoveDecision, (usize, usize)) {
+    let total_cost = netlist.calculate_delta_routing_cost(item.0, item.1);
+
+    let decision = if total_cost < 0f64 {
+        MoveDecision::Good
+    } else {
+        let random_value: f64 = rand::random();
+        let boltzman = (-total_cost / temperature).exp();
+        if boltzman > random_value {
+            MoveDecision::Bad
+        } else {
+            MoveDecision::Rejected
+        }
+    };
+
+    (decision, item)
 }
 
-pub fn assess_updates(updates: Vec<Option<(usize, usize)>>, temp: f64, completed_steps: i32, max_steps: Option<i32>, swaps_per_temp: usize, mut rng: ChaCha12Rng) -> (bool, Vec<(usize, usize)>, ChaCha12Rng) {
-    unimplemented!()
+pub fn dup<T: Clone>(item: T) -> (T, T) {
+    (item.clone(), item)
 }
+
+
+pub struct InternalRNG(ChaCha12Rng);
+
+impl InternalRNG {
+    pub fn seed_from_u64(seed: u64) -> Self {
+        Self(ChaCha12Rng::seed_from_u64(seed))
+    }
+
+    pub fn assess_updates(&mut self, updates: Vec<Option<(usize, usize)>>, dimensions: Location, temp: f64, completed_steps: i32, max_steps: Option<i32>, swaps_per_temp: usize) -> (bool, Vec<(usize, usize)>) {
+        unimplemented!()
+    }
+    
+    pub fn generate_worklist(&mut self, swaps_per_temp: usize, dimensions: Location) -> Vec<(usize, usize)> {
+        unimplemented!()
+    }
+}
+
+
