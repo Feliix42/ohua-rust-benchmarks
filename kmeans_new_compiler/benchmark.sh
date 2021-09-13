@@ -29,7 +29,7 @@ do
     echo "Running benchmarks for $benchsize"
 
     echo -n "  sequential"
-    ../kmeans/target/release/sequential ../kmeans/inputs/$benchsize --json --outdir "$TODAY-kmeans-low/$sdir" --runs 30 
+    ../kmeans/target/release/sequential ../kmeans/inputs/$benchsize --json --outdir "$TODAY-kmeans-low/$sdir" --runs 30 -n 40 -t 0.00001
     echo " - done!"
 
     echo -n "  new ohua version"
@@ -39,7 +39,7 @@ do
         sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = $tcount/" src/generated.rs
         echo -n "."
         cargo build --release --quiet
-        target/release/kmeans_new_compiler ../kmeans/inputs/$benchsize --json --outdir "$TODAY-kmeans-low/$sdir" --runs 30
+        target/release/kmeans_new_compiler ../kmeans/inputs/$benchsize --json --outdir "$TODAY-kmeans-low/$sdir" --runs 30 -n 40 -t 0.00001
     done
 
     echo " - done!"
@@ -67,7 +67,7 @@ do
     echo "Running benchmarks for $benchsize"
 
     echo -n "  sequential"
-    ../kmeans/target/release/sequential ../kmeans/inputs/$benchsize --json --outdir "$TODAY-kmeans-low-200/$sdir" --runs 30 
+    ../kmeans/target/release/sequential ../kmeans/inputs/$benchsize --json --outdir "$TODAY-kmeans-low-200/$sdir" --runs 30 -n 40 -t 0.00001
     echo " - done!"
 
     echo -n "  new ohua version"
@@ -77,7 +77,7 @@ do
         sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = $tcount/" src/generated.rs
         echo -n "."
         cargo build --release --quiet
-        target/release/kmeans_new_compiler ../kmeans/inputs/$benchsize --json --outdir "$TODAY-kmeans-low-200/$sdir" --runs 30
+        target/release/kmeans_new_compiler ../kmeans/inputs/$benchsize --json --outdir "$TODAY-kmeans-low-200/$sdir" --runs 30 -n 40 -t 0.00001
     done
 
     echo " - done!"
