@@ -265,7 +265,7 @@ impl Netlist {
         delta_cost
     }
     
-    pub fn update(&mut self, updt: (MoveDecision, (usize, usize))) -> Option<(usize, usize)> {
+    pub fn update(&mut self, updt: (MoveDecision, (usize, usize))) -> Result<MoveDecision, (usize, usize)> {
         unimplemented!()
     }
 }
@@ -307,17 +307,26 @@ pub fn dup<T: Clone>(item: T) -> (T, T) {
 }
 
 
-pub struct InternalRNG(ChaCha12Rng);
+pub struct InternalRNG {
+    rng: ChaCha12Rng,
+    accepted_good_moves: u32,
+    accepted_bad_moves:u32
+}
 
 impl InternalRNG {
     pub fn seed_from_u64(seed: u64) -> Self {
-        Self(ChaCha12Rng::seed_from_u64(seed))
+        Self {
+            rng: ChaCha12Rng::seed_from_u64(seed),
+            accepted_good_moves: 0,
+            accepted_bad_moves: 0,
+        }
     }
 
-    pub fn assess_updates(&mut self, updates: Vec<Option<(usize, usize)>>, dimensions: Location, temp: f64, completed_steps: i32, max_steps: Option<i32>, swaps_per_temp: usize) -> (bool, Vec<(usize, usize)>) {
-        unimplemented!()
+    pub fn assess_updates(&mut self, updates: Vec<Result<MoveDecision, (usize, usize)>>, dimensions: Location, temp: f64, completed_steps: i32, max_steps: Option<i32>, swaps_per_temp: usize) -> (bool, Vec<(usize, usize)>) {
+
+        todo!()
     }
-    
+
     pub fn generate_worklist(&mut self, swaps_per_temp: usize, dimensions: Location) -> Vec<(usize, usize)> {
         unimplemented!()
     }

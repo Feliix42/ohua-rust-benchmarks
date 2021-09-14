@@ -4,7 +4,11 @@ use std::sync::Arc;
 
 pub const THREADCOUNT: usize = 4;
 
-/*
+// NOTE(feliix42): Check the following:
+// - [ ] tokio runtime fix (channel) in place?
+// - [ ] THREADCOUNT and FREQUENCY variables replaced?
+
+/* // Old design sketch:
 pub fn run(mut netlist: Netlist, dimensions: Location, worklist: Vec<(usize, usize)>, rng: ChaCha12Rng, temperature: f64, completed_steps: i32, max_steps: Option<i32>, swaps_per_temp: usize) -> i32 { 
     let mut rs = Vec::default();
 
@@ -49,9 +53,10 @@ pub fn run(
 ) -> i32 {
     let mut rs = Vec::default();
     let new_temp = reduce_temp(temperature);
+    let new_temp2 = new_temp.clone();
     let nro = Arc::new(netlist.clone());
     for item in worklist {
-        let switch_info = process_move(item, nro.clone());
+        let switch_info = process_move(item, nro.clone(), new_temp2);
         let res = netlist.update(switch_info);
         rs.push(res);
     }
@@ -121,18 +126,21 @@ pub fn annealer(
     let (d2_0_0_0_tx, d2_0_0_0_rx) = std::sync::mpsc::channel();
     let (ctrl_0_0_0_tx, ctrl_0_0_0_rx) = std::sync::mpsc::channel::<(_, _)>();
     let (temperature_0_0_0_tx, temperature_0_0_0_rx) = std::sync::mpsc::channel::<f64>();
+    let (new_temp_0_0_2_tx, new_temp_0_0_2_rx) = std::sync::mpsc::channel::<f64>();
     let (netlist_0_0_2_tx, netlist_0_0_2_rx) = std::sync::mpsc::channel();
     let (c_0_0_tx, c_0_0_rx) = std::sync::mpsc::channel();
     let (worklist_0_0_0_tx, worklist_0_0_0_rx) = std::sync::mpsc::channel::<Vec<(usize, usize)>>();
     let (netlist_0_0_1_0_tx, netlist_0_0_1_0_rx) = std::sync::mpsc::channel::<Netlist>();
     let (ctrl_2_0_tx, ctrl_2_0_rx) = std::sync::mpsc::channel::<(_, _)>();
-    let (nro_0_0_1_tx, nro_0_0_1_rx) = std::sync::mpsc::channel::<Arc<Netlist>>();
+    let (new_temp2_0_0_0_tx, new_temp2_0_0_0_rx) = std::sync::mpsc::channel::<f64>();
     let (ctrl_2_1_tx, ctrl_2_1_rx) = std::sync::mpsc::channel::<(_, _)>();
-    let (rs_0_0_1_tx, rs_0_0_1_rx) = std::sync::mpsc::channel();
+    let (nro_0_0_1_tx, nro_0_0_1_rx) = std::sync::mpsc::channel::<Arc<Netlist>>();
     let (ctrl_2_2_tx, ctrl_2_2_rx) = std::sync::mpsc::channel::<(_, _)>();
+    let (rs_0_0_1_tx, rs_0_0_1_rx) = std::sync::mpsc::channel();
+    let (ctrl_2_3_tx, ctrl_2_3_rx) = std::sync::mpsc::channel::<(_, _)>();
     let (d_0_0_tx, d_0_0_rx) = std::sync::mpsc::channel::<Arc<Netlist>>();
     let (d_1_0_tx, d_1_0_rx) = std::sync::mpsc::channel::<(usize, usize)>();
-    let (futures_0_tx, futures_0_rx) = std::sync::mpsc::channel::<std::sync::mpsc::Receiver<_>>();
+    let (futures_0_tx, futures_0_rx) = std::sync::mpsc::channel();
     let (switch_info_0_0_0_tx, switch_info_0_0_0_rx) =
         std::sync::mpsc::channel::<(MoveDecision, (usize, usize))>();
     let (res_0_0_0_tx, res_0_0_0_rx) = std::sync::mpsc::channel();
@@ -140,59 +148,17 @@ pub fn annealer(
     let (swaps_per_temp_0_0_1_tx, swaps_per_temp_0_0_1_rx) = std::sync::mpsc::channel::<usize>();
     let (max_steps_0_0_1_tx, max_steps_0_0_1_rx) = std::sync::mpsc::channel::<Option<i32>>();
     let (completed_steps_0_0_1_tx, completed_steps_0_0_1_rx) = std::sync::mpsc::channel::<i32>();
-    let (new_temp_0_0_1_tx, new_temp_0_0_1_rx) = std::sync::mpsc::channel();
+    let (new_temp_0_0_1_0_tx, new_temp_0_0_1_0_rx) = std::sync::mpsc::channel();
     let (e_0_0_tx, e_0_0_rx) = std::sync::mpsc::channel::<usize>();
     let (f_0_0_tx, f_0_0_rx) = std::sync::mpsc::channel::<Option<i32>>();
     let (g_0_0_tx, g_0_0_rx) = std::sync::mpsc::channel::<i32>();
     let (h_0_0_tx, h_0_0_rx) = std::sync::mpsc::channel::<f64>();
     let (dimensions_0_0_0_0_tx, dimensions_0_0_0_0_rx) = std::sync::mpsc::channel::<Location>();
-    let (rs_0_1_0_tx, rs_0_1_0_rx) = std::sync::mpsc::channel::<Vec<Option<(usize, usize)>>>();
+    let (rs_0_1_0_tx, rs_0_1_0_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
     let (rng_0_0_1_tx, rng_0_0_1_rx) = std::sync::mpsc::channel::<InternalRNG>();
     let (completed_steps_0_0_0_0_tx, completed_steps_0_0_0_0_rx) =
         std::sync::mpsc::channel::<i32>();
     let mut tasks: Vec<Box<dyn FnOnce() -> Result<(), RunError> + Send>> = Vec::new();
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let mut data = worklist_0_0_0_rx.recv()?;
-            let hasSize = {
-                let tmp_has_size = data.iter().size_hint();
-                tmp_has_size.1.is_some()
-            };
-            if hasSize {
-                let size = data.len();
-                let ctrl = (true, size);
-                ctrl_2_2_tx.send(ctrl)?;
-                let ctrl = (true, size);
-                ctrl_2_1_tx.send(ctrl)?;
-                let ctrl = (true, size);
-                ctrl_2_0_tx.send(ctrl)?;
-                for d in data {
-                    d_1_0_tx.send(d)?;
-                    ()
-                }
-            } else {
-                let mut size = 0;
-                for d in data {
-                    d_1_0_tx.send(d)?;
-                    let ctrl = (false, 1);
-                    ctrl_2_2_tx.send(ctrl)?;
-                    let ctrl = (false, 1);
-                    ctrl_2_1_tx.send(ctrl)?;
-                    let ctrl = (false, 1);
-                    ctrl_2_0_tx.send(ctrl)?;
-                    size = size + 1;
-                    ()
-                }
-                let ctrl = (true, 0);
-                ctrl_2_2_tx.send(ctrl)?;
-                let ctrl = (true, 0);
-                ctrl_2_1_tx.send(ctrl)?;
-                let ctrl = (true, 0);
-                ctrl_2_0_tx.send(ctrl)?;
-                ()
-            }
-        }
-    }));
     tasks.push(Box::new(move || -> _ {
         loop {
             let mut var_0 = completed_steps_0_0_1_rx.recv()?;
@@ -228,6 +194,14 @@ pub fn annealer(
         }
     }));
     tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = new_temp_0_0_2_rx.recv()?;
+            let new_temp2_0_0_0 = var_0.clone();
+            new_temp2_0_0_0_tx.send(new_temp2_0_0_0)?;
+            new_temp_0_0_1_0_tx.send(var_0)?
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
         let restup = dup(dimensions);
         let d1_0_0_0 = restup.0;
         d1_0_0_0_tx.send(d1_0_0_0)?;
@@ -237,21 +211,50 @@ pub fn annealer(
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut renew = false;
-            let mut nro_0_0_1_0 = nro_0_0_1_rx.recv()?;
-            while !renew {
-                let sig = ctrl_2_1_rx.recv()?;
-                let count = sig.1;
-                for _ in 0..count {
-                    let d_0_0 = nro_0_0_1_0.clone();
-                    d_0_0_tx.send(d_0_0)?;
+            let mut data = worklist_0_0_0_rx.recv()?;
+            let hasSize = {
+                let tmp_has_size = data.iter().size_hint();
+                tmp_has_size.1.is_some()
+            };
+            if hasSize {
+                let size = data.len();
+                let ctrl = (true, size);
+                ctrl_2_3_tx.send(ctrl)?;
+                let ctrl = (true, size);
+                ctrl_2_2_tx.send(ctrl)?;
+                let ctrl = (true, size);
+                ctrl_2_1_tx.send(ctrl)?;
+                let ctrl = (true, size);
+                ctrl_2_0_tx.send(ctrl)?;
+                for d in data {
+                    d_1_0_tx.send(d)?;
                     ()
                 }
-                let renew_next_time = sig.0;
-                renew = renew_next_time;
+            } else {
+                let mut size = 0;
+                for d in data {
+                    d_1_0_tx.send(d)?;
+                    let ctrl = (false, 1);
+                    ctrl_2_3_tx.send(ctrl)?;
+                    let ctrl = (false, 1);
+                    ctrl_2_2_tx.send(ctrl)?;
+                    let ctrl = (false, 1);
+                    ctrl_2_1_tx.send(ctrl)?;
+                    let ctrl = (false, 1);
+                    ctrl_2_0_tx.send(ctrl)?;
+                    size = size + 1;
+                    ()
+                }
+                let ctrl = (true, 0);
+                ctrl_2_3_tx.send(ctrl)?;
+                let ctrl = (true, 0);
+                ctrl_2_2_tx.send(ctrl)?;
+                let ctrl = (true, 0);
+                ctrl_2_1_tx.send(ctrl)?;
+                let ctrl = (true, 0);
+                ctrl_2_0_tx.send(ctrl)?;
                 ()
             }
-            ()
         }
     }));
     tasks.push(Box::new(move || -> _ {
@@ -260,14 +263,6 @@ pub fn annealer(
             let f_0_0 = var_0.clone();
             f_0_0_tx.send(f_0_0)?;
             max_steps_0_0_0_0_tx.send(var_0)?
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let var_0 = temperature_0_0_0_rx.recv()?;
-            let new_temp_0_0_1 = reduce_temp(var_0);
-            new_temp_0_0_1_tx.send(new_temp_0_0_1)?;
-            ()
         }
     }));
     tasks.push(Box::new(move || -> _ {
@@ -309,6 +304,61 @@ pub fn annealer(
             let rest_0_0_0 = restup.1;
             rest_0_0_0_tx.send(rest_0_0_0)?;
             rng_0_0_0_0_tx.send(var_0)?
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut renew = false;
+            let mut nro_0_0_1_0 = nro_0_0_1_rx.recv()?;
+            while !renew {
+                let sig = ctrl_2_2_rx.recv()?;
+                let count = sig.1;
+                for _ in 0..count {
+                    let d_0_0 = nro_0_0_1_0.clone();
+                    d_0_0_tx.send(d_0_0)?;
+                    ()
+                }
+                let renew_next_time = sig.0;
+                renew = renew_next_time;
+                ()
+            }
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        let mut rt = std::sync::Arc::new(
+            tokio::runtime::Builder::new()
+                .threaded_scheduler()
+                .core_threads(1)
+                .build()
+                .unwrap(),
+        );
+        loop {
+            let mut renew = false;
+            let new_temp2_0_0_0_0 = new_temp2_0_0_0_rx.recv()?;
+            while !renew {
+                let sig = ctrl_2_1_rx.recv()?;
+                let count = sig.1;
+                for _ in 0..count {
+                    let var_1 = d_1_0_rx.recv()?;
+                    let var_2 = d_0_0_rx.recv()?;
+                    let futures_0 = {
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        let work = async move {
+                            tx.send(process_move(var_1, var_2, new_temp2_0_0_0_0))
+                                .unwrap()
+                        };
+                        rt.spawn(work);
+                        rx
+                    };
+                    futures_0_tx.send(futures_0)?;
+                    ()
+                }
+                let renew_next_time = sig.0;
+                renew = renew_next_time;
+                ()
+            }
+            ()
         }
     }));
     tasks.push(Box::new(move || -> _ {
@@ -359,27 +409,6 @@ pub fn annealer(
         Ok(k_0_0_tx.send(finalResult)?)
     }));
     tasks.push(Box::new(move || -> _ {
-        let mut rt = std::sync::Arc::new(
-            tokio::runtime::Builder::new()
-                .threaded_scheduler()
-                .core_threads(1)
-                .build()
-                .unwrap(),
-        );
-        loop {
-            let var_1 = d_1_0_rx.recv()?;
-            let var_2 = d_0_0_rx.recv()?;
-            let futures_0 = {
-                let (tx, rx) = std::sync::mpsc::channel();
-                let work = async move { tx.send(process_move(var_1, var_2)).unwrap() };
-                rt.spawn(work);
-                rx
-            };
-            futures_0_tx.send(futures_0)?;
-            ()
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
         loop {
             let var_0 = c_0_0_rx.recv()?;
             let nro_0_0_1 = Arc::new(var_0);
@@ -405,7 +434,15 @@ pub fn annealer(
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = new_temp_0_0_1_rx.recv()?;
+            let var_0 = temperature_0_0_0_rx.recv()?;
+            let new_temp_0_0_2 = reduce_temp(var_0);
+            new_temp_0_0_2_tx.send(new_temp_0_0_2)?;
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = new_temp_0_0_1_0_rx.recv()?;
             let h_0_0 = var_0.clone();
             h_0_0_tx.send(h_0_0)?;
             new_temp_0_0_0_0_tx.send(var_0)?
@@ -421,7 +458,7 @@ pub fn annealer(
             let mut renew = false;
             let mut rs_0_0_1_0 = rs_0_0_1_rx.recv()?;
             while !renew {
-                let sig = ctrl_2_2_rx.recv()?;
+                let sig = ctrl_2_3_rx.recv()?;
                 let count = sig.1;
                 for _ in 0..count {
                     let var_1 = res_0_0_0_rx.recv()?;
