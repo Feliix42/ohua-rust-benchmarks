@@ -232,7 +232,7 @@ fn generate_path(end_node: Point, mut meta_info: BacktrackMetaData) -> Path {
 
 //pub fn get_unmapped(
 //results: Vec<Option<(Point, Point)>>,
-//its_left: u32,
+//iterations_finished: u32,
 //) -> (Vec<(Point, Point)>, bool, u32) {
 //unimplemented!()
 //}
@@ -241,9 +241,9 @@ pub fn filter_mapped(results: Vec<Option<(Point, Point)>>) -> Vec<Option<(Point,
     results.into_iter().filter(Option::is_some).collect()
 }
 
-pub fn calculate_done(results: Vec<Option<(Point, Point)>>, its_left: u32) -> (u32, bool) {
-    let should_cont = (its_left > 0) && results.iter().any(Option::is_some);
-    (its_left - 1, should_cont)
+pub fn calculate_done(results: Vec<Option<(Point, Point)>>, iterations_finished: u32) -> (u32, bool) {
+    let should_cont = results.iter().any(Option::is_some);
+    (iterations_finished + 1, should_cont)
 }
 
 //pub fn decrement(u: u32) -> u32 {
