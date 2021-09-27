@@ -9,6 +9,7 @@ use std::sync::Arc;
 use time::PreciseTime;
 
 mod generated;
+mod original;
 mod types;
 
 fn main() {
@@ -65,6 +66,12 @@ fn main() {
                 .takes_value(true)
                 .default_value("results")
         )
+        .arg(
+            Arg::with_name("sequential")
+                .long("seq")
+                .short("s")
+                .help("Run the sequential ohua algorithm (bare)")
+        )
         .get_matches();
 
     // parse benchmark parameters
@@ -75,6 +82,7 @@ fn main() {
         "Provided invalid value for `threshold`. Must be a non-negative floatin gpoint number",
     );
     let dont_use_zscore = matches.is_present("no_zscore");
+    let sequential = matches.is_present("sequential");
 
     // parse runtime parameters
     let runs =
@@ -109,7 +117,11 @@ fn main() {
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        let runs_necessary = calculate(input_data, initial_centers, threshold, 0);
+        let runs_necessary = if sequential {
+            original::calculate(input_data, initial_centers, threshold, 0)
+        } else {
+            calculate(input_data, initial_centers, threshold, 0)
+        };
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -147,6 +159,7 @@ fn main() {
     \"input\": \"{input_path}\",
     \"values-count\": {value_count},
     \"runs\": {runs},
+    \"sequential\": {seq},
     \"converged_after\": {conv:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
@@ -157,6 +170,7 @@ fn main() {
             input_path = input_path,
             value_count = clusters.len(),
             runs = runs,
+            seq = sequential,
             conv = convergence_after,
             cpu = cpu_results,
             res = results

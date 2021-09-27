@@ -8,6 +8,7 @@ use time::PreciseTime;
 //use tokio::runtime::{Builder, Runtime};
 
 mod generated;
+mod original;
 mod benchs;
 mod parser;
 mod grid;
@@ -61,11 +62,18 @@ fn main() {
                 .help("The number of threads the threadpool should encompass.")
                 .default_value("4")
         )
+        .arg(
+            Arg::with_name("sequential")
+                .long("seq")
+                .short("s")
+                .help("Run the sequential ohua algorithm (bare)")
+        )
         .get_matches();
 
     // JSON Dump?
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
+    let sequential = matches.is_present("sequential");
 
     // #runs
     let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();
@@ -102,7 +110,11 @@ fn main() {
         //#[ohua]
         //let (filled_maze, rollbacks) =
             //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
-        let (filled_maze, retries) = generated::run(dims2, paths2, 200);
+        let (filled_maze, retries) = if sequential {
+            original::run(dims2, paths2, 200)
+        } else {
+            generated::run(dims2, paths2, 200)
+        };
 
         let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
@@ -143,6 +155,7 @@ fn main() {
     \"configuration\": \"{conf}\",
     \"paths\": {paths},
     \"runs\": {runs},
+    \"sequential\": {seq},
     \"threadcount\": {threadcount},
     \"update_frequency\": {freq},
     \"mapped\": {mapped:?},
@@ -153,6 +166,7 @@ fn main() {
             conf = dimensions,
             paths = paths.len(),
             runs = runs,
+            seq = sequential,
             threadcount = threadcount,
             freq = updates,
             mapped = mapped_paths,

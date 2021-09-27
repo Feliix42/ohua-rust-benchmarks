@@ -7,6 +7,7 @@ use std::time::Instant;
 use types::*;
 
 mod generated;
+mod original;
 mod types;
 
 fn main() {
@@ -48,11 +49,18 @@ fn main() {
                 .takes_value(true)
                 .default_value("results")
         )
+        .arg(
+            Arg::with_name("sequential")
+                .long("seq")
+                .short("s")
+                .help("Run the sequential ohua algorithm (bare)")
+        )
         .get_matches();
 
     // parse parameters
     let input_file = matches.value_of("INPUT").unwrap();
     let threadcount = generated::THREADCOUNT;
+    let sequential = matches.is_present("sequential");
 
     // parse runtime parameters
     let runs =
@@ -86,7 +94,11 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let res = generated::calculate(options);
+        let res = if sequential {
+            original::calculate(options)
+        } else {
+            generated::calculate(options)
+        };
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -121,12 +133,14 @@ fn main() {
     \"options\": {opt},
     \"threadcount\": {threadcount},
     \"runs\": {runs},
+    \"sequential\": {seq},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             opt = input_data.len(),
             threadcount = threadcount,
             runs = runs,
+            seq = sequential,
             cpu = cpu_time,
             res = results
         ))
