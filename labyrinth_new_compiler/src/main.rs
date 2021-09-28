@@ -13,6 +13,8 @@ mod benchs;
 mod parser;
 mod grid;
 
+mod no_data_par;
+
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
         .version("1.0")
@@ -68,12 +70,18 @@ fn main() {
                 .short("s")
                 .help("Run the sequential ohua algorithm (bare)")
         )
+        .arg(
+            Arg::with_name("no_data_par")
+                .long("no-data-par")
+                .help("Run the ohua algorithm without data parallelism at all")
+        )
         .get_matches();
 
     // JSON Dump?
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
     let sequential = matches.is_present("sequential");
+    let ndp = matches.is_present("no_data_par");
 
     // #runs
     let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();
@@ -112,6 +120,8 @@ fn main() {
             //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
         let (filled_maze, retries) = if sequential {
             original::run(dims2, paths2, 200)
+        } else if ndp {
+            no_data_par::run(dims2, paths2, 200)
         } else {
             generated::run(dims2, paths2, 200)
         };
