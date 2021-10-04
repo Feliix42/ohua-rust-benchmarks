@@ -55,43 +55,43 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
             RunError::RecvFailed
         }
     }
-    let (e_0_0_tx, e_0_0_rx) = crossbeam_channel::bounded(FREQUENCY+10);
-    let (maze_0_1_0_tx, maze_0_1_0_rx) = crossbeam_channel::bounded(FREQUENCY+10);
-    let (not_done_0_0_0_tx, not_done_0_0_0_rx) = crossbeam_channel::bounded(FREQUENCY+10);
-    let (new_its_left_0_0_0_tx, new_its_left_0_0_0_rx) = crossbeam_channel::bounded(FREQUENCY+10);
-    let (rs2_0_0_0_tx, rs2_0_0_0_rx) = crossbeam_channel::bounded(FREQUENCY+10);
-    let (maze_1_0_0_tx, maze_1_0_0_rx) = crossbeam_channel::bounded(FREQUENCY+10);
-    let (ctrl_0_0_0_tx, ctrl_0_0_0_rx) = crossbeam_channel::bounded::<(_, _)>(FREQUENCY+10);
+    let (e_0_0_tx, e_0_0_rx) = crossbeam_channel::unbounded();
+    let (maze_0_1_0_tx, maze_0_1_0_rx) = crossbeam_channel::unbounded();
+    let (not_done_0_0_0_tx, not_done_0_0_0_rx) = crossbeam_channel::unbounded();
+    let (new_its_left_0_0_0_tx, new_its_left_0_0_0_rx) = crossbeam_channel::unbounded();
+    let (rs2_0_0_0_tx, rs2_0_0_0_rx) = crossbeam_channel::unbounded();
+    let (maze_1_0_0_tx, maze_1_0_0_rx) = crossbeam_channel::unbounded();
+    let (ctrl_0_0_0_tx, ctrl_0_0_0_rx) = crossbeam_channel::unbounded::<(_, _)>();
     // FIXME: This channel needs a type -> See where it could come from!
-    let (maze_0_0_2_tx, maze_0_0_2_rx) = crossbeam_channel::bounded::<Maze>(FREQUENCY+10);
-    let (m2_0_0_0_tx, m2_0_0_0_rx) = crossbeam_channel::bounded::<Maze>(FREQUENCY+10);
+    let (maze_0_0_2_tx, maze_0_0_2_rx) = crossbeam_channel::unbounded::<Maze>();
+    let (m2_0_0_0_tx, m2_0_0_0_rx) = crossbeam_channel::unbounded::<Maze>();
     // FIXME: Needs a type!
     let (pairs_0_0_0_tx, pairs_0_0_0_rx) =
-        crossbeam_channel::bounded::<Vec<Option<(Point, Point)>>>(FREQUENCY+10);
+        crossbeam_channel::unbounded::<Vec<Option<(Point, Point)>>>();
     let (pairs_0_n_0_0_0_tx, pairs_0_n_0_0_0_rx) =
-        crossbeam_channel::bounded::<Vec<Option<(Point, Point)>>>(FREQUENCY+10);
-    let (maze_0_0_1_0_tx, maze_0_0_1_0_rx) = crossbeam_channel::bounded::<Maze>(FREQUENCY+10);
-    let (ctrl_2_0_tx, ctrl_2_0_rx) = crossbeam_channel::bounded::<(_, _)>(FREQUENCY+10);
-    let (mro_0_0_1_tx, mro_0_0_1_rx) = crossbeam_channel::bounded::<Arc<Maze>>(FREQUENCY+10);
-    let (ctrl_2_1_tx, ctrl_2_1_rx) = crossbeam_channel::bounded::<(_, _)>(FREQUENCY+10);
+        crossbeam_channel::unbounded::<Vec<Option<(Point, Point)>>>();
+    let (maze_0_0_1_0_tx, maze_0_0_1_0_rx) = crossbeam_channel::unbounded::<Maze>();
+    let (ctrl_2_0_tx, ctrl_2_0_rx) = crossbeam_channel::unbounded::<(_, _)>();
+    let (mro_0_0_1_tx, mro_0_0_1_rx) = crossbeam_channel::unbounded::<Arc<Maze>>();
+    let (ctrl_2_1_tx, ctrl_2_1_rx) = crossbeam_channel::unbounded::<(_, _)>();
     // FIXME: Needs a type
-    let (rs_0_1_1_tx, rs_0_1_1_rx) = crossbeam_channel::bounded::<Vec<Option<(Point, Point)>>>(FREQUENCY+10);
+    let (rs_0_1_1_tx, rs_0_1_1_rx) = crossbeam_channel::unbounded::<Vec<Option<(Point, Point)>>>();
     // FIXME(feliix42): Need type anno here!
-    let (ctrl_2_2_tx, ctrl_2_2_rx) = crossbeam_channel::bounded::<(_, _)>(FREQUENCY+10);
-    let (d_0_0_tx, d_0_0_rx) = crossbeam_channel::bounded::<Option<(Point, Point)>>(FREQUENCY+10);
-    let (b_0_0_tx, b_0_0_rx) = crossbeam_channel::bounded::<Arc<Maze>>(FREQUENCY+10);
-    let (futures_0_tx, futures_0_rx) = crossbeam_channel::bounded::<crossbeam_channel::Receiver<_>>(FREQUENCY+10);
-    let (path_0_0_0_tx, path_0_0_0_rx) = crossbeam_channel::bounded::<Option<Path>>(FREQUENCY+10);
+    let (ctrl_2_2_tx, ctrl_2_2_rx) = crossbeam_channel::unbounded::<(_, _)>();
+    let (d_0_0_tx, d_0_0_rx) = crossbeam_channel::unbounded::<Option<(Point, Point)>>();
+    let (b_0_0_tx, b_0_0_rx) = crossbeam_channel::unbounded::<Arc<Maze>>();
+    let (futures_0_tx, futures_0_rx) = crossbeam_channel::unbounded::<crossbeam_channel::Receiver<_>>();
+    let (path_0_0_0_tx, path_0_0_0_rx) = crossbeam_channel::unbounded::<Option<Path>>();
     // FIXME(feliix42): This had a generic type parameter `T` instead of Maze!
-    let (r_0_0_0_tx, r_0_0_0_rx) = crossbeam_channel::bounded::<Option<(Point, Point)>>(FREQUENCY+10);
+    let (r_0_0_0_tx, r_0_0_0_rx) = crossbeam_channel::unbounded::<Option<(Point, Point)>>();
     // FIXME(feliix42): Need a type annotation!
-    let (rest_0_0_0_tx, rest_0_0_0_rx) = crossbeam_channel::bounded::<Vec<_>>(FREQUENCY+10);
-    let (rs_0_2_0_tx, rs_0_2_0_rx) = crossbeam_channel::bounded::<Vec<Option<(Point, Point)>>>(FREQUENCY+10);
-    let (rs_0_0_0_0_tx, rs_0_0_0_0_rx) = crossbeam_channel::bounded::<Vec<Option<(Point, Point)>>>(FREQUENCY+10);
-    let (rs1_0_0_1_tx, rs1_0_0_1_rx) = crossbeam_channel::bounded(FREQUENCY+10);
-    let (its_left_0_0_0_tx, its_left_0_0_0_rx) = crossbeam_channel::bounded::<u32>(FREQUENCY+10);
+    let (rest_0_0_0_tx, rest_0_0_0_rx) = crossbeam_channel::unbounded::<Vec<_>>();
+    let (rs_0_2_0_tx, rs_0_2_0_rx) = crossbeam_channel::unbounded::<Vec<Option<(Point, Point)>>>();
+    let (rs_0_0_0_0_tx, rs_0_0_0_0_rx) = crossbeam_channel::unbounded::<Vec<Option<(Point, Point)>>>();
+    let (rs1_0_0_1_tx, rs1_0_0_1_rx) = crossbeam_channel::unbounded();
+    let (its_left_0_0_0_tx, its_left_0_0_0_rx) = crossbeam_channel::unbounded::<u32>();
     let (rs1_0_0_0_0_tx, rs1_0_0_0_0_rx) =
-        crossbeam_channel::bounded::<Vec<Option<(Point, Point)>>>(FREQUENCY+10);
+        crossbeam_channel::unbounded::<Vec<Option<(Point, Point)>>>();
     let mut tasks: Vec<Box<dyn FnOnce() -> Result<(), RunError> + Send>> = Vec::new();
 
     let (retry_sender, retry_rx) = std::sync::mpsc::channel::<usize>();
@@ -137,7 +137,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
             let var_1 = b_0_0_rx.recv()?;
             let var_2 = d_0_0_rx.recv()?;
             let futures_0 = {
-                let (tx, rx) = crossbeam_channel::bounded(FREQUENCY+10);
+                let (tx, rx) = crossbeam_channel::unbounded();
                 let work = async move { tx.send(find_path(var_1, var_2)).unwrap() };
                 rt.spawn(work);
                 rx
