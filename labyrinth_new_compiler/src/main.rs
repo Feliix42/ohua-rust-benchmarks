@@ -14,6 +14,7 @@ mod parser;
 mod grid;
 
 mod no_data_par;
+mod no_amorphous;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -75,6 +76,11 @@ fn main() {
                 .long("no-data-par")
                 .help("Run the ohua algorithm without data parallelism at all")
         )
+        .arg(
+            Arg::with_name("no_amorphous")
+                .long("no-amorphous")
+                .help("Run the ohua algorithm without amorphous optimizations")
+        )
         .get_matches();
 
     // JSON Dump?
@@ -82,6 +88,7 @@ fn main() {
     let out_dir = matches.value_of("outdir").unwrap();
     let sequential = matches.is_present("sequential");
     let ndp = matches.is_present("no_data_par");
+    let nam = matches.is_present("no_amorphous");
 
     // #runs
     let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();
@@ -122,6 +129,8 @@ fn main() {
             original::run(dims2, paths2, 200)
         } else if ndp {
             no_data_par::run(dims2, paths2, 200)
+        } else if nam {
+            no_amorphous::run(dims2, paths2, 200)
         } else {
             generated::run(dims2, paths2, 200)
         };
