@@ -3,97 +3,49 @@ use crate::types::*;
 use std::sync::Arc;
 
 pub const THREADCOUNT: usize = 4;
+pub const FREQUENCY: usize = 7500;
 
 // NOTE(feliix42): Check the following:
-// - [ ] tokio runtime fix (channel) in place?
-// - [ ] THREADCOUNT and FREQUENCY variables replaced?
+// - [x] tokio runtime fix (channel) in place?
+// - [x] THREADCOUNT and FREQUENCY variables replaced?
 
-/* // Old design sketch:
-pub fn run(mut netlist: Netlist, dimensions: Location, worklist: Vec<(usize, usize)>, rng: ChaCha12Rng, temperature: f64, completed_steps: i32, max_steps: Option<i32>, swaps_per_temp: usize) -> i32 { 
-    let mut rs = Vec::default();
+//fn run(
+    //mut netlist: Netlist,
+    //worklist: Vec<Result<MoveDecision, (usize, usize)>>,
+    //temperature: f64,
+    //mut internal_state: InternalState,
+//) -> Netlist {
+    //let mut rs = Vec::new();
+    //let new_temp = reduce_temp(temperature);
+    //let n2 = netlist.clone();
+    //let nro = Arc::new(n2);
+    //for item in worklist {
+        //let switch_info = process_move(item, nro.clone(), new_temp.clone());
+        //let result = netlist.update(switch_info);
+        //rs.push(result);
+    //}
+    //netlist.clear_changes();
+    //let rs2 = rs.clone();
+    //let mut remaining_work = filter_work(rs);
+    //let length = remaining_work.len();
+    //let (new_temp2, new_temp3) = dup(new_temp);
+    //let (new_work, keep_going) = internal_state.assess_updates(rs2, length);
+    //remaining_work.exp(new_work);
+    //if keep_going {
+        //run(netlist, remaining_work, new_temp3, internal_state)
+    //} else {
+        //netlist
+    //}
+//}
 
-    let new_temp = reduce_temp(temperature);
-
-    let nro = Arc::new(netlist.clone());
-    for item in worklist {
-        let switch_info = process_move(item, nro.clone()); // gives a Good/Bad/Reject plus tuple
-        let res = netlist.update(switch_info); // produces a Option<(_, _)> with the update info (success/fail)
-        // TODO: How to track overrides??
-        rs.push(res);
-    }
-
-    let (keep_going, rest, new_rng) = assess_updates(rs, dimensions.clone(), new_temp.clone(), completed_steps.clone(), max_steps.clone(), swaps_per_temp.clone(), rng);
-
-    let new_temp_steps = increment(completed_steps);
-    if keep_going {
-        run(netlist, dimensions, rest, new_rng, new_temp, new_temp_steps, max_steps, swaps_per_temp)
-    } else {
-        new_temp_steps
-    }
-}
-
-pub fn annealer(netlist: Netlist, dimensions: Location, completed_steps: i32, temperature: f64, max_steps: Option<i32>, swaps_per_temp: usize) -> i32 {
-    let rng = ChaCha12Rng::seed_from_u64(0);
-
-    let (worklist, new_rng) = generate_worklist(swaps_per_temp, dimensions.clone(), rng);
-    run(netlist, dimensions, worklist, new_rng, temperature, completed_steps, max_steps, swaps_per_temp)
-}
-*/
-
-#[allow(dead_code)]
-pub fn run(
-    mut netlist: Netlist,
-    dimensions: Location,
-    worklist: Vec<(usize, usize)>,
-    mut rng: InternalRNG,
-    temperature: f64,
-    completed_steps: i32,
-    max_steps: Option<i32>,
-    swaps_per_temp: usize,
-) -> i32 {
-    let mut rs = Vec::default();
-    let new_temp = reduce_temp(temperature);
-    let new_temp2 = new_temp.clone();
-    let nro = Arc::new(netlist.clone());
-    for item in worklist {
-        let switch_info = process_move(item, nro.clone(), new_temp2);
-        let res = netlist.update(switch_info);
-        rs.push(res);
-    }
-    let dim2 = dimensions.clone();
-    let (keep_going, rest) = rng.assess_updates(
-        rs,
-        dimensions,
-        new_temp.clone(),
-        completed_steps.clone(),
-        max_steps.clone(),
-        swaps_per_temp.clone(),
-    );
-    let new_temp_steps = increment(completed_steps);
-    if keep_going {
-        run(
-            netlist,
-            dim2,
-            rest,
-            rng,
-            new_temp,
-            new_temp_steps,
-            max_steps,
-            swaps_per_temp,
-        )
-    } else {
-        new_temp_steps
-    }
-}
 
 pub fn annealer(
     netlist: Netlist,
-    dimensions: Location,
+    elements: usize,
     temperature: f64,
-    completed_steps: i32,
     max_steps: Option<i32>,
     swaps_per_temp: usize,
-) -> i32 {
+) -> Netlist {
     #[derive(Debug)]
     enum RunError {
         SendFailed,
@@ -109,62 +61,234 @@ pub fn annealer(
             RunError::RecvFailed
         }
     }
-    let (k_0_0_tx, k_0_0_rx) = std::sync::mpsc::channel();
-    let (d1_0_0_0_tx, d1_0_0_0_rx) = std::sync::mpsc::channel::<Location>();
-    let (rng_1_0_1_tx, rng_1_0_1_rx) = std::sync::mpsc::channel::<InternalRNG>();
-    let (new_temp_steps_0_0_0_tx, new_temp_steps_0_0_0_rx) = std::sync::mpsc::channel();
+    let (g_0_0_tx, g_0_0_rx) = std::sync::mpsc::channel();
+    let (st_0_0_1_tx, st_0_0_1_rx) = std::sync::mpsc::channel::<InternalState>();
+    let (netlist_0_1_0_0_tx, netlist_0_1_0_0_rx) = std::sync::mpsc::channel();
     let (keep_going_0_0_0_tx, keep_going_0_0_0_rx) = std::sync::mpsc::channel();
-    let (swaps_per_temp_0_0_0_0_tx, swaps_per_temp_0_0_0_0_rx) = std::sync::mpsc::channel();
-    let (max_steps_0_0_0_0_tx, max_steps_0_0_0_0_rx) = std::sync::mpsc::channel();
-    let (new_temp_0_0_0_0_tx, new_temp_0_0_0_0_rx) = std::sync::mpsc::channel();
-    let (rng_0_0_0_0_tx, rng_0_0_0_0_rx) = std::sync::mpsc::channel();
-    let (rest_0_0_0_tx, rest_0_0_0_rx) = std::sync::mpsc::channel();
-    let (dim2_0_0_0_tx, dim2_0_0_0_rx) = std::sync::mpsc::channel();
-    let (netlist_0_1_0_tx, netlist_0_1_0_rx) = std::sync::mpsc::channel();
-    let (rng_1_0_0_0_tx, rng_1_0_0_0_rx) = std::sync::mpsc::channel();
+    let (internal_state_0_0_0_0_tx, internal_state_0_0_0_0_rx) = std::sync::mpsc::channel();
+    let (new_temp3_0_0_0_tx, new_temp3_0_0_0_rx) = std::sync::mpsc::channel();
+    let (remaining_work_0_0_0_0_tx, remaining_work_0_0_0_0_rx) = std::sync::mpsc::channel();
+    let (st_0_0_0_0_tx, st_0_0_0_0_rx) = std::sync::mpsc::channel();
     let (worklist_1_0_0_tx, worklist_1_0_0_rx) = std::sync::mpsc::channel();
-    let (d2_0_0_0_tx, d2_0_0_0_rx) = std::sync::mpsc::channel();
     let (ctrl_0_0_0_tx, ctrl_0_0_0_rx) = std::sync::mpsc::channel::<(_, _)>();
     let (temperature_0_0_0_tx, temperature_0_0_0_rx) = std::sync::mpsc::channel::<f64>();
-    let (new_temp_0_0_2_tx, new_temp_0_0_2_rx) = std::sync::mpsc::channel::<f64>();
-    let (netlist_0_0_2_tx, netlist_0_0_2_rx) = std::sync::mpsc::channel();
-    let (c_0_0_tx, c_0_0_rx) = std::sync::mpsc::channel();
-    let (worklist_0_0_0_tx, worklist_0_0_0_rx) = std::sync::mpsc::channel::<Vec<(usize, usize)>>();
+    let (netlist_0_0_2_tx, netlist_0_0_2_rx) = std::sync::mpsc::channel::<Netlist>();
+    let (n2_0_0_0_tx, n2_0_0_0_rx) = std::sync::mpsc::channel::<Netlist>();
+    let (worklist_0_0_0_tx, worklist_0_0_0_rx) = std::sync::mpsc::channel();
+    let (worklist_0_n_0_0_0_tx, worklist_0_n_0_0_0_rx) =
+        std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
     let (netlist_0_0_1_0_tx, netlist_0_0_1_0_rx) = std::sync::mpsc::channel::<Netlist>();
     let (ctrl_2_0_tx, ctrl_2_0_rx) = std::sync::mpsc::channel::<(_, _)>();
-    let (new_temp2_0_0_0_tx, new_temp2_0_0_0_rx) = std::sync::mpsc::channel::<f64>();
+    let (new_temp_0_0_1_tx, new_temp_0_0_1_rx) = std::sync::mpsc::channel::<f64>();
     let (ctrl_2_1_tx, ctrl_2_1_rx) = std::sync::mpsc::channel::<(_, _)>();
     let (nro_0_0_1_tx, nro_0_0_1_rx) = std::sync::mpsc::channel::<Arc<Netlist>>();
     let (ctrl_2_2_tx, ctrl_2_2_rx) = std::sync::mpsc::channel::<(_, _)>();
-    let (rs_0_0_1_tx, rs_0_0_1_rx) = std::sync::mpsc::channel();
+    let (rs_0_1_1_tx, rs_0_1_1_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
     let (ctrl_2_3_tx, ctrl_2_3_rx) = std::sync::mpsc::channel::<(_, _)>();
+    let (c_0_0_tx, c_0_0_rx) = std::sync::mpsc::channel::<f64>();
     let (d_0_0_tx, d_0_0_rx) = std::sync::mpsc::channel::<Arc<Netlist>>();
-    let (d_1_0_tx, d_1_0_rx) = std::sync::mpsc::channel::<(usize, usize)>();
-    let (futures_0_tx, futures_0_rx) = std::sync::mpsc::channel();
+    let (d_1_0_tx, d_1_0_rx) = std::sync::mpsc::channel::<Result<MoveDecision, (usize, usize)>>();
+    let (futures_0_tx, futures_0_rx) = std::sync::mpsc::channel::<std::sync::mpsc::Receiver<_>>();
     let (switch_info_0_0_0_tx, switch_info_0_0_0_rx) =
         std::sync::mpsc::channel::<(MoveDecision, (usize, usize))>();
-    let (res_0_0_0_tx, res_0_0_0_rx) = std::sync::mpsc::channel();
-    let (dimensions_0_0_1_tx, dimensions_0_0_1_rx) = std::sync::mpsc::channel::<Location>();
-    let (swaps_per_temp_0_0_1_tx, swaps_per_temp_0_0_1_rx) = std::sync::mpsc::channel::<usize>();
-    let (max_steps_0_0_1_tx, max_steps_0_0_1_rx) = std::sync::mpsc::channel::<Option<i32>>();
-    let (completed_steps_0_0_1_tx, completed_steps_0_0_1_rx) = std::sync::mpsc::channel::<i32>();
-    let (new_temp_0_0_1_0_tx, new_temp_0_0_1_0_rx) = std::sync::mpsc::channel();
-    let (e_0_0_tx, e_0_0_rx) = std::sync::mpsc::channel::<usize>();
-    let (f_0_0_tx, f_0_0_rx) = std::sync::mpsc::channel::<Option<i32>>();
-    let (g_0_0_tx, g_0_0_rx) = std::sync::mpsc::channel::<i32>();
-    let (h_0_0_tx, h_0_0_rx) = std::sync::mpsc::channel::<f64>();
-    let (dimensions_0_0_0_0_tx, dimensions_0_0_0_0_rx) = std::sync::mpsc::channel::<Location>();
-    let (rs_0_1_0_tx, rs_0_1_0_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
-    let (rng_0_0_1_tx, rng_0_0_1_rx) = std::sync::mpsc::channel::<InternalRNG>();
-    let (completed_steps_0_0_0_0_tx, completed_steps_0_0_0_0_rx) =
-        std::sync::mpsc::channel::<i32>();
+    let (result_0_0_0_tx, result_0_0_0_rx) = std::sync::mpsc::channel::<Result<MoveDecision, (usize, usize)>>();
+    let (rest_0_0_0_tx, rest_0_0_0_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
+    let (rs_0_2_0_tx, rs_0_2_0_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
+    let (netlist_0_1_1_tx, netlist_0_1_1_rx) = std::sync::mpsc::channel::<Netlist>();
+    let (rs_0_0_0_1_tx, rs_0_0_0_1_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
+    let (rs_0_0_0_0_0_tx, rs_0_0_0_0_0_rx) =
+        std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
+    let (remaining_work_0_0_2_tx, remaining_work_0_0_2_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
+    let (new_temp_0_1_0_tx, new_temp_0_1_0_rx) = std::sync::mpsc::channel::<f64>();
+    let (new_temp2_0_0_0_tx, _new_temp2_0_0_0_rx) = std::sync::mpsc::channel::<f64>();
+    let (length_0_0_0_tx, length_0_0_0_rx) = std::sync::mpsc::channel::<usize>();
+    let (rs2_0_0_0_tx, rs2_0_0_0_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
+    let (internal_state_0_0_1_tx, internal_state_0_0_1_rx) =
+        std::sync::mpsc::channel::<InternalState>();
+    let (new_work_0_0_0_tx, new_work_0_0_0_rx) = std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
+    let (remaining_work_0_0_1_0_tx, remaining_work_0_0_1_0_rx) =
+        std::sync::mpsc::channel::<Vec<Result<MoveDecision, (usize, usize)>>>();
     let mut tasks: Vec<Box<dyn FnOnce() -> Result<(), RunError> + Send>> = Vec::new();
     tasks.push(Box::new(move || -> _ {
+        let st_0_0_1 = InternalState::initialize(elements, max_steps, swaps_per_temp);
+        st_0_0_1_tx.send(st_0_0_1)?;
+        Ok(())
+    }));
+    tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = completed_steps_0_0_1_rx.recv()?;
-            let g_0_0 = var_0.clone();
-            g_0_0_tx.send(g_0_0)?;
-            completed_steps_0_0_0_0_tx.send(var_0)?
+            let mut var_0 = internal_state_0_0_1_rx.recv()?;
+            let var_1 = rs2_0_0_0_rx.recv()?;
+            let var_2 = length_0_0_0_rx.recv()?;
+            let restup = var_0.assess_updates(var_1, var_2);
+            let new_work_0_0_0 = restup.0;
+            new_work_0_0_0_tx.send(new_work_0_0_0)?;
+            let keep_going_0_0_0 = restup.1;
+            keep_going_0_0_0_tx.send(keep_going_0_0_0)?;
+            internal_state_0_0_0_0_tx.send(var_0)?
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let var_0 = n2_0_0_0_rx.recv()?;
+            let nro_0_0_1 = Arc::new(var_0);
+            nro_0_0_1_tx.send(nro_0_0_1)?;
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = netlist_0_0_2_rx.recv()?;
+            let n2_0_0_0 = var_0.clone();
+            n2_0_0_0_tx.send(n2_0_0_0)?;
+            netlist_0_0_1_0_tx.send(var_0)?
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = remaining_work_0_0_2_rx.recv()?;
+            let length_0_0_0 = var_0.len();
+            length_0_0_0_tx.send(length_0_0_0)?;
+            remaining_work_0_0_1_0_tx.send(var_0)?
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = rs_0_2_0_rx.recv()?;
+            let var_1 = rest_0_0_0_rx.recv()?;
+            let rs_0_0_0_1 = {
+                var_0.extend(var_1.into_iter());
+                var_0
+            };
+            rs_0_0_0_1_tx.send(rs_0_0_0_1)?;
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        let ctrlSig = (true, 1);
+        ctrl_0_0_0_tx.send(ctrlSig)?;
+        let init_1 = worklist_1_0_0_rx.recv()?;
+        let init_3 = st_0_0_0_0_rx.recv()?;
+        netlist_0_0_2_tx.send(netlist)?;
+        worklist_0_0_0_tx.send(init_1)?;
+        temperature_0_0_0_tx.send(temperature)?;
+        internal_state_0_0_1_tx.send(init_3)?;
+        while keep_going_0_0_0_rx.recv()? {
+            let ctrlSig = (true, 1);
+            ctrl_0_0_0_tx.send(ctrlSig)?;
+            let loop_res_0 = netlist_0_1_0_0_rx.recv()?;
+            let loop_res_1 = remaining_work_0_0_0_0_rx.recv()?;
+            let loop_res_2 = new_temp3_0_0_0_rx.recv()?;
+            let loop_res_3 = internal_state_0_0_0_0_rx.recv()?;
+            netlist_0_0_2_tx.send(loop_res_0)?;
+            worklist_0_0_0_tx.send(loop_res_1)?;
+            temperature_0_0_0_tx.send(loop_res_2)?;
+            internal_state_0_0_1_tx.send(loop_res_3)?;
+            ()
+        }
+        let ctrlSig = (false, 0);
+        ctrl_0_0_0_tx.send(ctrlSig)?;
+        remaining_work_0_0_0_0_rx.recv()?;
+        new_temp3_0_0_0_rx.recv()?;
+        internal_state_0_0_0_0_rx.recv()?;
+        let finalResult = netlist_0_1_0_0_rx.recv()?;
+        Ok(g_0_0_tx.send(finalResult)?)
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let var_0 = temperature_0_0_0_rx.recv()?;
+            let new_temp_0_0_1 = reduce_temp(var_0);
+            new_temp_0_0_1_tx.send(new_temp_0_0_1)?;
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = netlist_0_1_1_rx.recv()?;
+            var_0.clear_changes();
+            netlist_0_1_0_0_tx.send(var_0)?
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut renew = false;
+            let mut nro_0_0_1_0 = nro_0_0_1_rx.recv()?;
+            while !renew {
+                let sig = ctrl_2_2_rx.recv()?;
+                let count = sig.1;
+                for _ in 0..count {
+                    let d_0_0 = nro_0_0_1_0.clone();
+                    d_0_0_tx.send(d_0_0)?;
+                    ()
+                }
+                let renew_next_time = sig.0;
+                renew = renew_next_time;
+                ()
+            }
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let var_0 = rs_0_0_0_0_0_rx.recv()?;
+            let remaining_work_0_0_2 = filter_work(var_0);
+            remaining_work_0_0_2_tx.send(remaining_work_0_0_2)?;
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = remaining_work_0_0_1_0_rx.recv()?;
+            let var_1 = new_work_0_0_0_rx.recv()?;
+            var_0.exp(var_1);
+            remaining_work_0_0_0_0_tx.send(var_0)?
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = futures_0_rx.recv()?;
+            let switch_info_0_0_0 = var_0.recv().unwrap();
+            switch_info_0_0_0_tx.send(switch_info_0_0_0)?;
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = st_0_0_1_rx.recv()?;
+            let worklist_1_0_0 = var_0.generate_worklist();
+            worklist_1_0_0_tx.send(worklist_1_0_0)?;
+            st_0_0_0_0_tx.send(var_0)?
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut var_0 = rs_0_0_0_1_rx.recv()?;
+            let rs2_0_0_0 = var_0.clone();
+            rs2_0_0_0_tx.send(rs2_0_0_0)?;
+            rs_0_0_0_0_0_tx.send(var_0)?
+        }
+    }));
+    let (tokio_sx, tokio_rx) = std::sync::mpsc::channel();
+    tasks.push(Box::new(move || -> _ {
+        let mut rt = std::sync::Arc::new(
+            tokio::runtime::Builder::new()
+                .threaded_scheduler()
+                .core_threads(THREADCOUNT)
+                .build()
+                .unwrap(),
+        );
+        tokio_sx.send(rt.clone()).unwrap();
+        loop {
+            let var_1 = d_1_0_rx.recv()?;
+            let var_2 = d_0_0_rx.recv()?;
+            let var_3 = c_0_0_rx.recv()?;
+            let futures_0 = {
+                let (tx, rx) = std::sync::mpsc::channel();
+                let work = async move { tx.send(process_move(var_1, var_2, var_3)).unwrap() };
+                rt.spawn(work);
+                rx
+            };
+            futures_0_tx.send(futures_0)?;
+            ()
         }
     }));
     tasks.push(Box::new(move || -> _ {
@@ -174,8 +298,8 @@ pub fn annealer(
                 let sig = ctrl_0_0_0_rx.recv()?;
                 let count = sig.1;
                 for _ in 0..count {
-                    let rs_0_0_1 = Vec::default();
-                    rs_0_0_1_tx.send(rs_0_0_1)?;
+                    let rs_0_1_1 = Vec::new();
+                    rs_0_1_1_tx.send(rs_0_1_1)?;
                     ()
                 }
                 let renew_next_time = sig.0;
@@ -186,32 +310,33 @@ pub fn annealer(
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = rng_1_0_1_rx.recv()?;
-            let var_2 = d1_0_0_0_rx.recv()?;
-            let worklist_1_0_0 = var_0.generate_worklist(swaps_per_temp, var_2);
-            worklist_1_0_0_tx.send(worklist_1_0_0)?;
-            rng_1_0_0_0_tx.send(var_0)?
+            let mut var_0 = worklist_0_0_0_rx.recv()?;
+            let restup = {
+                let sp = if var_0.len() < FREQUENCY { var_0.len() } else { FREQUENCY };
+                let chunk = var_0.split_off(sp);
+                (var_0, chunk)
+            };
+            let worklist_0_n_0_0_0 = restup.0;
+            worklist_0_n_0_0_0_tx.send(worklist_0_n_0_0_0)?;
+            let rest_0_0_0 = restup.1;
+            rest_0_0_0_tx.send(rest_0_0_0)?;
+            ()
         }
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = new_temp_0_0_2_rx.recv()?;
-            let new_temp2_0_0_0 = var_0.clone();
+            let var_0 = new_temp_0_1_0_rx.recv()?;
+            let restup = dup(var_0);
+            let new_temp2_0_0_0 = restup.0;
             new_temp2_0_0_0_tx.send(new_temp2_0_0_0)?;
-            new_temp_0_0_1_0_tx.send(var_0)?
+            let new_temp3_0_0_0 = restup.1;
+            new_temp3_0_0_0_tx.send(new_temp3_0_0_0)?;
+            ()
         }
     }));
     tasks.push(Box::new(move || -> _ {
-        let restup = dup(dimensions);
-        let d1_0_0_0 = restup.0;
-        d1_0_0_0_tx.send(d1_0_0_0)?;
-        let d2_0_0_0 = restup.1;
-        d2_0_0_0_tx.send(d2_0_0_0)?;
-        Ok(())
-    }));
-    tasks.push(Box::new(move || -> _ {
         loop {
-            let mut data = worklist_0_0_0_rx.recv()?;
+            let mut data = worklist_0_n_0_0_0_rx.recv()?;
             let hasSize = {
                 let tmp_has_size = data.iter().size_hint();
                 tmp_has_size.1.is_some()
@@ -259,217 +384,21 @@ pub fn annealer(
     }));
     tasks.push(Box::new(move || -> _ {
         loop {
-            let mut var_0 = max_steps_0_0_1_rx.recv()?;
-            let f_0_0 = var_0.clone();
-            f_0_0_tx.send(f_0_0)?;
-            max_steps_0_0_0_0_tx.send(var_0)?
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let mut var_0 = dimensions_0_0_1_rx.recv()?;
-            let dim2_0_0_0 = var_0.clone();
-            dim2_0_0_0_tx.send(dim2_0_0_0)?;
-            dimensions_0_0_0_0_tx.send(var_0)?
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let var_0 = completed_steps_0_0_0_0_rx.recv()?;
-            let new_temp_steps_0_0_0 = increment(var_0);
-            new_temp_steps_0_0_0_tx.send(new_temp_steps_0_0_0)?;
-            ()
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let mut var_0 = swaps_per_temp_0_0_1_rx.recv()?;
-            let e_0_0 = var_0.clone();
-            e_0_0_tx.send(e_0_0)?;
-            swaps_per_temp_0_0_0_0_tx.send(var_0)?
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let mut var_0 = rng_0_0_1_rx.recv()?;
-            let var_1 = rs_0_1_0_rx.recv()?;
-            let var_2 = dimensions_0_0_0_0_rx.recv()?;
-            let var_3 = h_0_0_rx.recv()?;
-            let var_4 = g_0_0_rx.recv()?;
-            let var_5 = f_0_0_rx.recv()?;
-            let var_6 = e_0_0_rx.recv()?;
-            let restup = var_0.assess_updates(var_1, var_2, var_3, var_4, var_5, var_6);
-            let keep_going_0_0_0 = restup.0;
-            keep_going_0_0_0_tx.send(keep_going_0_0_0)?;
-            let rest_0_0_0 = restup.1;
-            rest_0_0_0_tx.send(rest_0_0_0)?;
-            rng_0_0_0_0_tx.send(var_0)?
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
             let mut renew = false;
-            let mut nro_0_0_1_0 = nro_0_0_1_rx.recv()?;
-            while !renew {
-                let sig = ctrl_2_2_rx.recv()?;
-                let count = sig.1;
-                for _ in 0..count {
-                    let d_0_0 = nro_0_0_1_0.clone();
-                    d_0_0_tx.send(d_0_0)?;
-                    ()
-                }
-                let renew_next_time = sig.0;
-                renew = renew_next_time;
-                ()
-            }
-            ()
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        let mut rt = std::sync::Arc::new(
-            tokio::runtime::Builder::new()
-                .threaded_scheduler()
-                .core_threads(1)
-                .build()
-                .unwrap(),
-        );
-        loop {
-            let mut renew = false;
-            let new_temp2_0_0_0_0 = new_temp2_0_0_0_rx.recv()?;
-            while !renew {
-                let sig = ctrl_2_1_rx.recv()?;
-                let count = sig.1;
-                for _ in 0..count {
-                    let var_1 = d_1_0_rx.recv()?;
-                    let var_2 = d_0_0_rx.recv()?;
-                    let futures_0 = {
-                        let (tx, rx) = std::sync::mpsc::channel();
-                        let work = async move {
-                            tx.send(process_move(var_1, var_2, new_temp2_0_0_0_0))
-                                .unwrap()
-                        };
-                        rt.spawn(work);
-                        rx
-                    };
-                    futures_0_tx.send(futures_0)?;
-                    ()
-                }
-                let renew_next_time = sig.0;
-                renew = renew_next_time;
-                ()
-            }
-            ()
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        let ctrlSig = (true, 1);
-        ctrl_0_0_0_tx.send(ctrlSig)?;
-        let init_1 = d2_0_0_0_rx.recv()?;
-        let init_2 = worklist_1_0_0_rx.recv()?;
-        let init_3 = rng_1_0_0_0_rx.recv()?;
-        netlist_0_0_2_tx.send(netlist)?;
-        dimensions_0_0_1_tx.send(init_1)?;
-        worklist_0_0_0_tx.send(init_2)?;
-        rng_0_0_1_tx.send(init_3)?;
-        temperature_0_0_0_tx.send(temperature)?;
-        completed_steps_0_0_1_tx.send(completed_steps)?;
-        max_steps_0_0_1_tx.send(max_steps)?;
-        swaps_per_temp_0_0_1_tx.send(swaps_per_temp)?;
-        while keep_going_0_0_0_rx.recv()? {
-            let ctrlSig = (true, 1);
-            ctrl_0_0_0_tx.send(ctrlSig)?;
-            let loop_res_0 = netlist_0_1_0_rx.recv()?;
-            let loop_res_1 = dim2_0_0_0_rx.recv()?;
-            let loop_res_2 = rest_0_0_0_rx.recv()?;
-            let loop_res_3 = rng_0_0_0_0_rx.recv()?;
-            let loop_res_4 = new_temp_0_0_0_0_rx.recv()?;
-            let loop_res_5 = new_temp_steps_0_0_0_rx.recv()?;
-            let loop_res_6 = max_steps_0_0_0_0_rx.recv()?;
-            let loop_res_7 = swaps_per_temp_0_0_0_0_rx.recv()?;
-            netlist_0_0_2_tx.send(loop_res_0)?;
-            dimensions_0_0_1_tx.send(loop_res_1)?;
-            worklist_0_0_0_tx.send(loop_res_2)?;
-            rng_0_0_1_tx.send(loop_res_3)?;
-            temperature_0_0_0_tx.send(loop_res_4)?;
-            completed_steps_0_0_1_tx.send(loop_res_5)?;
-            max_steps_0_0_1_tx.send(loop_res_6)?;
-            swaps_per_temp_0_0_1_tx.send(loop_res_7)?;
-            ()
-        }
-        let ctrlSig = (false, 0);
-        ctrl_0_0_0_tx.send(ctrlSig)?;
-        netlist_0_1_0_rx.recv()?;
-        dim2_0_0_0_rx.recv()?;
-        rest_0_0_0_rx.recv()?;
-        rng_0_0_0_0_rx.recv()?;
-        new_temp_0_0_0_0_rx.recv()?;
-        max_steps_0_0_0_0_rx.recv()?;
-        swaps_per_temp_0_0_0_0_rx.recv()?;
-        let finalResult = new_temp_steps_0_0_0_rx.recv()?;
-        Ok(k_0_0_tx.send(finalResult)?)
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let var_0 = c_0_0_rx.recv()?;
-            let nro_0_0_1 = Arc::new(var_0);
-            nro_0_0_1_tx.send(nro_0_0_1)?;
-            ()
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let mut var_0 = futures_0_rx.recv()?;
-            let switch_info_0_0_0 = var_0.recv().unwrap();
-            switch_info_0_0_0_tx.send(switch_info_0_0_0)?;
-            ()
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let mut var_0 = netlist_0_0_2_rx.recv()?;
-            let c_0_0 = var_0.clone();
-            c_0_0_tx.send(c_0_0)?;
-            netlist_0_0_1_0_tx.send(var_0)?
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let var_0 = temperature_0_0_0_rx.recv()?;
-            let new_temp_0_0_2 = reduce_temp(var_0);
-            new_temp_0_0_2_tx.send(new_temp_0_0_2)?;
-            ()
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let mut var_0 = new_temp_0_0_1_0_rx.recv()?;
-            let h_0_0 = var_0.clone();
-            h_0_0_tx.send(h_0_0)?;
-            new_temp_0_0_0_0_tx.send(var_0)?
-        }
-    }));
-    tasks.push(Box::new(move || -> _ {
-        let rng_1_0_1 = InternalRNG::seed_from_u64(0);
-        rng_1_0_1_tx.send(rng_1_0_1)?;
-        Ok(())
-    }));
-    tasks.push(Box::new(move || -> _ {
-        loop {
-            let mut renew = false;
-            let mut rs_0_0_1_0 = rs_0_0_1_rx.recv()?;
+            let mut rs_0_1_1_0 = rs_0_1_1_rx.recv()?;
             while !renew {
                 let sig = ctrl_2_3_rx.recv()?;
                 let count = sig.1;
                 for _ in 0..count {
-                    let var_1 = res_0_0_0_rx.recv()?;
-                    rs_0_0_1_0.push(var_1);
+                    let var_1 = result_0_0_0_rx.recv()?;
+                    rs_0_1_1_0.push(var_1);
                     ()
                 }
                 let renew_next_time = sig.0;
                 renew = renew_next_time;
                 ()
             }
-            rs_0_1_0_tx.send(rs_0_0_1_0)?;
+            rs_0_2_0_tx.send(rs_0_1_1_0)?;
             ()
         }
     }));
@@ -482,15 +411,35 @@ pub fn annealer(
                 let count = sig.1;
                 for _ in 0..count {
                     let var_1 = switch_info_0_0_0_rx.recv()?;
-                    let res_0_0_0 = netlist_0_0_1_0_0.update(var_1);
-                    res_0_0_0_tx.send(res_0_0_0)?;
+                    let result_0_0_0 = netlist_0_0_1_0_0.update(var_1);
+                    result_0_0_0_tx.send(result_0_0_0)?;
                     ()
                 }
                 let renew_next_time = sig.0;
                 renew = renew_next_time;
                 ()
             }
-            netlist_0_1_0_tx.send(netlist_0_0_1_0_0)?;
+            netlist_0_1_1_tx.send(netlist_0_0_1_0_0)?;
+            ()
+        }
+    }));
+    tasks.push(Box::new(move || -> _ {
+        loop {
+            let mut renew = false;
+            let mut new_temp_0_0_1_0 = new_temp_0_0_1_rx.recv()?;
+            while !renew {
+                let sig = ctrl_2_1_rx.recv()?;
+                let count = sig.1;
+                for _ in 0..count {
+                    let c_0_0 = new_temp_0_0_1_0.clone();
+                    c_0_0_tx.send(c_0_0)?;
+                    ()
+                }
+                let renew_next_time = sig.0;
+                renew = renew_next_time;
+                ()
+            }
+            new_temp_0_1_0_tx.send(new_temp_0_0_1_0)?;
             ()
         }
     }));
@@ -507,8 +456,10 @@ pub fn annealer(
             eprintln!("[Error] A worker thread of an Ohua algorithm has panicked!");
         }
     }
-    match k_0_0_rx.recv() {
+    let _ = tokio_rx.recv().unwrap();
+    match g_0_0_rx.recv() {
         Ok(res) => res,
         Err(e) => panic!("[Ohua Runtime Internal Exception] {}", e),
     }
 }
+

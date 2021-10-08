@@ -1,10 +1,10 @@
+use rand_chacha::rand_core::SeedableRng;
+use rand_chacha::ChaCha12Rng;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::str::FromStr;
 use std::sync::Arc;
-use rand_chacha::ChaCha12Rng;
-use rand_chacha::rand_core::SeedableRng;
 
 use rand::Rng;
 
@@ -45,6 +45,7 @@ impl NetlistElement {
 #[derive(Clone, Debug)]
 pub struct Netlist {
     pub elements: Vec<NetlistElement>,
+    changed_fields: Vec<bool>,
     pub max_x: usize,
     pub max_y: usize,
 }
@@ -140,43 +141,45 @@ impl Netlist {
             }
         }
 
+        let size = elements.len();
         Ok(Self {
             elements,
+            changed_fields: vec![false; size],
             max_x,
             max_y,
         })
     }
 
-    pub fn get_element_by_name(&self, name: &str) -> usize {
-        unimplemented!()
-    }
+    //pub fn get_element_by_name(&self, name: &str) -> usize {
+        //unimplemented!()
+    //}
 
-    /// Selects a random pair of different elements from the element list and returns their indices
-    pub fn get_random_pair<R: Rng>(&self, rng: &mut R) -> (usize, usize) {
-        assert!(self.elements.len() > 1);
+    ///// Selects a random pair of different elements from the element list and returns their indices
+    //pub fn get_random_pair<R: Rng>(&self, rng: &mut R) -> (usize, usize) {
+        //assert!(self.elements.len() > 1);
 
-        let idx_a = rng.gen_range(0..self.elements.len());
-        let mut idx_b = rng.gen_range(0..self.elements.len());
+        //let idx_a = rng.gen_range(0..self.elements.len());
+        //let mut idx_b = rng.gen_range(0..self.elements.len());
 
-        while idx_a == idx_b {
-            idx_b = rng.gen_range(0..self.elements.len());
-        }
+        //while idx_a == idx_b {
+            //idx_b = rng.gen_range(0..self.elements.len());
+        //}
 
-        (idx_a, idx_b)
-    }
+        //(idx_a, idx_b)
+    //}
 
-    pub fn get_random_element<R: Rng>(&self, different_from: Option<usize>, rng: &mut R) -> usize {
-        assert!(self.elements.len() > 1);
+    //pub fn get_random_element<R: Rng>(&self, different_from: Option<usize>, rng: &mut R) -> usize {
+        //assert!(self.elements.len() > 1);
 
-        let mut idx = rng.gen_range(0..self.elements.len());
-        if let Some(diff) = different_from {
-            while idx == diff {
-                idx = rng.gen_range(0..self.elements.len());
-            }
-        }
+        //let mut idx = rng.gen_range(0..self.elements.len());
+        //if let Some(diff) = different_from {
+            //while idx == diff {
+                //idx = rng.gen_range(0..self.elements.len());
+            //}
+        //}
 
-        idx
-    }
+        //idx
+    //}
 
     /// Swap the location information for two elements, effectively swapping their positions
     pub fn swap_locations(&mut self, idx_a: usize, idx_b: usize) {
@@ -185,49 +188,49 @@ impl Netlist {
         self.elements[idx_a].location = tmp;
     }
 
-    /// Shuffle the elements vector by randomly switching out x * y * 1000 pairs
-    pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
-        let bounds = self.max_x * self.max_y * 1000;
+    ///// Shuffle the elements vector by randomly switching out x * y * 1000 pairs
+    //pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
+        //let bounds = self.max_x * self.max_y * 1000;
 
-        for _ in 0..bounds {
-            let (a, b) = self.get_random_pair(rng);
-            self.swap_locations(a, b);
-        }
-    }
+        //for _ in 0..bounds {
+            //let (a, b) = self.get_random_pair(rng);
+            //self.swap_locations(a, b);
+        //}
+    //}
 
-    /// Count the total routing cost for the netlist.
-    pub fn total_routing_cost(&self) -> f64 {
-        let mut cost = 0f64;
+    ///// Count the total routing cost for the netlist.
+    //pub fn total_routing_cost(&self) -> f64 {
+        //let mut cost = 0f64;
 
-        for element in 0..self.elements.len() {
-            cost += self.element_routing_cost(element);
-        }
+        //for element in 0..self.elements.len() {
+            //cost += self.element_routing_cost(element);
+        //}
 
-        // divide by two since the `routing_cost` function considers both fan-in and fan-out.
-        cost / 2f64
-    }
+        //// divide by two since the `routing_cost` function considers both fan-in and fan-out.
+        //cost / 2f64
+    //}
 
-    /// Calculates the routing cost using the Manhattan distancee.
-    pub fn element_routing_cost(&self, elem: usize) -> f64 {
-        let mut fan_in_cost = 0_f64;
-        let mut fan_out_cost = 0_f64;
+    ///// Calculates the routing cost using the Manhattan distancee.
+    //pub fn element_routing_cost(&self, elem: usize) -> f64 {
+        //let mut fan_in_cost = 0_f64;
+        //let mut fan_out_cost = 0_f64;
 
-        let element = &self.elements[elem];
+        //let element = &self.elements[elem];
 
-        for other in &element.fan_in {
-            let el = &self.elements[*other];
-            fan_in_cost += (element.location.x as isize - el.location.x as isize).abs() as f64;
-            fan_in_cost += (element.location.y as isize - el.location.y as isize).abs() as f64;
-        }
+        //for other in &element.fan_in {
+            //let el = &self.elements[*other];
+            //fan_in_cost += (element.location.x as isize - el.location.x as isize).abs() as f64;
+            //fan_in_cost += (element.location.y as isize - el.location.y as isize).abs() as f64;
+        //}
 
-        for other in &element.fan_out {
-            let el = &self.elements[*other];
-            fan_out_cost += (element.location.x as isize - el.location.x as isize).abs() as f64;
-            fan_out_cost += (element.location.y as isize - el.location.y as isize).abs() as f64;
-        }
+        //for other in &element.fan_out {
+            //let el = &self.elements[*other];
+            //fan_out_cost += (element.location.x as isize - el.location.x as isize).abs() as f64;
+            //fan_out_cost += (element.location.y as isize - el.location.y as isize).abs() as f64;
+        //}
 
-        fan_in_cost + fan_out_cost
-    }
+        //fan_in_cost + fan_out_cost
+    //}
 
     /// Get the cost change of swapping from the present location to a new location
     pub fn element_swap_cost(&self, elem: usize, old: &Location, new: &Location) -> f64 {
@@ -264,27 +267,56 @@ impl Netlist {
 
         delta_cost
     }
-    
-    pub fn update(&mut self, updt: (MoveDecision, (usize, usize))) -> Result<MoveDecision, (usize, usize)> {
-        unimplemented!()
+
+    pub fn update(
+        &mut self,
+        updt: (MoveDecision, (usize, usize)),
+    ) -> Result<MoveDecision, (usize, usize)> {
+        let (a, b) = updt.1;
+
+        match updt.0 {
+            MoveDecision::Good |
+            MoveDecision::Bad => {
+                if !self.changed_fields[a] && !self.changed_fields[b] {
+                    self.swap_locations(a, b);
+                    self.changed_fields[a] = true;
+                    self.changed_fields[b] = true;
+
+                    Ok(updt.0)
+                } else {
+                    Err(updt.1)
+                }
+            }
+            MoveDecision::Rejected => Ok(updt.0),
+        }
+    }
+
+    pub fn clear_changes(&mut self) {
+        self.changed_fields = vec![false; self.elements.len()];
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum MoveDecision {
     Good,
     Bad,
     Rejected,
 }
 
-pub fn increment(completed_steps: i32) -> i32 {
-    completed_steps + 1
-}
+//pub fn increment(completed_steps: i32) -> i32 {
+    //completed_steps + 1
+//}
 
 pub fn reduce_temp(temperature: f64) -> f64 {
     temperature / 1.5
 }
 
-pub fn process_move(item: (usize, usize), netlist: Arc<Netlist>, temperature: f64) -> (MoveDecision, (usize, usize)) {
+pub fn process_move(
+    item: Result<MoveDecision, (usize, usize)>,
+    netlist: Arc<Netlist>,
+    temperature: f64,
+) -> (MoveDecision, (usize, usize)) {
+    let item = item.unwrap_err();
     let total_cost = netlist.calculate_delta_routing_cost(item.0, item.1);
 
     let decision = if total_cost < 0f64 {
@@ -306,30 +338,116 @@ pub fn dup<T: Clone>(item: T) -> (T, T) {
     (item.clone(), item)
 }
 
+pub fn filter_work(
+    work: Vec<Result<MoveDecision, (usize, usize)>>,
+) -> Vec<Result<MoveDecision, (usize, usize)>> {
+    //let mut retry = Vec::new();
 
-pub struct InternalRNG {
-    rng: ChaCha12Rng,
-    accepted_good_moves: u32,
-    accepted_bad_moves:u32
+    //for item in work {
+        //match item {
+            //Ok(res) => (),
+            //Err(retr) => retry.push(retr),
+        //}
+    //}
+
+    //retry
+
+    work.into_iter().filter(Result::is_err).collect()
 }
 
-impl InternalRNG {
-    pub fn seed_from_u64(seed: u64) -> Self {
+pub struct InternalState {
+    rng: ChaCha12Rng,
+    total_elements: usize,
+    accepted_good_moves: u32,
+    accepted_bad_moves: u32,
+    max_steps: Option<i32>,
+    completed_steps: i32,
+    swaps_per_temp: usize,
+}
+
+impl InternalState {
+    pub fn initialize(total_elements: usize, max_steps: Option<i32>, swaps_per_temp: usize) -> Self {
         Self {
-            rng: ChaCha12Rng::seed_from_u64(seed),
+            rng: ChaCha12Rng::seed_from_u64(0),
+            total_elements,
             accepted_good_moves: 0,
             accepted_bad_moves: 0,
+            max_steps,
+            completed_steps: 0,
+            swaps_per_temp,
         }
     }
 
-    pub fn assess_updates(&mut self, updates: Vec<Result<MoveDecision, (usize, usize)>>, dimensions: Location, temp: f64, completed_steps: i32, max_steps: Option<i32>, swaps_per_temp: usize) -> (bool, Vec<(usize, usize)>) {
+    pub fn assess_updates(
+        &mut self,
+        results: Vec<Result<MoveDecision, (usize, usize)>>,
+        length: usize,
+    ) -> (Vec<Result<MoveDecision, (usize, usize)>>, bool) {
+         // update internal state
+        for res in results {
+            match res {
+                Ok(MoveDecision::Good) => self.accepted_good_moves += 1,
+                Ok(MoveDecision::Bad) => self.accepted_bad_moves += 1,
+                Ok(MoveDecision::Rejected) => (),
+                Err(_) => (),
+            }
+        }
 
-        todo!()
+        // generate a new worklist if necessary
+        if length == 0 {
+            // current worklist done!
+            let keep_going = if let Some(bound) = self.max_steps {
+                self.completed_steps < bound
+            } else {
+                self.accepted_good_moves > self.accepted_bad_moves
+            };
+
+            self.accepted_good_moves = 0;
+            self.accepted_bad_moves = 0;
+            self.completed_steps += 1;
+
+            if keep_going {
+                (self.generate_worklist(), true)
+            } else {
+                (Vec::with_capacity(0), false)
+            }
+        } else {
+            (Vec::with_capacity(0), true)
+        }
     }
 
-    pub fn generate_worklist(&mut self, swaps_per_temp: usize, dimensions: Location) -> Vec<(usize, usize)> {
-        unimplemented!()
+    pub fn generate_worklist(
+        &mut self,
+    ) -> Vec<Result<MoveDecision, (usize, usize)>> {
+        let mut res = Vec::with_capacity(self.swaps_per_temp);
+        let mut idx_a;
+        let mut idx_b;
+
+        for _ in 0..self.swaps_per_temp {
+            // todo
+            idx_a = self.rng.gen_range(0..self.total_elements);
+            idx_b = self.rng.gen_range(0..self.total_elements);
+            
+            while idx_a == idx_b {
+                idx_b = self.rng.gen_range(0..self.total_elements);
+            }
+
+            res.push(Err((idx_a, idx_b)));
+        }
+
+        res
     }
 }
 
+pub trait Expand {
+    fn exp(&mut self, elem: Self);
+}
 
+impl<T> Expand for Vec<T>
+where
+    T: Clone,
+{
+    fn exp(&mut self, elem: Vec<T>) {
+        self.extend_from_slice(&elem);
+    }
+}

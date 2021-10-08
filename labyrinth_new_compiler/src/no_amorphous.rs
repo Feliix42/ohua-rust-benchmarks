@@ -1,6 +1,8 @@
 #![allow(unused_mut, non_snake_case)]
 // just for peace of mind
 
+use crate::generated::THREADCOUNT;
+
 use crate::benchs::*;
 use std::sync::Arc;
 
@@ -119,7 +121,7 @@ pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -
         let mut rt = std::sync::Arc::new(
             tokio::runtime::Builder::new()
                 .threaded_scheduler()
-                .core_threads(1)
+                .core_threads(THREADCOUNT)
                 .build()
                 .unwrap(),
         );

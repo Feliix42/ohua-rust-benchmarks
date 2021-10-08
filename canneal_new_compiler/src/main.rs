@@ -2,8 +2,6 @@ use crate::generated::*;
 use crate::types::*;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
-use rand_chacha::rand_core::SeedableRng;
-use rand_chacha::ChaCha12Rng;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
@@ -84,6 +82,7 @@ fn main() {
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
     let threadcount = THREADCOUNT;
+    let frequency = FREQUENCY;
 
     // read and parse input data
     let input_data = Netlist::new(input_file).expect("Failed to parse input file");
@@ -106,21 +105,17 @@ fn main() {
     for _ in 0..runs {
         // clone the necessary data
         let netlist = input_data.clone();
-        let dimensions = Location {
-            x: netlist.max_x,
-            y: netlist.max_y,
-        };
+        let elements = input_data.elements.len();
 
         // start the clock
         let cpu_start = ProcessTime::now();
         let start = Instant::now();
 
         // run the algorithm
-        let runs = generated::annealer(
+        let _netlist = generated::annealer(
             netlist,
-            dimensions,
+            elements,
             initial_temp as f64,
-            0,
             steps,
             swap_count,
         );
@@ -152,10 +147,11 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"ohua-futures\",
+    \"algorithm\": \"Ohua\",
     \"netlist_elements\": {opt},
     \"runs\": {runs},
     \"threadcount\": {threads},
+    \"frequency\": {freq},
     \"initial_temperature\": {init_tmp},
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
@@ -165,6 +161,7 @@ fn main() {
             opt = input_data.elements.len(),
             runs = runs,
             threads = threadcount,
+            freq = frequency,
             init_tmp = initial_temp,
             steps = steps.unwrap_or(-1),
             swaps_per_temp = swap_count,
@@ -192,156 +189,3 @@ fn main() {
     }
 }
 
-fn get_rng() -> ChaCha12Rng {
-    ChaCha12Rng::seed_from_u64(0)
-}
-
-///// run the inner loop and create a log of changes
-/////
-///// Returns: (List of changes, good moves, bad moves)
-//fn do_work(
-//netlist: Arc<Netlist>,
-//temperature: f64,
-//swaps_per_step: usize,
-//mut rng: ChaCha12Rng,
-//) -> (Vec<(usize, usize)>, usize, usize) {
-//let mut changelog = Vec::new();
-//let mut accepted_bad_moves = 0;
-//let mut accepted_good_moves = 0;
-
-//// TODO: Keep local state
-//let mut idx_a;
-//let mut idx_b = netlist.get_random_element(None, &mut rng);
-
-//for _ in 0..swaps_per_step {
-//// get a single new element
-//idx_a = idx_b;
-//idx_b = netlist.get_random_element(Some(idx_a), &mut rng);
-
-//let delta_cost = netlist.calculate_delta_routing_cost(idx_a, idx_b);
-
-//match assess_move(delta_cost, temperature, &mut rng) {
-//MoveDecision::Good => {
-//accepted_good_moves += 1;
-//changelog.push((idx_a, idx_b));
-//// netlist.swap_locations(idx_a, idx_b);
-//}
-//MoveDecision::Bad => {
-//accepted_bad_moves += 1;
-//changelog.push((idx_a, idx_b));
-//// netlist.swap_locations(idx_a, idx_b);
-//}
-//MoveDecision::Rejected => (),
-//}
-//}
-
-//(changelog, accepted_good_moves, accepted_bad_moves)
-//}
-
-//fn apply_changes(mut netlist: Arc<Netlist>, log: Vec<(usize, usize)>) -> Arc<Netlist> {
-//let mut new_netlist: Netlist = netlist.deref().to_owned();
-//let mut was_changed_before = vec![false; new_netlist.elements.len()];
-//let mut errors = 0;
-
-//for (from, to) in log {
-//// quick check to detect overwrites
-//if was_changed_before[from] {
-//errors += 1;
-//} else {
-//was_changed_before[from] = true;
-//}
-//if was_changed_before[to] {
-//errors += 1;
-//}
-//new_netlist.swap_locations(from, to);
-//}
-
-//// if errors > 0 {
-////     println!("Encountered {} overwrites of previous changes", errors);
-//// }
-
-//Arc::new(new_netlist)
-//}
-
-//// this function is problematic
-//fn create_rngs(mut rng: ChaCha12Rng, threadcount: usize) -> (ChaCha12Rng, Vec<ChaCha12Rng>) {
-//let mut rngs = Vec::with_capacity(threadcount);
-
-//for _ in 0..(threadcount * TASKS_PER_THREAD) {
-//rngs.push(ChaCha12Rng::seed_from_u64(rng.next_u64()));
-//}
-
-//(rng, rngs)
-//}
-
-//fn spawn_onto_pool(
-//netlist: Arc<Netlist>,
-//rngs: Vec<ChaCha12Rng>,
-//temperature: f64,
-//swaps_per_thread: usize,
-//rt: Arc<Runtime>,
-//) -> (
-//Arc<Runtime>,
-//Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>,
-//) {
-//let mut handles = Vec::with_capacity(rngs.len());
-
-//for rng in rngs.into_iter() {
-//let (sx, rx) = mpsc::channel();
-//let nl = netlist.clone();
-
-//rt.spawn(async move {
-//sx.send(do_work(nl, temperature, swaps_per_thread, rng))
-//.unwrap()
-//});
-
-//handles.push(rx);
-//}
-
-//(rt, handles)
-//}
-
-//fn create_runtime(threadcount: usize) -> Arc<Runtime> {
-//Arc::new(
-//Builder::new()
-//.threaded_scheduler()
-//.core_threads(threadcount)
-//.thread_name("ohua-tokio-worker")
-//.build()
-//.unwrap(),
-//)
-//}
-
-//// fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>)) -> Vec<T> {
-////     let (_rt, mut receivers) = tokio_data;
-////     receivers
-////         .drain(..)
-////         .map(|h| h.recv().unwrap())
-////         .flatten()
-////         .collect()
-//// }
-
-//fn collect_work(
-//tokio_data: (
-//Arc<Runtime>,
-//Vec<Receiver<(Vec<(usize, usize)>, usize, usize)>>,
-//),
-//) -> (Vec<(usize, usize)>, i32, i32) {
-//let (_rt, mut receivers) = tokio_data;
-//let res: Vec<(Vec<(usize, usize)>, usize, usize)> =
-//receivers.drain(..).map(|h| h.recv().unwrap()).collect();
-
-//let mut good = 0;
-//let mut bad = 0;
-//let mut flattened = Vec::new();
-//let _: Vec<()> = res
-//.into_iter()
-//.map(|(mut result, good_mv, bad_mv)| {
-//flattened.append(&mut result);
-//good += good_mv;
-//bad += bad_mv;
-//})
-//.collect();
-
-//(flattened, good as i32, bad as i32)
-//}
