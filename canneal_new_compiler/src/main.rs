@@ -1,5 +1,3 @@
-#![feature(get_mut_unchecked)]
-
 use crate::generated::*;
 use crate::types::*;
 use clap::{App, Arg};
@@ -10,7 +8,7 @@ use std::str::FromStr;
 use std::time::Instant;
 
 mod generated;
-mod original;
+// mod original;
 mod types;
 
 fn main() {
@@ -115,31 +113,32 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let netlist = input_data.clone();
-        let elements = input_data.elements.len();
+        // read and parse input data
+        let netlist = Netlist::new(input_file).expect("Failed to parse input file");
+        let elements = netlist.elements.len();
 
         // start the clock
         let cpu_start = ProcessTime::now();
         let start = Instant::now();
 
         // run the algorithm
-        let netlist = if sequential {
-            original::annealer(
-                netlist,
-                elements,
-                initial_temp as f64,
-                steps,
-                swap_count,
-            )
-        } else {
+        let netlist = // if sequential {
+            //original::annealer(
+                //netlist,
+                //elements,
+                //initial_temp as f64,
+                //steps,
+                //swap_count,
+            //)
+        //} else {
             generated::annealer(
                 netlist,
                 elements,
                 initial_temp as f64,
                 steps,
                 swap_count,
-            )
-        };
+            );
+        // };
 
         // stop the clock
         let cpu_end = ProcessTime::now();
