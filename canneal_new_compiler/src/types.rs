@@ -44,8 +44,8 @@ impl NetlistElement {
 
 #[derive(Clone, Debug)]
 pub struct Netlist {
-    pub elements: Vec<NetlistElement>,
-    changed_fields: Vec<bool>,
+    pub elements: Arc<Vec<NetlistElement>>,
+    changed_fields: Arc<Vec<bool>>,
     pub max_x: usize,
     pub max_y: usize,
 }
@@ -143,8 +143,8 @@ impl Netlist {
 
         let size = elements.len();
         Ok(Self {
-            elements,
-            changed_fields: vec![false; size],
+            elements: Arc::new(elements),
+            changed_fields: Arc::new(vec![false; size]),
             max_x,
             max_y,
         })
@@ -183,9 +183,12 @@ impl Netlist {
 
     /// Swap the location information for two elements, effectively swapping their positions
     pub fn swap_locations(&mut self, idx_a: usize, idx_b: usize) {
-        let mut tmp = std::mem::take(&mut self.elements[idx_a].location);
-        std::mem::swap(&mut tmp, &mut self.elements[idx_b].location);
-        self.elements[idx_a].location = tmp;
+        unsafe {
+            let elems = Arc::get_mut_unchecked(&mut self.elements);
+            let mut tmp = std::mem::take(&mut elems[idx_a].location);
+            std::mem::swap(&mut tmp, &mut elems[idx_b].location);
+            elems[idx_a].location = tmp;
+        }
     }
 
     ///// Shuffle the elements vector by randomly switching out x * y * 1000 pairs
@@ -279,9 +282,11 @@ impl Netlist {
             MoveDecision::Bad => {
                 if !self.changed_fields[a] && !self.changed_fields[b] {
                     self.swap_locations(a, b);
-                    self.changed_fields[a] = true;
-                    self.changed_fields[b] = true;
-
+                    unsafe {
+                        let changed = Arc::get_mut_unchecked(&mut self.changed_fields);
+                        changed[a] = true;
+                        changed[b] = true;
+                    }
                     Ok(updt.0)
                 } else {
                     Err(updt.1)
@@ -292,7 +297,7 @@ impl Netlist {
     }
 
     pub fn clear_changes(&mut self) {
-        self.changed_fields = vec![false; self.elements.len()];
+        self.changed_fields = Arc::new(vec![false; self.elements.len()]);
     }
 }
 

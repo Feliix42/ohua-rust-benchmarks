@@ -1,3 +1,5 @@
+#![feature(get_mut_unchecked)]
+
 use crate::generated::*;
 use crate::types::*;
 use clap::{App, Arg};
