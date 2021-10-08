@@ -22,6 +22,11 @@ do
     sdir="${foo[0]}"
     mkdir -p $TODAY-canneal/$sdir
 
+    echo "Running sequential Ohua"
+    mkdir -p $TODAY-canneal/$sdir/seq
+    cargo build --release --quiet
+    target/release/canneal_new_compiler ../canneal/inputs/$benchsize --json --outdir "$TODAY-canneal/$sdir/seq" --runs 30 --swaps 15000 --temperature 2000 --max-steps 128 -s
+
     echo "Running benchmarks for $benchsize"
 
     echo -n "  sequential"
