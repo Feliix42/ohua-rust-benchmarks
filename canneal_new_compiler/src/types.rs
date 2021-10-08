@@ -46,6 +46,7 @@ impl NetlistElement {
 pub struct Netlist {
     pub elements: Arc<Vec<NetlistElement>>,
     changed_fields: Arc<Vec<bool>>,
+    pub failed_updates: usize,
     pub max_x: usize,
     pub max_y: usize,
 }
@@ -145,6 +146,7 @@ impl Netlist {
         Ok(Self {
             elements: Arc::new(elements),
             changed_fields: Arc::new(vec![false; size]),
+            failed_updates: 0,
             max_x,
             max_y,
         })
@@ -289,6 +291,7 @@ impl Netlist {
                     }
                     Ok(updt.0)
                 } else {
+                    self.failed_updates += 1;
                     Err(updt.1)
                 }
             }

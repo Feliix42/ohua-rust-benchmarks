@@ -107,6 +107,7 @@ fn main() {
     // run the benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_time = Vec::with_capacity(runs);
+    let mut collisions = Vec::with_capacity(runs);
 
     if !json_dump {
         print!("[info] Running benchmark");
@@ -122,7 +123,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let _netlist = if sequential {
+        let netlist = if sequential {
             original::annealer(
                 netlist,
                 elements,
@@ -152,6 +153,7 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_time.push(cpu_runtime_ms);
+        collisions.push(netlist.failed_updates);
     }
 
     // write output
@@ -175,6 +177,7 @@ fn main() {
     \"initial_temperature\": {init_tmp},
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
+    \"collisions\": {coll:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -185,6 +188,7 @@ fn main() {
             init_tmp = initial_temp,
             steps = steps.unwrap_or(-1),
             swaps_per_temp = swap_count,
+            coll = collisions,
             cpu = cpu_time,
             res = results
         ))
@@ -204,6 +208,7 @@ fn main() {
         println!("    Initial Temperature: {}", initial_temp);
         println!("    Maximal number of temperature steps: {:?}", steps);
         println!("    Swaps per temperature step: {}", swap_count);
+        println!("    Collisions: {:?}", collisions);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
         println!("Runtime (ms): {:?}", results);
     }
