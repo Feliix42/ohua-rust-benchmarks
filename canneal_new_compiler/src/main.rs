@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::time::Instant;
 
 mod generated;
+mod original;
 mod types;
 
 fn main() {
@@ -65,6 +66,12 @@ fn main() {
                 .help("Maximal number of temperature steps")
                 .takes_value(true)
         )
+        .arg(
+            Arg::with_name("sequential")
+                .long("seq")
+                .short("s")
+                .help("Run the sequential ohua algorithm (bare)")
+        )
         .get_matches();
 
     // parse parameters
@@ -75,6 +82,7 @@ fn main() {
         .value_of("nsteps")
         .map(i32::from_str)
         .map(Result::unwrap);
+    let sequential = matches.is_present("sequential");
 
     // parse runtime parameters
     let runs =
@@ -112,13 +120,23 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let _netlist = generated::annealer(
-            netlist,
-            elements,
-            initial_temp as f64,
-            steps,
-            swap_count,
-        );
+        let _netlist = if sequential {
+            original::annealer(
+                netlist,
+                elements,
+                initial_temp as f64,
+                steps,
+                swap_count,
+            )
+        } else {
+            generated::annealer(
+                netlist,
+                elements,
+                initial_temp as f64,
+                steps,
+                swap_count,
+            )
+        };
 
         // stop the clock
         let cpu_end = ProcessTime::now();
