@@ -5,9 +5,9 @@ use std::sync::Arc;
 fn run(mut state: Netlist, worklist: Vec<(usize, usize)>, temperature: f64) -> Netlist {
     let mut rs = Vec::new(); // the new worklist
     let new_temp: f64 = reduce_temp(temperature);
-    let n2: Netlist = state.clone();
-    let nro: Arc<Netlist> = Arc::new(n2);
     for item in worklist {
+        let n2: Netlist = state.clone();
+        let nro: Arc<Netlist> = Arc::new(n2);
         let switch_info: (MoveDecision, (usize, usize)) =
             process_move(item, nro.clone(), new_temp.clone());
         // updates the netlist by performing the switch, returning an error when there's a collision
