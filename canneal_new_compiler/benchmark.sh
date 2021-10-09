@@ -38,7 +38,7 @@ do
     for tcount in 1 2 3 4 5 6 7 8 9 10 11 12
     do
         sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = $tcount/" src/generated.rs
-        for frequency in 2500 5000 7500 10000 12500 15000
+        for frequency in 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 12000 13000 14000 15000
         do
             mkdir -p $TODAY-canneal/$sdir/freq$frequency
             echo -n "."
