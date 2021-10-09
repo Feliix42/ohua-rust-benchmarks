@@ -93,7 +93,7 @@ fn main() {
     let frequency = FREQUENCY;
 
     // read and parse input data
-    let input_data = Netlist::new(input_file).expect("Failed to parse input file");
+    let input_data = Netlist::new(input_file, steps, swap_count).expect("Failed to parse input file");
 
     if !json_dump {
         println!(
@@ -114,8 +114,8 @@ fn main() {
     for _ in 0..runs {
         // clone the necessary data
         // read and parse input data
-        let netlist = Netlist::new(input_file).expect("Failed to parse input file");
-        let elements = netlist.elements.len();
+        let mut netlist = Netlist::new(input_file, steps, swap_count).expect("Failed to parse input file");
+        let workset = netlist.internal_state.generate_worklist();
 
         // start the clock
         let cpu_start = ProcessTime::now();
@@ -133,10 +133,8 @@ fn main() {
         //} else {
             generated::annealer(
                 netlist,
-                elements,
+                workset,
                 initial_temp as f64,
-                steps,
-                swap_count,
             );
         // };
 

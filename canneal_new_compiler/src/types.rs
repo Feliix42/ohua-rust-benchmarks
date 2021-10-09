@@ -45,7 +45,7 @@ impl NetlistElement {
 #[derive(Clone, Debug)]
 pub struct Netlist {
     pub elements: Arc<Vec<NetlistElement>>,
-    changed_fields: Arc<Vec<bool>>,
+    pub internal_state: InternalState,
     pub failed_updates: usize,
     pub max_x: usize,
     pub max_y: usize,
@@ -53,7 +53,7 @@ pub struct Netlist {
 
 impl Netlist {
     /// Create a netlist from a file specification
-    pub fn new(path: &str) -> io::Result<Self> {
+    pub fn new(path: &str, max_steps: Option<i32>, swaps_per_temp: usize) -> io::Result<Self> {
         let f = File::open(path)?;
 
         let mut reader = BufReader::new(f);
@@ -145,97 +145,12 @@ impl Netlist {
         let size = elements.len();
         Ok(Self {
             elements: Arc::new(elements),
-            changed_fields: Arc::new(vec![false; size]),
+            internal_state: InternalState::initialize(size, max_steps, swaps_per_temp),
             failed_updates: 0,
             max_x,
             max_y,
         })
     }
-
-    //pub fn get_element_by_name(&self, name: &str) -> usize {
-        //unimplemented!()
-    //}
-
-    ///// Selects a random pair of different elements from the element list and returns their indices
-    //pub fn get_random_pair<R: Rng>(&self, rng: &mut R) -> (usize, usize) {
-        //assert!(self.elements.len() > 1);
-
-        //let idx_a = rng.gen_range(0..self.elements.len());
-        //let mut idx_b = rng.gen_range(0..self.elements.len());
-
-        //while idx_a == idx_b {
-            //idx_b = rng.gen_range(0..self.elements.len());
-        //}
-
-        //(idx_a, idx_b)
-    //}
-
-    //pub fn get_random_element<R: Rng>(&self, different_from: Option<usize>, rng: &mut R) -> usize {
-        //assert!(self.elements.len() > 1);
-
-        //let mut idx = rng.gen_range(0..self.elements.len());
-        //if let Some(diff) = different_from {
-            //while idx == diff {
-                //idx = rng.gen_range(0..self.elements.len());
-            //}
-        //}
-
-        //idx
-    //}
-
-    ///// Swap the location information for two elements, effectively swapping their positions
-    //pub fn swap_locations(&mut self, idx_a: usize, idx_b: usize) {
-        //unsafe {
-            //let elems = Arc::get_mut_unchecked(&mut self.elements);
-            //let mut tmp = std::mem::take(&mut elems[idx_a].location);
-            //std::mem::swap(&mut tmp, &mut elems[idx_b].location);
-            //elems[idx_a].location = tmp;
-        //}
-    //}
-
-    ///// Shuffle the elements vector by randomly switching out x * y * 1000 pairs
-    //pub fn shuffle<R: Rng>(&mut self, rng: &mut R) {
-        //let bounds = self.max_x * self.max_y * 1000;
-
-        //for _ in 0..bounds {
-            //let (a, b) = self.get_random_pair(rng);
-            //self.swap_locations(a, b);
-        //}
-    //}
-
-    ///// Count the total routing cost for the netlist.
-    //pub fn total_routing_cost(&self) -> f64 {
-        //let mut cost = 0f64;
-
-        //for element in 0..self.elements.len() {
-            //cost += self.element_routing_cost(element);
-        //}
-
-        //// divide by two since the `routing_cost` function considers both fan-in and fan-out.
-        //cost / 2f64
-    //}
-
-    ///// Calculates the routing cost using the Manhattan distancee.
-    //pub fn element_routing_cost(&self, elem: usize) -> f64 {
-        //let mut fan_in_cost = 0_f64;
-        //let mut fan_out_cost = 0_f64;
-
-        //let element = &self.elements[elem];
-
-        //for other in &element.fan_in {
-            //let el = &self.elements[*other];
-            //fan_in_cost += (element.location.x as isize - el.location.x as isize).abs() as f64;
-            //fan_in_cost += (element.location.y as isize - el.location.y as isize).abs() as f64;
-        //}
-
-        //for other in &element.fan_out {
-            //let el = &self.elements[*other];
-            //fan_out_cost += (element.location.x as isize - el.location.x as isize).abs() as f64;
-            //fan_out_cost += (element.location.y as isize - el.location.y as isize).abs() as f64;
-        //}
-
-        //fan_in_cost + fan_out_cost
-    //}
 
     /// Get the cost change of swapping from the present location to a new location
     pub fn element_swap_cost(&self, elem: usize, old: &Location, new: &Location) -> f64 {
@@ -276,39 +191,71 @@ impl Netlist {
     pub fn update(
         &mut self,
         updts: Vec<(MoveDecision, (usize, usize))>,
-    ) -> Vec<(MoveDecision, (usize, usize))> {
+    ) -> Vec<(usize, usize)> {
         //println!("Strong counts: {} (elems), {} (changed)", Arc::strong_count(&self.elements), Arc::strong_count(&self.changed_fields));
         let mut res = Vec::with_capacity(updts.len());
         let elems = Arc::get_mut(&mut self.elements).unwrap();
-        let changed = Arc::get_mut(&mut self.changed_fields).unwrap();
+
+        let mut changed = vec![false; elems.len()];
 
         for updt in updts {
             let (a, b) = updt.1;
 
             match updt.0 {
-                MoveDecision::Good |
+                MoveDecision::Good => {
+                    if !changed[a] && !changed[b] {
+                        swap_locations(elems, a, b);
+                        changed[a] = true;
+                        changed[b] = true;
+
+                        self.internal_state.accepted_good_moves += 1;
+                    } else {
+                        self.failed_updates += 1;
+                        res.push(updt.1);
+                    }
+                }
                 MoveDecision::Bad => {
                     if !changed[a] && !changed[b] {
                         swap_locations(elems, a, b);
                         changed[a] = true;
                         changed[b] = true;
 
-                        res.push(updt);
+                        self.internal_state.accepted_bad_moves += 1;
                     } else {
                         self.failed_updates += 1;
-                        res.push((MoveDecision::Undecided, updt.1));
+                        res.push(updt.1);
                     }
                 }
-                MoveDecision::Rejected => (), // Ok(updt.0)
-                MoveDecision::Undecided => res.push(updt) // Ok(updt.0)
+                MoveDecision::Rejected => (),
             }
         }
+
+        if res.len() == 0 {
+            //println!("Current done!");
+            // current worklist done!
+            let keep_going = self.get_keep_going();
+
+            self.internal_state.accepted_good_moves = 0;
+            self.internal_state.accepted_bad_moves = 0;
+            self.internal_state.completed_steps += 1;
+
+            if keep_going {
+                res = self.internal_state.generate_worklist();
+            }
+        } /* else {
+            println!("Remaining elements: {}", res.len());
+            println!("Failed updates: {}", self.failed_updates);
+        } */
 
         res
     }
 
-    pub fn clear_changes(&mut self) {
-        self.changed_fields = Arc::new(vec![false; self.elements.len()]);
+    pub fn get_keep_going(&self) -> bool {
+        if let Some(bound) = self.internal_state.max_steps {
+            self.internal_state.completed_steps < bound
+        } else {
+            self.internal_state.accepted_good_moves > self.internal_state.accepted_bad_moves
+        }
     }
 }
     
@@ -324,25 +271,17 @@ pub enum MoveDecision {
     Good,
     Bad,
     Rejected,
-    Undecided,
 }
-
-//pub fn increment(completed_steps: i32) -> i32 {
-    //completed_steps + 1
-//}
 
 pub fn reduce_temp(temperature: f64) -> f64 {
     temperature / 1.5
 }
 
 pub fn process_move(
-    work_item: (MoveDecision, (usize, usize)),
+    item: (usize, usize),
     netlist: Arc<Netlist>,
     temperature: f64,
 ) -> (MoveDecision, (usize, usize)) {
-    // TODO: Uncomment
-    assert_eq!(work_item.0, MoveDecision::Undecided);
-    let item = work_item.1; 
     let total_cost = netlist.calculate_delta_routing_cost(item.0, item.1);
 
     let decision = if total_cost < 0f64 {
@@ -360,27 +299,7 @@ pub fn process_move(
     (decision, item)
 }
 
-pub fn dup<T: Clone>(item: T) -> (T, T) {
-    (item.clone(), item)
-}
-
-pub fn filter_work(
-    work: Vec<(MoveDecision, (usize, usize))>,
-) -> Vec<(MoveDecision, (usize, usize))> {
-    //let mut retry = Vec::new();
-
-    //for item in work {
-        //match item {
-            //Ok(res) => (),
-            //Err(retr) => retry.push(retr),
-        //}
-    //}
-
-    //retry
-
-    work.into_iter().filter(|x| x.0 == MoveDecision::Undecided).collect()
-}
-
+#[derive(Clone, Debug)]
 pub struct InternalState {
     rng: ChaCha12Rng,
     total_elements: usize,
@@ -404,49 +323,9 @@ impl InternalState {
         }
     }
 
-    pub fn assess_updates(
-        &mut self,
-        results: Vec<(MoveDecision, (usize, usize))>,
-        length: usize,
-    ) -> (Vec<(MoveDecision, (usize, usize))>, bool) {
-         // update internal state
-        for res in results {
-            match res.0 {
-                MoveDecision::Good => self.accepted_good_moves += 1,
-                MoveDecision::Bad => self.accepted_bad_moves += 1,
-                MoveDecision::Rejected |
-                MoveDecision::Undecided => (),
-            }
-        }
-
-        // generate a new worklist if necessary
-        if length == 0 {
-            println!("Current done!");
-            // current worklist done!
-            let keep_going = if let Some(bound) = self.max_steps {
-                self.completed_steps < bound
-            } else {
-                self.accepted_good_moves > self.accepted_bad_moves
-            };
-
-            self.accepted_good_moves = 0;
-            self.accepted_bad_moves = 0;
-            self.completed_steps += 1;
-
-            if keep_going {
-                (self.generate_worklist(), true)
-            } else {
-                (Vec::with_capacity(0), false)
-            }
-        } else {
-            println!("Remaining elements: {}", length);
-            (Vec::with_capacity(0), true)
-        }
-    }
-
     pub fn generate_worklist(
         &mut self,
-    ) -> Vec<(MoveDecision, (usize, usize))> {
+    ) -> Vec<(usize, usize)> {
         let mut res = Vec::with_capacity(self.swaps_per_temp);
         let mut idx_a;
         let mut idx_b;
@@ -460,22 +339,9 @@ impl InternalState {
                 idx_b = self.rng.gen_range(0..self.total_elements);
             }
 
-            res.push((MoveDecision::Undecided, (idx_a, idx_b)));
+            res.push((idx_a, idx_b));
         }
 
         res
-    }
-}
-
-pub trait Expand {
-    fn exp(&mut self, elem: Self);
-}
-
-impl<T> Expand for Vec<T>
-where
-    T: Clone,
-{
-    fn exp(&mut self, elem: Vec<T>) {
-        self.extend_from_slice(&elem);
     }
 }
