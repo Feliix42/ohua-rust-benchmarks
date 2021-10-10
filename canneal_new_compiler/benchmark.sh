@@ -38,11 +38,12 @@ do
     for tcount in 1 2 3 4 5 6 7 8 9 10 11 12
     do
         sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = $tcount/" src/generated.rs
-        for frequency in 1000 2000 3000 4000 5000 6000 7000 8000 9000 10000 12000 13000 14000 15000
+        for frequency in 10 20 30 40 50 60 70 80 90 100 120 130 140 150
         do
             mkdir -p $TODAY-canneal/$sdir/freq$frequency
             echo -n "."
-            sed -i "s/FREQUENCY: usize = [0-9]\+/FREQUENCY: usize = $(($tcount * $frequency))/" src/generated.rs
+            # sed -i "s/FREQUENCY: usize = [0-9]\+/FREQUENCY: usize = $(($tcount * $frequency))/" src/generated.rs
+            sed -i "s/FREQUENCY: usize = [0-9]\+/FREQUENCY: usize = $frequency/" src/generated.rs
             cargo build --release --quiet
             target/release/canneal_new_compiler ../canneal/inputs/$benchsize --json --outdir "$TODAY-canneal/$sdir/freq$frequency" --runs 30 --swaps 15000 --temperature 2000 --max-steps 128
         done

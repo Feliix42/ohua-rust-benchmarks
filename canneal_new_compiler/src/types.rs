@@ -190,47 +190,51 @@ impl Netlist {
 
     pub fn update(
         &mut self,
-        updts: Vec<(MoveDecision, (usize, usize))>,
-    ) -> Vec<(usize, usize)> {
+        updt_sets: Vec<Vec<(MoveDecision, (usize, usize))>>,
+    ) -> Vec<Vec<(usize, usize)>> {
         //println!("Strong counts: {} (elems), {} (changed)", Arc::strong_count(&self.elements), Arc::strong_count(&self.changed_fields));
-        let mut res = Vec::with_capacity(updts.len());
+        let mut res = Vec::with_capacity(updt_sets.len());
         let elems = Arc::get_mut(&mut self.elements).unwrap();
 
         let mut changed = vec![false; elems.len()];
 
-        for updt in updts {
-            let (a, b) = updt.1;
+        for updts in updt_sets {
+            let mut tmp = Vec::with_capacity(updts.len());
+            for updt in updts {
+                let (a, b) = updt.1;
 
-            match updt.0 {
-                MoveDecision::Good => {
-                    if !changed[a] && !changed[b] {
-                        swap_locations(elems, a, b);
-                        changed[a] = true;
-                        changed[b] = true;
+                match updt.0 {
+                    MoveDecision::Good => {
+                        if !changed[a] && !changed[b] {
+                            swap_locations(elems, a, b);
+                            changed[a] = true;
+                            changed[b] = true;
 
-                        self.internal_state.accepted_good_moves += 1;
-                    } else {
-                        self.failed_updates += 1;
-                        res.push(updt.1);
+                            self.internal_state.accepted_good_moves += 1;
+                        } else {
+                            self.failed_updates += 1;
+                            tmp.push(updt.1);
+                        }
                     }
-                }
-                MoveDecision::Bad => {
-                    if !changed[a] && !changed[b] {
-                        swap_locations(elems, a, b);
-                        changed[a] = true;
-                        changed[b] = true;
+                    MoveDecision::Bad => {
+                        if !changed[a] && !changed[b] {
+                            swap_locations(elems, a, b);
+                            changed[a] = true;
+                            changed[b] = true;
 
-                        self.internal_state.accepted_bad_moves += 1;
-                    } else {
-                        self.failed_updates += 1;
-                        res.push(updt.1);
+                            self.internal_state.accepted_bad_moves += 1;
+                        } else {
+                            self.failed_updates += 1;
+                            tmp.push(updt.1);
+                        }
                     }
+                    MoveDecision::Rejected => (),
                 }
-                MoveDecision::Rejected => (),
             }
+            res.push(tmp);
         }
 
-        if res.len() == 0 {
+        if res.iter().flatten().count() == 0 {
             //println!("Current done!");
             // current worklist done!
             let keep_going = self.get_keep_going();
@@ -278,25 +282,31 @@ pub fn reduce_temp(temperature: f64) -> f64 {
 }
 
 pub fn process_move(
-    item: (usize, usize),
+    items: Vec<(usize, usize)>,
     netlist: Arc<Netlist>,
     temperature: f64,
-) -> (MoveDecision, (usize, usize)) {
-    let total_cost = netlist.calculate_delta_routing_cost(item.0, item.1);
+) -> Vec<(MoveDecision, (usize, usize))> {
+    let mut res = Vec::with_capacity(items.len());
 
-    let decision = if total_cost < 0f64 {
-        MoveDecision::Good
-    } else {
-        let random_value: f64 = rand::random();
-        let boltzman = (-total_cost / temperature).exp();
-        if boltzman > random_value {
-            MoveDecision::Bad
+    for item in items {
+        let total_cost = netlist.calculate_delta_routing_cost(item.0, item.1);
+
+        let decision = if total_cost < 0f64 {
+            MoveDecision::Good
         } else {
-            MoveDecision::Rejected
-        }
-    };
+            let random_value: f64 = rand::random();
+            let boltzman = (-total_cost / temperature).exp();
+            if boltzman > random_value {
+                MoveDecision::Bad
+            } else {
+                MoveDecision::Rejected
+            }
+        };
 
-    (decision, item)
+        res.push((decision, item));
+    }
+
+    res
 }
 
 #[derive(Clone, Debug)]
@@ -323,13 +333,37 @@ impl InternalState {
         }
     }
 
+    //pub fn generate_worklist(
+        //&mut self,
+    //) -> Vec<(usize, usize)> {
+        //let mut res = Vec::with_capacity(self.swaps_per_temp);
+        //let mut idx_a;
+        //let mut idx_b;
+
+        //for _ in 0..self.swaps_per_temp {
+            //// todo
+            //idx_a = self.rng.gen_range(0..self.total_elements);
+            //idx_b = self.rng.gen_range(0..self.total_elements);
+            
+            //while idx_a == idx_b {
+                //idx_b = self.rng.gen_range(0..self.total_elements);
+            //}
+
+            //res.push((idx_a, idx_b));
+        //}
+
+        //res
+    //}
+
     pub fn generate_worklist(
         &mut self,
-    ) -> Vec<(usize, usize)> {
-        let mut res = Vec::with_capacity(self.swaps_per_temp);
+    ) -> Vec<Vec<(usize, usize)>> {
+        // Optimization: Bigger work packages
+        let mut res = Vec::with_capacity(self.swaps_per_temp / 100);
         let mut idx_a;
         let mut idx_b;
 
+        let mut tmp = Vec::with_capacity(100);
         for _ in 0..self.swaps_per_temp {
             // todo
             idx_a = self.rng.gen_range(0..self.total_elements);
@@ -339,7 +373,15 @@ impl InternalState {
                 idx_b = self.rng.gen_range(0..self.total_elements);
             }
 
-            res.push((idx_a, idx_b));
+            tmp.push((idx_a, idx_b));
+            if tmp.len() == 100 {
+                res.push(tmp);
+                tmp = Vec::with_capacity(100);
+            }
+        }
+
+        if !tmp.is_empty() {
+            res.push(tmp);
         }
 
         res

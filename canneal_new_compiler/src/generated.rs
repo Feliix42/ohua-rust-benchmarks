@@ -11,7 +11,7 @@ pub const FREQUENCY: usize = 7500;
 
 fn run(
     mut state: Netlist,
-    worklist: Vec<(usize, usize)>,
+    worklist: Vec<Vec<(usize, usize)>>,
     temperature: f64,
 ) -> Netlist {
     let mut rs = Vec::new();
@@ -19,11 +19,11 @@ fn run(
     let n2: Netlist = state.clone();
     let nro: Arc<Netlist> = Arc::new(n2);
     for item in worklist {
-        let switch_info: (MoveDecision, (usize, usize)) =
+        let switch_info: Vec<(MoveDecision, (usize, usize))> =
             process_move(item, nro.clone(), new_temp.clone());
         rs.push(switch_info);
     }
-    let remaining_work: Vec<(usize, usize)> = state.update(rs);
+    let remaining_work: Vec<Vec<(usize, usize)>> = state.update(rs);
     let keep_going: bool = state.get_keep_going();
     if keep_going {
         run(state, remaining_work, new_temp)
@@ -34,7 +34,7 @@ fn run(
 
 pub fn annealer(
     netlist: Netlist,
-    worklist: Vec<(usize, usize)>,
+    worklist: Vec<Vec<(usize, usize)>>,
     temperature: f64,
 ) -> Netlist {
     #[derive(Debug)]
@@ -63,22 +63,22 @@ pub fn annealer(
     let (n2_0_0_0_tx, n2_0_0_0_rx) = std::sync::mpsc::channel::<Netlist>();
     let (worklist_0_0_0_tx, worklist_0_0_0_rx) = std::sync::mpsc::channel();
     let (worklist_0_n_0_0_0_tx, worklist_0_n_0_0_0_rx) =
-        std::sync::mpsc::channel::<Vec<(usize, usize)>>();
+        std::sync::mpsc::channel::<Vec<Vec<(usize, usize)>>>();
     let (new_temp_0_0_1_tx, new_temp_0_0_1_rx) = std::sync::mpsc::channel::<f64>();
     let (ctrl_2_0_tx, ctrl_2_0_rx) = std::sync::mpsc::channel::<(_, _)>();
     let (nro_0_0_1_tx, nro_0_0_1_rx) = std::sync::mpsc::channel::<Arc<Netlist>>();
     let (ctrl_2_1_tx, ctrl_2_1_rx) = std::sync::mpsc::channel::<(_, _)>();
-    let (rs_0_0_1_tx, rs_0_0_1_rx) = std::sync::mpsc::channel::<Vec<(MoveDecision, (usize, usize))>>();
+    let (rs_0_0_1_tx, rs_0_0_1_rx) = std::sync::mpsc::channel::<Vec<Vec<(MoveDecision, (usize, usize))>>>();
     let (ctrl_2_2_tx, ctrl_2_2_rx) = std::sync::mpsc::channel::<(_, _)>();
     let (a_0_0_tx, a_0_0_rx) = std::sync::mpsc::channel::<f64>();
     let (b_0_0_tx, b_0_0_rx) = std::sync::mpsc::channel::<Arc<Netlist>>();
-    let (d_0_0_tx, d_0_0_rx) = std::sync::mpsc::channel::<(usize, usize)>();
+    let (d_0_0_tx, d_0_0_rx) = std::sync::mpsc::channel::<Vec<(usize, usize)>>();
     let (futures_0_tx, futures_0_rx) = std::sync::mpsc::channel::<std::sync::mpsc::Receiver<_>>();
-    let (switch_info_0_0_0_tx, switch_info_0_0_0_rx) = std::sync::mpsc::channel::<(MoveDecision, (usize, usize))>();
-    let (rs_0_1_0_tx, rs_0_1_0_rx) = std::sync::mpsc::channel::<Vec<(MoveDecision, (usize, usize))>>();
+    let (switch_info_0_0_0_tx, switch_info_0_0_0_rx) = std::sync::mpsc::channel::<Vec<(MoveDecision, (usize, usize))>>();
+    let (rs_0_1_0_tx, rs_0_1_0_rx) = std::sync::mpsc::channel::<Vec<Vec<(MoveDecision, (usize, usize))>>>();
     let (state_0_0_2_0_tx, state_0_0_2_0_rx) = std::sync::mpsc::channel::<Netlist>();
-    let (rest_0_0_0_tx, rest_0_0_0_rx) = std::sync::mpsc::channel::<Vec<(usize, usize)>>();
-    let (remaining_work_0_1_0_tx, remaining_work_0_1_0_rx) = std::sync::mpsc::channel::<Vec<(usize, usize)>>();
+    let (rest_0_0_0_tx, rest_0_0_0_rx) = std::sync::mpsc::channel::<Vec<Vec<(usize, usize)>>>();
+    let (remaining_work_0_1_0_tx, remaining_work_0_1_0_rx) = std::sync::mpsc::channel::<Vec<Vec<(usize, usize)>>>();
     let (state_0_0_1_0_tx, state_0_0_1_0_rx) = std::sync::mpsc::channel::<Netlist>();
     let mut tasks: Vec<Box<dyn FnOnce() -> Result<(), RunError> + Send>> = Vec::new();
     tasks.push(Box::new(move || -> _ {
