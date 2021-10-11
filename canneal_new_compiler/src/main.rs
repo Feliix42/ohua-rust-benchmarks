@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::time::Instant;
 
 mod generated;
-//mod original;
+mod original;
 mod types;
 
 fn main() {
@@ -122,19 +122,19 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let netlist = // if sequential {
-            //original::annealer(
-                //netlist,
-                //workset,
-                //initial_temp as f64,
-            //)
-        //} else {
+        let netlist = if sequential {
+            original::annealer(
+                netlist,
+                workset,
+                initial_temp as f64,
+            )
+        } else {
             generated::annealer(
                 netlist,
                 workset,
                 initial_temp as f64,
-            );
-         //};
+            )
+         };
 
         // stop the clock
         let cpu_end = ProcessTime::now();
