@@ -384,6 +384,10 @@ impl InternalState {
             res.push(tmp);
         }
 
+        println!("Generated {} elements", res.iter().flatten().count());
+
         res
     }
 }
+
+

@@ -165,6 +165,7 @@ fn get_opposite(node: Rc<RefCell<Element>>) -> Rc<RefCell<Element>> {
         }
     }
 
-    std::mem::drop(inner);
-    node
+    unreachable!()
+    //std::mem::drop(inner);
+    //node
 }
