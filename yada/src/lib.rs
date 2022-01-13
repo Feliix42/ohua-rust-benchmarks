@@ -2,5 +2,5 @@
 
 mod cavity;
 mod element;
-mod mesh;
+pub mod mesh;
 mod point;

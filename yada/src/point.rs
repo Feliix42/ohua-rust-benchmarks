@@ -4,7 +4,7 @@ use std::cmp::{Eq, Ord, Ordering};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul, Sub};
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
@@ -140,5 +140,19 @@ mod tests {
         println!("{}", b.angle(&c, &a));
         assert!(b.angle(&c, &a) - 45.0_f64 < 1e-6);
         assert!(c.angle(&a, &b) - 45.0_f64 < 1e-6);
+    }
+
+    #[test]
+    fn obtuse_angles_work() {
+        let a = Point { x: 0_f64, y: 0_f64 };
+        let b = Point { x: 0_f64, y: 1_f64 };
+        let c = Point {
+            x: 1_f64,
+            y: -1_f64,
+        };
+        let d = Point { x: 1_f64, y: 0_f64 };
+
+        assert!(a.angle_is_obtuse(&c, &b));
+        assert!(!a.angle_is_obtuse(&d, &b));
     }
 }

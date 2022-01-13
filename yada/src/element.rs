@@ -8,7 +8,7 @@ const MIN_ANGLE: f64 = 30.0;
 
 pub type Edge = (Point, Point);
 
-#[derive(Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Element {
     /// The coordinates of the element.
     pub coordinates: Vec<Point>,
@@ -52,8 +52,8 @@ impl Element {
         let mut obtuse = None;
 
         for i in 0..3 {
-            let j = i + 1 % 3;
-            let k = i + 2 % 3;
+            let j = (i + 1) % 3;
+            let k = (i + 2) % 3;
             if coordinates[j].angle_is_obtuse(&coordinates[i], &coordinates[k]) {
                 obtuse = Some(i);
             }
@@ -118,21 +118,21 @@ impl Element {
     /// Get the edge with the assigned number
     pub fn get_edge(&self, i: usize) -> Edge {
         if i == 0 {
-            (self.coordinates[0], self.coordinates[1])
+            make_edge(self.coordinates[0], self.coordinates[1])
         } else {
             if self.num_coordinates == 2 {
                 if i == 1 {
-                    (self.coordinates[1], self.coordinates[0])
+                    make_edge(self.coordinates[1], self.coordinates[0])
                 } else {
                     // error case
-                    (self.coordinates[0], self.coordinates[0])
+                    make_edge(self.coordinates[0], self.coordinates[0])
                 }
             } else {
                 match i {
-                    1 => (self.coordinates[1], self.coordinates[2]),
-                    2 => (self.coordinates[2], self.coordinates[0]),
+                    1 => make_edge(self.coordinates[1], self.coordinates[2]),
+                    2 => make_edge(self.coordinates[2], self.coordinates[0]),
                     // error case
-                    _ => (self.coordinates[0], self.coordinates[0]),
+                    _ => make_edge(self.coordinates[0], self.coordinates[0]),
                 }
             }
         }
@@ -174,7 +174,7 @@ impl Element {
         }
 
         if points.len() == 2 {
-            Some((points[0], points[1]))
+            Some(make_edge(points[0], points[1]))
         } else {
             None
         }
@@ -188,6 +188,15 @@ impl Element {
         let center = self.get_center();
         let ds = center.distance_to(&p);
         ds <= self.get_radius(center)
+    }
+}
+
+/// Make an edge from 2 points, ensuring reproducibility
+fn make_edge(p1: Point, p2: Point) -> Edge {
+    if p1 <= p2 {
+        (p1, p2)
+    } else {
+        (p2, p1)
     }
 }
 

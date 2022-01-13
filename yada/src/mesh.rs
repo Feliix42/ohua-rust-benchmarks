@@ -4,14 +4,14 @@ use crate::cavity::Cavity;
 use crate::element::{Edge, Element};
 use crate::point::Point;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::rc::Rc;
 use std::str::FromStr;
 
 pub struct Mesh {
-    elements: Vec<Rc<RefCell<Element>>>,
+    pub elements: Vec<Rc<RefCell<Element>>>,
     //root: Rc<RefCell<Element>>,
     //initial_bad_queue: VecDeque<()>,
     //size: usize,
@@ -63,6 +63,7 @@ impl Mesh {
         let poly_file = File::open(format!("{}.poly", filename_prefix))?;
         let mut poly_reader = BufReader::new(poly_file);
 
+        buf.clear();
         poly_reader.read_line(&mut buf)?;
         let poly_header: Vec<usize> = buf
             .split_whitespace()
@@ -100,6 +101,10 @@ impl Mesh {
                 .map(usize::from_str)
                 .map(Result::unwrap)
                 .collect();
+
+            if coords.is_empty() {
+                continue;
+            }
             // off by one possible here?
             assert!(coords[0] < entry_count);
             assert!(coords[1] < entry_count);
@@ -114,6 +119,7 @@ impl Mesh {
         let ele_file = File::open(format!("{}.ele", filename_prefix))?;
         let mut ele_reader = BufReader::new(ele_file);
 
+        buf.clear();
         ele_reader.read_line(&mut buf)?;
         let ele_header: Vec<usize> = buf
             .split_whitespace()
@@ -137,9 +143,9 @@ impl Mesh {
                 .map(usize::from_str)
                 .map(Result::unwrap)
                 .collect();
-            assert!(coords[0] < entry_count);
-            assert!(coords[1] < entry_count);
-            assert!(coords[2] < entry_count);
+            assert!(coords[0] <= entry_count);
+            assert!(coords[1] <= entry_count);
+            assert!(coords[2] <= entry_count);
 
             // they count items from 1 for some reason
             let c_0 = coordinates[coords[0] - 1];
@@ -180,12 +186,12 @@ impl Mesh {
         Ok(Mesh { elements: elems })
     }
 
-    pub fn find_bad(&self) -> Vec<Rc<RefCell<Element>>> {
-        let mut r = Vec::new();
+    pub fn find_bad(&self) -> VecDeque<Rc<RefCell<Element>>> {
+        let mut r = VecDeque::new();
 
         for elem in &self.elements {
             if elem.borrow().is_bad() {
-                r.push(elem.clone());
+                r.push_back(elem.clone());
             }
         }
 
@@ -204,7 +210,7 @@ impl Mesh {
         &mut self,
         cav: Cavity,
         original_bad: Rc<RefCell<Element>>,
-    ) -> Vec<Rc<RefCell<Element>>> {
+    ) -> VecDeque<Rc<RefCell<Element>>> {
         // here we'd probably have to check if all elements of the `previous_nodes`
         // are still in the mesh before updating when doing this in parallel.
         // remove old elements
@@ -214,12 +220,12 @@ impl Mesh {
         }
 
         // add new data
-        let mut new_bad = Vec::new();
+        let mut new_bad = VecDeque::new();
         for new_node in cav.new_nodes.into_iter() {
             self.elements.push(new_node.clone());
 
             if new_node.borrow().is_bad() {
-                new_bad.push(new_node);
+                new_bad.push_back(new_node);
             }
         }
 
@@ -235,14 +241,18 @@ impl Mesh {
 
         // if the original "bad element" is still in the mesh that's still a todo
         if self.contains(&original_bad) {
-            new_bad.push(original_bad);
+            new_bad.push_back(original_bad);
         }
 
         new_bad
     }
 
-    pub fn refine(&mut self, bad: Vec<Rc<RefCell<Element>>>) {
-        for item in bad.into_iter() {
+    pub fn refine(&mut self, mut bad: VecDeque<Rc<RefCell<Element>>>) {
+        println!("Current number of bad elements: {}", bad.len());
+        let mut i = 0;
+        while !bad.is_empty() {
+            i += 1;
+            let item = bad.pop_front().unwrap();
             if !self.contains(&item) {
                 continue;
             }
@@ -250,7 +260,12 @@ impl Mesh {
             let mut cav = Cavity::new(&self, item.clone());
             cav.build();
             cav.compute();
-            self.update(cav, item);
+            bad.append(&mut self.update(cav, item));
+
+            if i >= 100 {
+                println!("Current number of bad elements: {}", bad.len());
+                i = 0;
+            }
         }
     }
 }

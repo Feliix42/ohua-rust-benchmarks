@@ -150,6 +150,7 @@ impl Cavity {
     }
 }
 
+/// Find the node that is opposite to the obtuse angle of the element.
 fn get_opposite(node: Rc<RefCell<Element>>) -> Rc<RefCell<Element>> {
     let inner = node.borrow();
     let obtuse_pt = inner.get_obtuse();
