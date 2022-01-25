@@ -2,13 +2,14 @@
 
 use crate::point::Point;
 use std::cell::RefCell;
+use std::cmp::{Ord, Ordering};
 use std::rc::Rc;
 
 const MIN_ANGLE: f64 = 30.0;
 
 pub type Edge = (Point, Point);
 
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Debug, Eq, PartialOrd)]
 pub struct Element {
     /// The coordinates of the element.
     pub coordinates: Vec<Point>,
@@ -37,10 +38,26 @@ pub struct Element {
     //is_referenced: bool
 }
 
+impl PartialEq for Element {
+    fn eq(&self, other: &Self) -> bool {
+        // everything is derived from the coordinates
+        self.coordinates == other.coordinates
+    }
+}
+
+impl Ord for Element {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.coordinates.cmp(&other.coordinates)
+    }
+}
+
 impl Element {
     pub fn new_line(p1: Point, p2: Point) -> Self {
+        let mut coordinates = if p1 < p2 { vec![p1, p2] } else { vec![p2, p1] };
+        // coordinates.sort_unstable();
+
         Element {
-            coordinates: vec![p1, p2],
+            coordinates,
             num_coordinates: 2,
             neighbors: Vec::with_capacity(1),
             obtuse_angle: None,
@@ -48,7 +65,14 @@ impl Element {
     }
 
     pub fn new_poly(p1: Point, p2: Point, p3: Point) -> Self {
-        let coordinates = vec![p1, p2, p3];
+        assert_ne!(p1, p2);
+        assert_ne!(p2, p3);
+        assert_ne!(p3, p1);
+
+        let mut coordinates = vec![p1, p2, p3];
+        coordinates.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+
+        // coordinates.sort_unstable();
         let mut obtuse = None;
 
         for i in 0..3 {
@@ -91,14 +115,14 @@ impl Element {
         if self.num_coordinates == 2 {
             (self.coordinates[0] + self.coordinates[1]) * 0.5
         } else {
-            let a = &self.coordinates[0];
-            let b = &self.coordinates[1];
-            let c = &self.coordinates[2];
+            let a = self.coordinates[0];
+            let b = self.coordinates[1];
+            let c = self.coordinates[2];
 
             let x = b - a;
             let y = c - a;
-            let x_len = a.distance_to(b);
-            let y_len = a.distance_to(c);
+            let x_len = a.distance_to(&b);
+            let y_len = a.distance_to(&c);
             let cosine = (x * y) / (x_len * y_len);
             let sine_sq = 1.0 - cosine * cosine;
             let p_len = y_len / x_len;
@@ -109,9 +133,9 @@ impl Element {
             let wp = (p_len - cosine) / (2f64 * t);
             let wb = 0.5 - (wp * s);
 
-            let mut tmp_val = *a * (1f64 - wb - wp);
-            tmp_val = tmp_val + (*b * wb);
-            tmp_val + (*c * wp)
+            let mut tmp_val = a * (1f64 - wb - wp);
+            tmp_val = tmp_val + (b * wb);
+            tmp_val + (c * wp)
         }
     }
 
@@ -176,6 +200,7 @@ impl Element {
         if points.len() == 2 {
             Some(make_edge(points[0], points[1]))
         } else {
+            panic!("Found no related edge, got: {:?}", points);
             None
         }
     }

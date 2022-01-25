@@ -3,6 +3,7 @@
 use crate::cavity::Cavity;
 use crate::element::{Edge, Element};
 use crate::point::Point;
+use decorum::R64;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::fs::File;
@@ -52,8 +53,8 @@ impl Mesh {
                 .collect();
 
             coordinates.push(Point {
-                x: coords[0],
-                y: coords[1],
+                x: R64::from_inner(coords[0]),
+                y: R64::from_inner(coords[1]),
             });
         }
 
@@ -105,9 +106,8 @@ impl Mesh {
             if coords.is_empty() {
                 continue;
             }
-            // off by one possible here?
-            assert!(coords[0] < entry_count);
-            assert!(coords[1] < entry_count);
+            assert!(coords[0] <= entry_count);
+            assert!(coords[1] <= entry_count);
 
             // they count items from 1 for some reason
             let c_0 = coordinates[coords[0] - 1];
@@ -214,9 +214,38 @@ impl Mesh {
         // here we'd probably have to check if all elements of the `previous_nodes`
         // are still in the mesh before updating when doing this in parallel.
         // remove old elements
+        // println!("Previous nodes: {}", cav.previous_nodes.len(),);
+        let mut failed = 0;
         for old in cav.previous_nodes.into_iter() {
-            let pos = self.elements.binary_search(&old).unwrap();
-            self.elements.remove(pos);
+            // print!("Searching {:?}", old.borrow().coordinates);
+            if let Some(pos) = find_pos(&self.elements, &old) {
+                self.elements.remove(pos);
+                // println!(" - found");
+            } else {
+                if self.elements.contains(&old) {
+                    panic!("Element was already removed??");
+                }
+                // println!(" - nope");
+                failed += 1;
+            }
+        }
+        assert!(failed == 0, "Failed in removing {} elements", failed);
+
+        //println!(
+        //    "old connections: {}, new connections: {}",
+        //    cav.connections.len(),
+        //    cav.new_connections.len()
+        //);
+
+        // prune old connections!
+        for (old, _, outer) in cav.connections.into_iter() {
+            let mut o_inner = outer.borrow_mut();
+
+            if let Some(pos) = find_pos(&o_inner.neighbors, &old) {
+                o_inner.neighbors.remove(pos);
+            } else {
+                panic!("delete w/o success");
+            }
         }
 
         // add new data
@@ -248,7 +277,7 @@ impl Mesh {
     }
 
     pub fn refine(&mut self, mut bad: VecDeque<Rc<RefCell<Element>>>) {
-        println!("Current number of bad elements: {}", bad.len());
+        // println!("Current number of bad elements: {}", bad.len());
         let mut i = 0;
         while !bad.is_empty() {
             i += 1;
@@ -258,14 +287,35 @@ impl Mesh {
             }
 
             let mut cav = Cavity::new(&self, item.clone());
-            cav.build();
+            cav.build(&self);
             cav.compute();
-            bad.append(&mut self.update(cav, item));
+            //println!("Created {} new elements", cav.new_nodes.len());
+            let mut result = self.update(cav, item);
+            //println!("Got {} new bad items", result.len());
+            bad.append(&mut result);
 
-            if i >= 100 {
-                println!("Current number of bad elements: {}", bad.len());
-                i = 0;
+            if (i % 10000) == 0 {
+                println!("Iteration: {}, bad elements: {}", i, bad.len());
             }
+            //if i >= 100 {
+            //    println!("Current number of bad elements: {}", bad.len());
+            //    i = 0;
+            //}
+        }
+
+        println!("Did {} iterations", i);
+    }
+}
+
+fn find_pos(list: &Vec<Rc<RefCell<Element>>>, other: &Rc<RefCell<Element>>) -> Option<usize> {
+    let mut idx = 0;
+    for elem in list {
+        if elem == other {
+            return Some(idx);
+        } else {
+            idx += 1;
         }
     }
+
+    None
 }

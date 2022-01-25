@@ -1,24 +1,14 @@
 //! In the original codebase, this was `coordinate.c`
 
+use decorum::R64;
 use std::cmp::{Eq, Ord, Ordering};
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul, Sub};
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Point {
-    pub x: f64,
-    pub y: f64,
-}
-
-impl Eq for Point {}
-
-// WARNING: This is absolute garbage. I'm only implementing this to allow me to search for a specific element in a vector.
-impl Ord for Point {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let this_sum = self.x + self.y;
-        let other_sum = other.x + other.y;
-        this_sum.total_cmp(&other_sum)
-    }
+    pub x: R64,
+    pub y: R64,
 }
 
 impl Point {
@@ -26,13 +16,14 @@ impl Point {
         let delta_x = self.x - other.x;
         let delta_y = self.y - other.y;
 
-        f64::sqrt((delta_x * delta_x) + (delta_y * delta_y))
+        let d: f64 = ((delta_x * delta_x) + (delta_y * delta_y)).into_inner();
+        f64::sqrt(d)
     }
 
     /// Angle formed by b, self, c
     pub fn angle(&self, b: &Self, c: &Self) -> f64 {
-        let delta_b = b - self;
-        let delta_c = c - self;
+        let delta_b = *b - *self;
+        let delta_c = *c - *self;
 
         let numerator = delta_b * delta_c;
 
@@ -48,8 +39,8 @@ impl Point {
 
     /// Angle formed by b, self, c
     pub fn angle_is_obtuse(&self, b: &Self, c: &Self) -> bool {
-        let vb = b - self;
-        let vc = c - self;
+        let vb = *b - *self;
+        let vc = *c - *self;
 
         (vb * vc) < 0f64
     }
@@ -60,7 +51,7 @@ impl Point {
     }
 }
 
-impl Sub for &Point {
+impl Sub for Point {
     type Output = Point;
 
     fn sub(self, other: Self) -> Self::Output {
@@ -99,10 +90,11 @@ impl Mul for Point {
     type Output = f64;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        self.x * rhs.x + self.y * rhs.y
+        (self.x * rhs.x + self.y * rhs.y).into_inner()
     }
 }
 
+/*
 impl Hash for Point {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // This seems like absolute gore and I agree, but we're only feeding the mesh with ints and
@@ -111,6 +103,7 @@ impl Hash for Point {
         (self.y as u64).hash(state);
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {

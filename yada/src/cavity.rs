@@ -33,11 +33,21 @@ impl Cavity {
         let mut center_element = node;
 
         // TODO(feliix42): What if mesh.contains(node) fails?
+        let mut circ = Vec::new();
         while mesh.contains(&center_element) && center_element.borrow().obtuse_angle.is_some() {
-            center_element = get_opposite(center_element);
+            circ.push(center_element.clone());
+            let new_center = get_opposite(&center_element);
+            // the original code did not handle loops at all (i.e. 2 triangles that share an opposite side)
+            if circ.contains(&new_center) {
+                break;
+            } else {
+                center_element = new_center;
+            }
         }
 
         let center = center_element.borrow().get_center();
+        // println!("Center: {:?}", center);
+        // println!("Coordinates: {:?}", center_element.borrow().coordinates);
         let dimension = center_element.borrow().coordinates.len();
         frontier.push_back(center_element.clone());
         previous_nodes.push(center_element.clone());
@@ -54,8 +64,11 @@ impl Cavity {
         }
     }
 
-    // TODO(feliix42): Maybe return `Result<(), Rc<RefCell<Element>>` instead to fix the self-overwriting thingy?
-    fn expand(&mut self, curr: Rc<RefCell<Element>>, next: &Rc<RefCell<Element>>) {
+    fn expand(
+        &mut self,
+        curr: Rc<RefCell<Element>>,
+        next: &Rc<RefCell<Element>>,
+    ) -> Result<(), Rc<RefCell<Element>>> {
         let next_inner = next.borrow();
 
         if !(self.dimension == 2
@@ -66,11 +79,10 @@ impl Cavity {
             // part of the cavity and we're not the second segment encroaching on this cavity
             if next_inner.coordinates.len() == 2 && self.dimension != 2 {
                 // is segment and we're encroaching
-                // self = Self::new();
-                // self.build();
-                todo!()
+                return Err(next.clone());
             } else {
                 if !self.previous_nodes.contains(&next) {
+                    // println!("Adding {:?} as node", next_inner.coordinates);
                     self.previous_nodes.push(next.clone());
                     self.frontier.push_back(next.clone());
                 }
@@ -85,16 +97,20 @@ impl Cavity {
                 self.connections.push(connection);
             }
         }
+
+        Ok(())
     }
 
     /// Expand the cavity to cover all related elements.
-    pub fn build(&mut self) {
+    pub fn build(&mut self, mesh: &Mesh) {
         while !self.frontier.is_empty() {
             let curr = self.frontier.pop_back().unwrap();
             let curr_inner = curr.borrow();
 
             for neighbor in &curr_inner.neighbors {
-                self.expand(curr.clone(), neighbor);
+                if let Err(other) = self.expand(curr.clone(), neighbor) {
+                    *self = Self::new(mesh, other);
+                }
             }
         }
     }
@@ -127,8 +143,19 @@ impl Cavity {
                 conn.2.clone()
             };
 
-            let other_edge = ele.get_related_edge(&other.borrow()).unwrap();
+            let other_edge = match ele.get_related_edge(&other.borrow()) {
+                Some(e) => e,
+                None => panic!(
+                    "There is no related edge between the following coordinates:\n{:#?}\n{:#?}\nMatch check: {}\nEquality? {}\nCenter: {:?}",
+                    ele.coordinates,
+                    other.borrow().coordinates,
+                    ele.is_related_to(&other.borrow()),
+                    ele == *other.borrow(),
+                    self.center
+                ),
+            };
             let ele_wrapped = Rc::new(RefCell::new(ele));
+            // Connection structure: (source, shared edge, destination)
             self.new_connections
                 .push((ele_wrapped.clone(), other_edge, other));
 
@@ -151,7 +178,7 @@ impl Cavity {
 }
 
 /// Find the node that is opposite to the obtuse angle of the element.
-fn get_opposite(node: Rc<RefCell<Element>>) -> Rc<RefCell<Element>> {
+fn get_opposite(node: &Rc<RefCell<Element>>) -> Rc<RefCell<Element>> {
     let inner = node.borrow();
     let obtuse_pt = inner.get_obtuse();
 
