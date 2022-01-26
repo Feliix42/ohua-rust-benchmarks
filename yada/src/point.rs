@@ -1,8 +1,8 @@
 //! In the original codebase, this was `coordinate.c`
 
 use decorum::R64;
-use std::cmp::{Eq, Ord, Ordering};
-use std::hash::{Hash, Hasher};
+use std::cmp::{Eq, Ord};
+use std::hash::Hash;
 use std::ops::{Add, Mul, Sub};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

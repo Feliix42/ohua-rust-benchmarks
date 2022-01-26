@@ -1,76 +1,88 @@
 //! In the original codebase, this was `element.c`
 
 use crate::point::Point;
-use std::cell::RefCell;
-use std::cmp::{Ord, Ordering};
-use std::rc::Rc;
 
 const MIN_ANGLE: f64 = 30.0;
 
-pub type Edge = (Point, Point);
+pub trait Element {
+    /// Determines whether an element needs to be processed.
+    fn is_bad(&self) -> bool;
+    /// Get a list of (references to) all points of the element.
+    fn get_points<'a>(&'a self) -> Vec<&'a Point>;
+    /// Get the center point of the element.
+    fn get_center(&self) -> Point;
+    /// Get the edge with the assigned number.
+    fn get_edge(&self, i: usize) -> Edge;
+    /// Get the point with the obtuse angle.
+    fn get_obtuse(&self) -> Point;
+    /// Returns `true` if both elements share an edge.
+    fn is_related_to(&self, other: &dyn Element) -> bool {
+        let this_pt = self.get_points();
+        let other_pt = other.get_points();
 
-#[derive(Debug, Eq, PartialOrd)]
-pub struct Element {
-    /// The coordinates of the element.
-    pub coordinates: Vec<Point>,
-    /// The number of coordinates stored. Two make it a line, three a triangle.
-    pub num_coordinates: usize,
+        let mut num_matching_points = 0;
 
-    /// Neighboring elements
-    pub neighbors: Vec<Rc<RefCell<Element>>>,
+        for pt in this_pt {
+            for pt2 in &other_pt {
+                if &pt == pt2 {
+                    num_matching_points += 1;
+                }
+            }
+        }
 
-    /// The triangle may have exactly one obtuse angle. If so, this variable defines which is the
-    /// one.
-    pub obtuse_angle: Option<usize>,
-    //circum_center: Point,
-    //circum_radius: f64,
-    //edges: (Edge, Edge, Edge),
-    //num_edges: usize,
-    ///// midpoint of each edge
-    //midpoints: (Point, Point, Point),
-    ///// half of edge length
-    //radii: (f64, f64, f64),
-    ///// opposite obtuse angle
-    //encroached_edge: Edge,
-    //is_skinny: bool,
-    //neighbor_list: Vec<Rc<RefCell<Element>>>,
-    //is_garbage: bool,
-    //is_referenced: bool
-}
-
-impl PartialEq for Element {
-    fn eq(&self, other: &Self) -> bool {
-        // everything is derived from the coordinates
-        self.coordinates == other.coordinates
+        num_matching_points == 2
     }
-}
 
-impl Ord for Element {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.coordinates.cmp(&other.coordinates)
-    }
-}
+    /// If both elements share an edge, it is returned.
+    fn get_related_edge(&self, other: &dyn Element) -> Option<Edge> {
+        let this_pt = self.get_points();
+        let other_pt = other.get_points();
+        let mut points: Vec<Point> = Vec::with_capacity(2);
 
-impl Element {
-    pub fn new_line(p1: Point, p2: Point) -> Self {
-        let mut coordinates = if p1 < p2 { vec![p1, p2] } else { vec![p2, p1] };
-        // coordinates.sort_unstable();
+        for coord in this_pt {
+            for ocoord in &other_pt {
+                if &coord == ocoord {
+                    points.push(*coord);
+                }
+            }
+        }
 
-        Element {
-            coordinates,
-            num_coordinates: 2,
-            neighbors: Vec::with_capacity(1),
-            obtuse_angle: None,
+        if points.len() == 2 {
+            Some(Edge::new(points[0], points[1]))
+        } else {
+            panic!("Found no related edge, got: {:?}", points);
+            //None
         }
     }
 
-    pub fn new_poly(p1: Point, p2: Point, p3: Point) -> Self {
+    fn get_radius(&self, pt: Point) -> f64;
+
+    fn in_circle(&self, p: Point) -> bool {
+        let center = self.get_center();
+        let ds = center.distance_to(&p);
+        ds <= self.get_radius(center)
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct Triangle {
+    /// The coordinates of the triangle, sorted by size.
+    coordinates: [Point; 3],
+
+    /// The index of the point that houses the obtuse angle.
+    obtuse_angle: Option<usize>,
+}
+
+impl Triangle {
+    /// Create a new triangle
+    pub fn new(p1: Point, p2: Point, p3: Point) -> Self {
         assert_ne!(p1, p2);
         assert_ne!(p2, p3);
         assert_ne!(p3, p1);
 
-        let mut coordinates = vec![p1, p2, p3];
-        coordinates.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        let mut coordinates: [Point; 3] = [p1, p2, p3];
+        // coordinates.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        coordinates.sort_unstable();
 
         // coordinates.sort_unstable();
         let mut obtuse = None;
@@ -83,145 +95,136 @@ impl Element {
             }
         }
 
-        Element {
+        Triangle {
             coordinates,
-            num_coordinates: 3,
-            neighbors: Vec::with_capacity(3),
             obtuse_angle: obtuse,
         }
     }
+}
 
-    /// Determines whether the node needs to be processed
-    pub fn is_bad(&self) -> bool {
-        if self.num_coordinates != 3 {
-            false
-        } else {
-            for i in 0..self.coordinates.len() {
-                let ang = self.coordinates[i].angle(
-                    &self.coordinates[(i + 1) % self.num_coordinates],
-                    &self.coordinates[(i + 2) % self.num_coordinates],
-                );
+impl Element for Triangle {
+    fn is_bad(&self) -> bool {
+        for i in 0..3 {
+            let ang = self.coordinates[i].angle(
+                &self.coordinates[(i + 1) % 3],
+                &self.coordinates[(i + 2) % 3],
+            );
 
-                if ang < MIN_ANGLE {
-                    return true;
-                }
-            }
-
-            false
-        }
-    }
-
-    pub fn get_center(&self) -> Point {
-        if self.num_coordinates == 2 {
-            (self.coordinates[0] + self.coordinates[1]) * 0.5
-        } else {
-            let a = self.coordinates[0];
-            let b = self.coordinates[1];
-            let c = self.coordinates[2];
-
-            let x = b - a;
-            let y = c - a;
-            let x_len = a.distance_to(&b);
-            let y_len = a.distance_to(&c);
-            let cosine = (x * y) / (x_len * y_len);
-            let sine_sq = 1.0 - cosine * cosine;
-            let p_len = y_len / x_len;
-
-            let s = p_len * cosine;
-            let t = p_len * sine_sq;
-
-            let wp = (p_len - cosine) / (2f64 * t);
-            let wb = 0.5 - (wp * s);
-
-            let mut tmp_val = a * (1f64 - wb - wp);
-            tmp_val = tmp_val + (b * wb);
-            tmp_val + (c * wp)
-        }
-    }
-
-    /// Get the edge with the assigned number
-    pub fn get_edge(&self, i: usize) -> Edge {
-        if i == 0 {
-            make_edge(self.coordinates[0], self.coordinates[1])
-        } else {
-            if self.num_coordinates == 2 {
-                if i == 1 {
-                    make_edge(self.coordinates[1], self.coordinates[0])
-                } else {
-                    // error case
-                    make_edge(self.coordinates[0], self.coordinates[0])
-                }
-            } else {
-                match i {
-                    1 => make_edge(self.coordinates[1], self.coordinates[2]),
-                    2 => make_edge(self.coordinates[2], self.coordinates[0]),
-                    // error case
-                    _ => make_edge(self.coordinates[0], self.coordinates[0]),
-                }
+            if ang < MIN_ANGLE {
+                return true;
             }
         }
+
+        false
     }
 
-    pub fn get_obtuse(&self) -> Point {
+    fn get_center(&self) -> Point {
+        let a = self.coordinates[0];
+        let b = self.coordinates[1];
+        let c = self.coordinates[2];
+
+        let x = b - a;
+        let y = c - a;
+        let x_len = a.distance_to(&b);
+        let y_len = a.distance_to(&c);
+        let cosine = (x * y) / (x_len * y_len);
+        let sine_sq = 1.0 - cosine * cosine;
+        let p_len = y_len / x_len;
+
+        let s = p_len * cosine;
+        let t = p_len * sine_sq;
+
+        let wp = (p_len - cosine) / (2f64 * t);
+        let wb = 0.5 - (wp * s);
+
+        let mut tmp_val = a * (1f64 - wb - wp);
+        tmp_val = tmp_val + (b * wb);
+        tmp_val + (c * wp)
+    }
+
+    fn get_points<'a>(&'a self) -> Vec<&'a Point> {
+        vec![
+            &self.coordinates[0],
+            &self.coordinates[1],
+            &self.coordinates[2],
+        ]
+    }
+
+    fn get_edge(&self, i: usize) -> Edge {
+        match i {
+            0 => Edge::new(self.coordinates[0], self.coordinates[1]),
+            1 => Edge::new(self.coordinates[1], self.coordinates[2]),
+            2 => Edge::new(self.coordinates[2], self.coordinates[0]),
+            // error case
+            _ => Edge::new(self.coordinates[0], self.coordinates[0]),
+        }
+    }
+
+    fn get_obtuse(&self) -> Point {
         if let Some(i) = self.obtuse_angle {
             self.coordinates[i]
         } else {
-            panic!("Cannot retrieve obtuse point from line because it has none.");
-        }
-    }
-
-    /// Returns `true` if both elements share an edge
-    pub fn is_related_to(&self, other: &Element) -> bool {
-        let mut num_matching_points = 0;
-
-        for pt in &self.coordinates {
-            for pt2 in &other.coordinates {
-                if pt == pt2 {
-                    num_matching_points += 1;
-                }
-            }
-        }
-
-        num_matching_points == 2
-    }
-
-    /// If both elements share an edge, it is returned.
-    pub fn get_related_edge(&self, other: &Element) -> Option<Edge> {
-        let mut points: Vec<Point> = Vec::with_capacity(2);
-
-        for coord in &self.coordinates {
-            for ocoord in &other.coordinates {
-                if coord == ocoord {
-                    points.push(*coord);
-                }
-            }
-        }
-
-        if points.len() == 2 {
-            Some(make_edge(points[0], points[1]))
-        } else {
-            panic!("Found no related edge, got: {:?}", points);
-            None
+            panic!("No obtuse angle exists for this triangle!");
         }
     }
 
     fn get_radius(&self, pt: Point) -> f64 {
         pt.distance_to(&self.coordinates[0])
     }
+}
 
-    pub fn in_circle(&self, p: Point) -> bool {
-        let center = self.get_center();
-        let ds = center.distance_to(&p);
-        ds <= self.get_radius(center)
+#[derive(Copy, Clone, Debug)]
+pub struct Edge(Point, Point);
+
+impl Edge {
+    pub fn new(p1: Point, p2: Point) -> Self {
+        if p1 < p2 {
+            Edge(p1, p2)
+        } else {
+            Edge(p2, p1)
+        }
     }
 }
 
-/// Make an edge from 2 points, ensuring reproducibility
-fn make_edge(p1: Point, p2: Point) -> Edge {
-    if p1 <= p2 {
-        (p1, p2)
-    } else {
-        (p2, p1)
+impl Element for Edge {
+    fn is_bad(&self) -> bool {
+        // this can't actually ever be true
+        false
+    }
+
+    fn get_center(&self) -> Point {
+        (self.0 + self.1) * 0.5
+    }
+
+    fn get_points<'a>(&'a self) -> Vec<&'a Point> {
+        vec![&self.0, &self.1]
+    }
+    fn get_edge(&self, i: usize) -> Edge {
+        match i {
+            1 => Self(self.1, self.0),
+            _ => *self,
+        }
+    }
+
+    fn get_obtuse(&self) -> Point {
+        panic!("A line has no obtuse angles.")
+    }
+
+    fn get_radius(&self, pt: Point) -> f64 {
+        pt.distance_to(&self.0)
+    }
+}
+/*
+impl PartialEq for Element {
+    fn eq(&self, other: &Self) -> bool {
+        // everything is derived from the coordinates
+        self.coordinates == other.coordinates
+    }
+}
+
+impl Ord for Element {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.coordinates.cmp(&other.coordinates)
     }
 }
 
@@ -274,3 +277,5 @@ mod tests {
         assert!(e.is_bad() == true);
     }
 }
+
+*/
