@@ -4,18 +4,17 @@
 use crate::element::{Edge, Element, Triangle};
 use crate::point::Point;
 use decorum::R64;
-use std::any::Any;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 
 pub struct Mesh {
-    pub elements: HashMap<Triangle, [Box<dyn Element>; 3]>,
+    pub elements: HashMap<Triangle, [Element; 3]>,
     //root: Rc<RefCell<Element>>,
     //initial_bad_queue: VecDeque<()>,
     //size: usize,
-    pub boundary_set: HashMap<Edge, Box<dyn Element>>,
+    pub boundary_set: HashMap<Edge, Element>,
 }
 
 impl Mesh {
@@ -153,8 +152,8 @@ impl Mesh {
             elem_vec.push(Triangle::new(c_0, c_1, c_2));
         }
 
-        let mut edges: HashMap<Edge, Box<dyn Element>> = HashMap::with_capacity(num_segments);
-        let mut elems: HashMap<Triangle, [Option<Box<dyn Element>>; 3]> =
+        let mut edges: HashMap<Edge, Element> = HashMap::with_capacity(num_segments);
+        let mut elems: HashMap<Triangle, [Option<Element>; 3]> =
             HashMap::with_capacity(num_elements);
 
         // establish neighboring relations
@@ -169,19 +168,19 @@ impl Mesh {
                     // edge is shared with an outer edge -> establish link
                     // insert the item in the linked list
                     let item = elems.entry(elem).or_default();
-                    item[0] = Some(Box::new(e));
+                    item[0] = Some(e.into());
                     item.rotate_left(1);
 
                     // insert backlink from the edge
                     // NOTE(feliix42): could be `assert!()`ed as `is_none()`
-                    edges.insert(e, Box::new(elem));
+                    edges.insert(e, elem.into());
                 } else if let Some(other) = triangle_map.remove(&e) {
                     let item = elems.entry(elem).or_default();
-                    item[0] = Some(Box::new(other));
+                    item[0] = Some(other.into());
                     item.rotate_left(1);
 
                     let o_mut = elems.entry(other).or_default();
-                    o_mut[0] = Some(Box::new(elem));
+                    o_mut[0] = Some(elem.into());
                     o_mut.rotate_left(1);
                 } else {
                     triangle_map.insert(e, elem.clone());
@@ -201,7 +200,7 @@ impl Mesh {
                 .map(|(k, v)| {
                     let [a, b, c] = v;
                     (k, [a.unwrap(), b.unwrap(), c.unwrap()])
-                }) //v.into_iter().map(Option::unwrap).collect()))
+                })
                 .collect(),
             boundary_set: edges,
         })
@@ -220,15 +219,36 @@ impl Mesh {
     }
 
     /// Tests whether `node` is contained in the graph.
-    pub fn contains(&self, node: &dyn Any) -> bool {
-        if let Some(t) = node.downcast_ref::<Triangle>() {
-            self.elements.contains_key(t)
-        } else if let Some(e) = node.downcast_ref::<Edge>() {
-            self.boundary_set.contains_key(e)
-        } else {
-            panic!("Called Mesh::contains with unknown type")
+    pub fn contains(&self, node: &Element) -> bool {
+        match node {
+            Element::E(ref e) => self.boundary_set.contains_key(e),
+            Element::T(ref t) => self.elements.contains_key(t),
         }
-        // self.elements.contains_key(node) || self.boundary_set.contains_key(node)
+    }
+
+    /// Tests whether `node` is contained in the graphs triangle set.
+    pub fn contains_triangle(&self, node: &Triangle) -> bool {
+        self.elements.contains_key(node)
+    }
+
+    // TODO: Continue with this function: Should it take a `Triangle`? I'm confused since the original code does not distinguish between edge & triangle but a edge can't have an obtuse angle...
+    /// Find the node that is opposite to the obtuse angle of the element.
+    fn get_opposite(&self, node: &Element) -> Element {
+        let obtuse_pt = node.get_obtuse();
+
+        for neighbor in self.elements.get(node).unwrap() {
+            // get related edge
+            if let Some(related_edge) = node.get_related_edge(&neighbor.borrow()) {
+                // if points of the edge don't match obtuse point, return neighbor
+                if obtuse_pt != related_edge.0 && obtuse_pt != related_edge.1 {
+                    return neighbor.clone();
+                }
+            }
+        }
+
+        unreachable!()
+        //std::mem::drop(inner);
+        //node
     }
 
     // /// Update the mesh with the data of a corrected cavity. (Original code implements this in `Cavity.h`)

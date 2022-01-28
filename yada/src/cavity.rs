@@ -1,4 +1,4 @@
-use crate::element::{Edge, Element};
+use crate::element::{Edge, Element, Triangle};
 use crate::mesh::Mesh;
 use crate::point::Point;
 use std::cell::RefCell;
@@ -6,15 +6,15 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 /// Connection between two elements. Format: (src, edge, dest)
-type Connection = (dyn Element, Edge, dyn Element);
+type Connection = (Element, Edge, Element);
 
 pub struct Cavity {
-    pub center_element: Rc<RefCell<Element>>,
+    pub center_element: Triangle,
     pub center: Point,
 
-    pub frontier: VecDeque<Rc<RefCell<Element>>>,
-    pub previous_nodes: Vec<Rc<RefCell<Element>>>,
-    pub new_nodes: Vec<Rc<RefCell<Element>>>,
+    pub frontier: VecDeque<Element>,
+    pub previous_nodes: Vec<Element>,
+    pub new_nodes: Vec<Element>,
     pub new_connections: Vec<Connection>,
 
     /// Connections to elements neighboring the cavity.
@@ -25,7 +25,7 @@ pub struct Cavity {
 
 impl Cavity {
     /// Initializes a new cavity.
-    pub fn new(mesh: &Mesh, node: Rc<RefCell<Element>>) -> Self {
+    pub fn new(mesh: &Mesh, node: Triangle) -> Self {
         let mut frontier = VecDeque::new();
         let mut previous_nodes = Vec::new();
         let new_nodes = Vec::new();
@@ -34,7 +34,7 @@ impl Cavity {
 
         // TODO(feliix42): What if mesh.contains(node) fails?
         let mut circ = Vec::new();
-        while mesh.contains(&center_element) && center_element.borrow().obtuse_angle.is_some() {
+        while mesh.contains_triangle(&center_element) && center_element.obtuse_angle.is_some() {
             circ.push(center_element.clone());
             let new_center = get_opposite(&center_element);
             // the original code did not handle loops at all (i.e. 2 triangles that share an opposite side)
