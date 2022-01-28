@@ -181,23 +181,3 @@ impl Cavity {
     //     }
     // }
 }
-
-/// Find the node that is opposite to the obtuse angle of the element.
-fn get_opposite(node: &Rc<RefCell<Element>>) -> Rc<RefCell<Element>> {
-    let inner = node.borrow();
-    let obtuse_pt = inner.get_obtuse();
-
-    for neighbor in &inner.neighbors {
-        // get related edge
-        if let Some(related_edge) = inner.get_related_edge(&neighbor.borrow()) {
-            // if points of the edge don't match obtuse point, return neighbor
-            if obtuse_pt != related_edge.0 && obtuse_pt != related_edge.1 {
-                return neighbor.clone();
-            }
-        }
-    }
-
-    unreachable!()
-    //std::mem::drop(inner);
-    //node
-}
