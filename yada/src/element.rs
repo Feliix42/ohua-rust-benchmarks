@@ -4,6 +4,53 @@ use crate::point::Point;
 
 const MIN_ANGLE: f64 = 30.0;
 
+// pub enum Element {
+//     T(Triangle),
+//     E(Edge),
+// }
+
+// impl Element {
+//     pub fn is_bad(&self) -> bool {
+//         match self {
+//             Self::T(t) => t.is_bad(),
+//             Self::E(e) => e.is_bad(),
+//         }
+//     }
+
+//     pub fn get_center(&self) -> Point {
+//         match self {
+//             Self::T(t) => t.get_center(),
+//             Self::E(e) => e.get_center(),
+//         }
+//     }
+
+//     pub fn get_edge(&self, i: usize) -> Edge {
+//         match self {
+//             Self::T(t) => t.get_edge(i),
+//             Self::E(e) => e.get_edge(i),
+//         }
+//     }
+
+//     pub fn get_obtuse(&self) -> Point {
+//         match self {
+//             Self::T(t) => t.get_obtuse(),
+//             Self::E(_) => panic!("A line has no obtuse angles."),
+//         }
+//     }
+// }
+
+// impl From<Triangle> for Element {
+//     fn from(t: Triangle) -> Self {
+//         Self::T(t)
+//     }
+// }
+
+// impl From<Edge> for Element {
+//     fn from(e: Edge) -> Self {
+//         Self::E(e)
+//     }
+// }
+
 pub trait Element {
     /// Determines whether an element needs to be processed.
     fn is_bad(&self) -> bool;
@@ -64,7 +111,7 @@ pub trait Element {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Triangle {
     /// The coordinates of the triangle, sorted by size.
     coordinates: [Point; 3],
@@ -173,7 +220,7 @@ impl Element for Triangle {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Edge(Point, Point);
 
 impl Edge {
