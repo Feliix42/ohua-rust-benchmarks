@@ -110,11 +110,26 @@ mod tests {
     use super::*;
     #[test]
     fn ordering_works() {
-        let p0 = Point { x: 0_f64, y: 0_f64 };
-        let p1 = Point { x: 1_f64, y: 0_f64 };
-        let p2 = Point { x: 1_f64, y: 1_f64 };
-        let p3 = Point { x: 2_f64, y: 2_f64 };
-        let p4 = Point { x: 1_f64, y: 2_f64 };
+        let p0 = Point {
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(0_f64),
+        };
+        let p1 = Point {
+            x: R64::from_inner(1_f64),
+            y: R64::from_inner(0_f64),
+        };
+        let p2 = Point {
+            x: R64::from_inner(1_f64),
+            y: R64::from_inner(1_f64),
+        };
+        let p3 = Point {
+            x: R64::from_inner(2_f64),
+            y: R64::from_inner(2_f64),
+        };
+        let p4 = Point {
+            x: R64::from_inner(1_f64),
+            y: R64::from_inner(2_f64),
+        };
 
         assert!(p1 > p0);
         assert!(p2 > p1);
@@ -123,9 +138,18 @@ mod tests {
 
     #[test]
     fn angle_computation_works() {
-        let a = Point { x: 0_f64, y: 0_f64 };
-        let b = Point { x: 0_f64, y: 1_f64 };
-        let c = Point { x: 1_f64, y: 0_f64 };
+        let a = Point {
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(0_f64),
+        };
+        let b = Point {
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(1_f64),
+        };
+        let c = Point {
+            x: R64::from_inner(1_f64),
+            y: R64::from_inner(0_f64),
+        };
 
         // don't assert for = 0 because of FPU imprecision
         dbg!(a.angle(&b, &c));
@@ -137,13 +161,22 @@ mod tests {
 
     #[test]
     fn obtuse_angles_work() {
-        let a = Point { x: 0_f64, y: 0_f64 };
-        let b = Point { x: 0_f64, y: 1_f64 };
-        let c = Point {
-            x: 1_f64,
-            y: -1_f64,
+        let a = Point {
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(0_f64),
         };
-        let d = Point { x: 1_f64, y: 0_f64 };
+        let b = Point {
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(1_f64),
+        };
+        let c = Point {
+            x: R64::from_inner(1_f64),
+            y: R64::from_inner(-1_f64),
+        };
+        let d = Point {
+            x: R64::from_inner(1_f64),
+            y: R64::from_inner(0_f64),
+        };
 
         assert!(a.angle_is_obtuse(&c, &b));
         assert!(!a.angle_is_obtuse(&d, &b));

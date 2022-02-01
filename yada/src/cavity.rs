@@ -40,7 +40,7 @@ impl Cavity {
                 if circ.contains(&new_center) {
                     break;
                 } else {
-                    center_element = new_center.into();
+                    center_element = new_center;
                 }
             } else {
                 unreachable!()
@@ -54,11 +54,11 @@ impl Cavity {
             Element::T(_) => 3,
             Element::E(_) => 2,
         };
-        frontier.push_back(center_element.clone().into());
-        previous_nodes.push(center_element.clone().into());
+        frontier.push_back(center_element);
+        previous_nodes.push(center_element);
 
         Cavity {
-            center_element: center_element.into(),
+            center_element,
             center,
             frontier,
             previous_nodes,
@@ -78,13 +78,11 @@ impl Cavity {
             // part of the cavity and we're not the second segment encroaching on this cavity
             if next.is_edge() && self.dimension != 2 {
                 // is segment and we're encroaching
-                return Err(next.clone());
-            } else {
-                if !self.previous_nodes.contains(&next) {
-                    // println!("Adding {:?} as node", next_inner.coordinates);
-                    self.previous_nodes.push(next.clone());
-                    self.frontier.push_back(next.clone());
-                }
+                return Err(next);
+            } else if !self.previous_nodes.contains(&next) {
+                // println!("Adding {:?} as node", next_inner.coordinates);
+                self.previous_nodes.push(next);
+                self.frontier.push_back(next);
             }
         } else {
             // not a member
@@ -151,15 +149,15 @@ impl Cavity {
             if circtest.contains(conn) {
                 panic!("ALARM");
             }
-            circtest.push(conn.clone());
+            circtest.push(*conn);
             assert_ne!(conn.1 .0, conn.1 .1);
 
             let ele = Element::T(Triangle::new(self.center, (conn.1).0, (conn.1).1));
             let other = if self.previous_nodes.contains(&conn.2) {
                 // if the destination is contained in previous nodes, go for the source
-                conn.0.clone()
+                conn.0
             } else {
-                conn.2.clone()
+                conn.2
             };
 
             let other_edge = match ele.get_related_edge(&other) {

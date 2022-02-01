@@ -72,17 +72,11 @@ impl Element {
     }
 
     pub fn is_triangle(&self) -> bool {
-        match self {
-            Self::T(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::T(_))
     }
 
     pub fn is_edge(&self) -> bool {
-        match self {
-            Self::E(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::E(_))
     }
 
     /// Returns `true` if both elements share an edge.

@@ -45,7 +45,7 @@ impl Mesh {
         for line in node_reader.lines() {
             let line = line?;
             // skip comments
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue;
             }
 
@@ -96,7 +96,7 @@ impl Mesh {
             let line = line?;
 
             // skip comments
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue;
             }
 
@@ -137,7 +137,7 @@ impl Mesh {
         for line in ele_reader.lines() {
             let line = line?;
 
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue;
             }
 
@@ -186,7 +186,7 @@ impl Mesh {
                     let o_mut = elems.entry(other).or_default();
                     o_mut.push(elem.into());
                 } else {
-                    triangle_map.insert(e, elem.clone());
+                    triangle_map.insert(e, elem);
                 }
             }
         }
@@ -410,8 +410,8 @@ impl Mesh {
                 continue;
             }
 
-            let mut cav = Cavity::new(&self, item.into());
-            cav.build(&self);
+            let mut cav = Cavity::new(self, item.into());
+            cav.build(self);
             cav.compute();
             //println!("Created {} new elements", cav.new_nodes.len());
             let mut result = self.update(cav, item);
