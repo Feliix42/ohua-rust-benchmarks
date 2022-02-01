@@ -1,15 +1,13 @@
 use crate::element::{Edge, Element, Triangle};
 use crate::mesh::Mesh;
 use crate::point::Point;
-use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::rc::Rc;
 
 /// Connection between two elements. Format: (src, edge, dest)
 type Connection = (Element, Edge, Element);
 
 pub struct Cavity {
-    pub center_element: Triangle,
+    pub center_element: Element,
     pub center: Point,
 
     pub frontier: VecDeque<Element>,
@@ -25,7 +23,7 @@ pub struct Cavity {
 
 impl Cavity {
     /// Initializes a new cavity.
-    pub fn new(mesh: &Mesh, node: Triangle) -> Self {
+    pub fn new(mesh: &Mesh, node: Element) -> Self {
         let mut frontier = VecDeque::new();
         let mut previous_nodes = Vec::new();
         let new_nodes = Vec::new();
@@ -34,26 +32,33 @@ impl Cavity {
 
         // TODO(feliix42): What if mesh.contains(node) fails?
         let mut circ = Vec::new();
-        while mesh.contains_triangle(&center_element) && center_element.obtuse_angle.is_some() {
-            circ.push(center_element.clone());
-            let new_center = get_opposite(&center_element);
-            // the original code did not handle loops at all (i.e. 2 triangles that share an opposite side)
-            if circ.contains(&new_center) {
-                break;
+        while mesh.contains(&center_element) && center_element.has_obtuse() {
+            if let Element::T(t) = center_element {
+                circ.push(t.into());
+                let new_center = mesh.get_opposite(&t);
+                // the original code did not handle loops at all (i.e. 2 triangles that share an opposite side)
+                if circ.contains(&new_center) {
+                    break;
+                } else {
+                    center_element = new_center.into();
+                }
             } else {
-                center_element = new_center;
+                unreachable!()
             }
         }
 
-        let center = center_element.borrow().get_center();
+        let center = center_element.get_center();
         // println!("Center: {:?}", center);
         // println!("Coordinates: {:?}", center_element.borrow().coordinates);
-        let dimension = center_element.borrow().coordinates.len();
-        frontier.push_back(center_element.clone());
-        previous_nodes.push(center_element.clone());
+        let dimension = match center_element {
+            Element::T(_) => 3,
+            Element::E(_) => 2,
+        };
+        frontier.push_back(center_element.clone().into());
+        previous_nodes.push(center_element.clone().into());
 
         Cavity {
-            center_element,
+            center_element: center_element.into(),
             center,
             frontier,
             previous_nodes,
@@ -64,120 +69,123 @@ impl Cavity {
         }
     }
 
-    // fn expand(
-    //     &mut self,
-    //     curr: Rc<RefCell<Element>>,
-    //     next: &Rc<RefCell<Element>>,
-    // ) -> Result<(), Rc<RefCell<Element>>> {
-    //     let next_inner = next.borrow();
+    fn expand(&mut self, curr: Element, next: Element) -> Result<(), Element> {
+        // let next_inner = next.borrow();
 
-    //     if !(self.dimension == 2
-    //         && next_inner.coordinates.len() == 2
-    //         && next != &self.center_element)
-    //         && next_inner.in_circle(self.center)
-    //     {
-    //         // part of the cavity and we're not the second segment encroaching on this cavity
-    //         if next_inner.coordinates.len() == 2 && self.dimension != 2 {
-    //             // is segment and we're encroaching
-    //             return Err(next.clone());
-    //         } else {
-    //             if !self.previous_nodes.contains(&next) {
-    //                 // println!("Adding {:?} as node", next_inner.coordinates);
-    //                 self.previous_nodes.push(next.clone());
-    //                 self.frontier.push_back(next.clone());
-    //             }
-    //         }
-    //     } else {
-    //         // not a member
-    //         let curr_inner = curr.borrow();
-    //         let edge = next_inner.get_related_edge(&curr_inner).unwrap();
+        if !(self.dimension == 2 && next.is_edge() && next != self.center_element)
+            && next.in_circle(self.center)
+        {
+            // part of the cavity and we're not the second segment encroaching on this cavity
+            if next.is_edge() && self.dimension != 2 {
+                // is segment and we're encroaching
+                return Err(next.clone());
+            } else {
+                if !self.previous_nodes.contains(&next) {
+                    // println!("Adding {:?} as node", next_inner.coordinates);
+                    self.previous_nodes.push(next.clone());
+                    self.frontier.push_back(next.clone());
+                }
+            }
+        } else {
+            // not a member
+            let edge = next.get_related_edge(&curr).unwrap();
 
-    //         let connection = (curr.clone(), edge, next.clone());
-    //         if !self.connections.contains(&connection) {
-    //             self.connections.push(connection);
-    //         }
-    //     }
+            let connection = (curr, edge, next);
+            if !self.connections.contains(&connection) {
+                self.connections.push(connection);
+            }
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
-    // /// Expand the cavity to cover all related elements.
-    // pub fn build(&mut self, mesh: &Mesh) {
-    //     while !self.frontier.is_empty() {
-    //         let curr = self.frontier.pop_back().unwrap();
-    //         let curr_inner = curr.borrow();
+    /// Expand the cavity to cover all related elements.
+    pub fn build(&mut self, mesh: &Mesh) {
+        while !self.frontier.is_empty() {
+            let curr = self.frontier.pop_back().unwrap();
 
-    //         for neighbor in &curr_inner.neighbors {
-    //             if let Err(other) = self.expand(curr.clone(), neighbor) {
-    //                 *self = Self::new(mesh, other);
-    //             }
-    //         }
-    //     }
-    // }
+            match curr {
+                Element::T(ref t) => {
+                    let neighbors = mesh
+                        .elements
+                        .get(t)
+                        .expect("Triangle is no longer in elements set");
 
-    // /// Compute a corrected cavity
-    // pub fn compute(&mut self) {
-    //     if self.dimension == 2 {
-    //         // we've actually built around a segment (or an edge)
-    //         let c = self.center_element.borrow();
-    //         let n1 = Rc::new(RefCell::new(Element::new_line(
-    //             self.center,
-    //             c.coordinates[0],
-    //         )));
-    //         let n2 = Rc::new(RefCell::new(Element::new_line(
-    //             self.center,
-    //             c.coordinates[1],
-    //         )));
+                    for neighbor in neighbors {
+                        if let Err(other) = self.expand(curr, *neighbor) {
+                            *self = Self::new(mesh, other);
+                        }
+                    }
+                }
+                Element::E(ref e) => {
+                    let neighbor = mesh
+                        .boundary_set
+                        .get(e)
+                        .expect("Edge is no longer in boundary set");
 
-    //         self.new_nodes.push(n1);
-    //         self.new_nodes.push(n2);
-    //     }
+                    if let Err(other) = self.expand(curr, *neighbor) {
+                        *self = Self::new(mesh, other);
+                    }
+                }
+            }
+        }
+    }
 
-    //     let mut circtest = Vec::new();
-    //     for conn in &self.connections {
-    //         if circtest.contains(conn) {
-    //             panic!("ALARM");
-    //         }
-    //         circtest.push(conn.clone());
-    //         assert_ne!(conn.1 .0, conn.1 .1);
-    //         let ele = Element::new_poly(self.center, (conn.1).0, (conn.1).1);
-    //         let other = if self.previous_nodes.contains(&conn.2) {
-    //             // if the destination is contained in previous nodes, go for the source
-    //             conn.0.clone()
-    //         } else {
-    //             conn.2.clone()
-    //         };
+    /// Compute a corrected cavity
+    pub fn compute(&mut self) {
+        // TODO: IS THIS FUNCTION CORRECT??
+        // Also: Check clippy warnings!
+        if self.dimension == 2 {
+            // we've actually built around a segment (or an edge)
+            let c = self.center_element.get_points();
+            let n1 = Edge::new(self.center, *c[0]);
+            let n2 = Edge::new(self.center, *c[1]);
 
-    //         let other_edge = match ele.get_related_edge(&other.borrow()) {
-    //             Some(e) => e,
-    //             None => panic!(
-    //                 "There is no related edge between the following coordinates:\n{:#?}\n{:#?}\nMatch check: {}\nEquality? {}\nCenter: {:?}",
-    //                 ele.coordinates,
-    //                 other.borrow().coordinates,
-    //                 ele.is_related_to(&other.borrow()),
-    //                 ele == *other.borrow(),
-    //                 self.center
-    //             ),
-    //         };
-    //         let ele_wrapped = Rc::new(RefCell::new(ele));
-    //         // Connection structure: (source, shared edge, destination)
-    //         self.new_connections
-    //             .push((ele_wrapped.clone(), other_edge, other));
+            self.new_nodes.push(n1.into());
+            self.new_nodes.push(n2.into());
+        }
 
-    //         for element in &self.new_nodes {
-    //             let el = element.borrow();
-    //             let ele = ele_wrapped.borrow();
-    //             if el.is_related_to(&ele) {
-    //                 let additional_edge = ele.get_related_edge(&el).unwrap();
-    //                 self.new_connections.push((
-    //                     ele_wrapped.clone(),
-    //                     additional_edge,
-    //                     element.clone(),
-    //                 ));
-    //             }
-    //         }
+        let mut circtest = Vec::new();
+        for conn in &self.connections {
+            // cycle detection (temporary)
+            if circtest.contains(conn) {
+                panic!("ALARM");
+            }
+            circtest.push(conn.clone());
+            assert_ne!(conn.1 .0, conn.1 .1);
 
-    //         self.new_nodes.push(ele_wrapped);
-    //     }
-    // }
+            let ele = Element::T(Triangle::new(self.center, (conn.1).0, (conn.1).1));
+            let other = if self.previous_nodes.contains(&conn.2) {
+                // if the destination is contained in previous nodes, go for the source
+                conn.0.clone()
+            } else {
+                conn.2.clone()
+            };
+
+            let other_edge = match ele.get_related_edge(&other) {
+                Some(e) => e,
+                None => panic!(
+                    "There is no related edge between the following coordinates:\n{:#?}\n{:#?}\nMatch check: {}\nEquality? {}\nCenter: {:?}",
+                    ele.get_points(),
+                    other.get_points(),
+                    ele.is_related_to(&other),
+                    ele == other,
+                    self.center
+                ),
+            };
+            // Connection structure: (source, shared edge, destination)
+            self.new_connections.push((ele, other_edge, other));
+
+            for element in &self.new_nodes {
+                // let el = element;
+                // let ele = ele_wrapped.borrow();
+                if element.is_related_to(&ele) {
+                    let additional_edge = ele.get_related_edge(element).unwrap();
+                    self.new_connections.push((ele, additional_edge, *element));
+                }
+            }
+
+            self.new_nodes.push(ele);
+        }
+    }
 }

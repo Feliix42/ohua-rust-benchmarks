@@ -4,6 +4,7 @@ use crate::point::Point;
 
 const MIN_ANGLE: f64 = 30.0;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Element {
     T(Triangle),
     E(Edge),
@@ -42,10 +43,85 @@ impl Element {
         }
     }
 
+    pub fn has_obtuse(&self) -> bool {
+        match self {
+            Element::T(ref t) => t.obtuse_angle.is_some(),
+            Element::E(_) => false,
+        }
+    }
+
     fn get_radius(&self, pt: Point) -> f64 {
         match self {
             Self::T(t) => t.get_radius(pt),
             Self::E(e) => e.get_radius(pt),
+        }
+    }
+
+    /// Returns a list of points the element is composed of.
+    pub fn get_points<'a>(&'a self) -> Vec<&'a Point> {
+        match self {
+            Self::T(t) => t.get_points(),
+            Self::E(e) => e.get_points(),
+        }
+    }
+
+    pub fn in_circle(&self, p: Point) -> bool {
+        let center = self.get_center();
+        let ds = center.distance_to(&p);
+        ds <= self.get_radius(center)
+    }
+
+    pub fn is_triangle(&self) -> bool {
+        match self {
+            Self::T(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_edge(&self) -> bool {
+        match self {
+            Self::E(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Returns `true` if both elements share an edge.
+    pub fn is_related_to(&self, other: &Element) -> bool {
+        let this_pt = self.get_points();
+        let other_pt = other.get_points();
+
+        let mut num_matching_points = 0;
+
+        for pt in this_pt {
+            for pt2 in &other_pt {
+                if &pt == pt2 {
+                    num_matching_points += 1;
+                }
+            }
+        }
+
+        num_matching_points == 2
+    }
+
+    /// If both elements share an edge, it is returned.
+    pub fn get_related_edge(&self, other: &Element) -> Option<Edge> {
+        let this_pt = self.get_points();
+        let other_pt = other.get_points();
+        let mut points: Vec<Point> = Vec::with_capacity(2);
+
+        for coord in this_pt {
+            for ocoord in &other_pt {
+                if &coord == ocoord {
+                    points.push(*coord);
+                }
+            }
+        }
+
+        if points.len() == 2 {
+            Some(Edge::new(points[0], points[1]))
+        } else {
+            panic!("Found no related edge, got: {:?}", points);
+            //None
         }
     }
 }
@@ -224,13 +300,49 @@ impl Triangle {
         }
     }
 
+    /// Get the Edge opposite to the obtuse angle.
+    pub fn get_opposite_edge(&self) -> Edge {
+        if let Some(i) = self.obtuse_angle {
+            self.get_edge((i + 1) % 3)
+        } else {
+            panic!("No obtuse angle exists for this triangle!")
+        }
+    }
+
     pub fn get_radius(&self, pt: Point) -> f64 {
         pt.distance_to(&self.coordinates[0])
     }
+
+    /// If both elements share an edge, it is returned.
+    pub fn get_related_edge(&self, other: &Triangle) -> Option<Edge> {
+        let mut points: Vec<Point> = Vec::with_capacity(2);
+
+        for coord in &self.coordinates {
+            for ocoord in &other.coordinates {
+                if coord == ocoord {
+                    points.push(*coord);
+                }
+            }
+        }
+
+        if points.len() == 2 {
+            Some(Edge::new(points[0], points[1]))
+        } else {
+            panic!("Found no related edge, got: {:?}", points);
+            //None
+        }
+    }
 }
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Edge(Point, Point);
+#[derive(Copy, Clone, Debug, Eq, Hash)]
+pub struct Edge(pub Point, pub Point);
+
+impl PartialEq for Edge {
+    fn eq(&self, other: &Edge) -> bool {
+        // I sure hope this won't come back to bite me
+        self.0 == other.0 && self.1 == other.1 || self.0 == other.1 && self.1 == other.0
+    }
+}
 
 impl Edge {
     pub fn new(p1: Point, p2: Point) -> Self {
@@ -267,6 +379,10 @@ impl Edge {
 
     pub fn get_radius(&self, pt: Point) -> f64 {
         pt.distance_to(&self.0)
+    }
+
+    pub fn contains(&self, pt: Point) -> bool {
+        self.0 == pt || self.1 == pt
     }
 }
 /*
