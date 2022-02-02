@@ -1,0 +1,15 @@
+[package]
+name = "kmeans_new_compiler"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand_chacha = "0.2"
+# just taken over from other benchmark, some dependencies are terribly out of date!
+clap = "2.32"
+time = "0.1"
+cpu-time = "1.0"
+tokio = { version = "0.2", features = ["full"] }

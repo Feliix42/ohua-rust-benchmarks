@@ -4,13 +4,17 @@ use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
-use std::sync::Arc;
 use time::PreciseTime;
 //use tokio::runtime::{Builder, Runtime};
 
 mod generated;
+mod original;
 mod benchs;
 mod parser;
+mod grid;
+
+mod no_data_par;
+mod no_amorphous;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -61,18 +65,39 @@ fn main() {
                 .help("The number of threads the threadpool should encompass.")
                 .default_value("4")
         )
+        .arg(
+            Arg::with_name("sequential")
+                .long("seq")
+                .short("s")
+                .help("Run the sequential ohua algorithm (bare)")
+        )
+        .arg(
+            Arg::with_name("no_data_par")
+                .long("no-data-par")
+                .help("Run the ohua algorithm without data parallelism at all")
+        )
+        .arg(
+            Arg::with_name("no_amorphous")
+                .long("no-amorphous")
+                .help("Run the ohua algorithm without amorphous optimizations")
+        )
         .get_matches();
 
     // JSON Dump?
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
+    let sequential = matches.is_present("sequential");
+    let ndp = matches.is_present("no_data_par");
+    let nam = matches.is_present("no_amorphous");
 
     // #runs
     let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();
 
     // runtime parameters
-    let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
-    let threadcount = usize::from_str(matches.value_of("threads").unwrap()).unwrap();
+    //let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
+    //let threadcount = usize::from_str(matches.value_of("threads").unwrap()).unwrap();
+    let updates = generated::FREQUENCY;
+    let threadcount = generated::THREADCOUNT;
 
     // input location & parsing
     let input_file = matches.value_of("INPUT").unwrap();
@@ -81,6 +106,7 @@ fn main() {
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
     let mut mapped_paths: Vec<usize> = Vec::with_capacity(runs);
+    #[allow(unused_mut)]
     let mut collisions: Vec<usize> = Vec::with_capacity(runs);
 
     for r in 0..runs {
@@ -90,7 +116,8 @@ fn main() {
             println!("[INFO] Loaded maze data from file.");
         }
 
-        let paths2 = paths.clone();
+        let paths2 = paths.clone().into_iter().map(Some).collect();
+        let dims2 = dimensions.clone();
 
         let start = PreciseTime::now();
         let cpu_start = ProcessTime::now();
@@ -98,7 +125,15 @@ fn main() {
         //#[ohua]
         //let (filled_maze, rollbacks) =
             //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
-        let filled_maze = generated::run(0, paths2, 200);
+        let (filled_maze, retries) = if sequential {
+            original::run(dims2, paths2, 200)
+        } else if ndp {
+            no_data_par::run(dims2, paths2, 200)
+        } else if nam {
+            no_amorphous::run(dims2, paths2, 200)
+        } else {
+            generated::run(dims2, paths2, 200)
+        };
 
         let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
@@ -113,8 +148,8 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             cpu_results.push(cpu_runtime_ms);
-            //mapped_paths.push(filled_maze.paths.len());
-            //collisions.push(rollbacks);
+            mapped_paths.push(filled_maze.paths.len());
+            collisions.push(retries);
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -139,6 +174,7 @@ fn main() {
     \"configuration\": \"{conf}\",
     \"paths\": {paths},
     \"runs\": {runs},
+    \"sequential\": {seq},
     \"threadcount\": {threadcount},
     \"update_frequency\": {freq},
     \"mapped\": {mapped:?},
@@ -149,6 +185,7 @@ fn main() {
             conf = dimensions,
             paths = paths.len(),
             runs = runs,
+            seq = sequential,
             threadcount = threadcount,
             freq = updates,
             mapped = mapped_paths,
