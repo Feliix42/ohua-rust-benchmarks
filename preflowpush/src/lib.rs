@@ -1,4 +1,6 @@
 
+// Preflow Push measured here: https://dl.acm.org/doi/pdf/10.1145/2644865.2541964
+// Global relabeling described here: http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
 
 
 
