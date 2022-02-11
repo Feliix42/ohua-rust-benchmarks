@@ -3,7 +3,9 @@
 // Global relabeling described here: http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
 
 
-
+// This paper has the best description:
+// http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
+// see page 3
 
 static ALPHA: u32 = 6;
 
@@ -13,27 +15,37 @@ type NodeID = u32;
 
 #[derive(Debug)]
 struct Node {
+    // constant node properties
     id : NodeID,
+    distance_to_sink : u32,
+
+    // recomputed node properties
     excess: i64,
     height: i64,
-    current: i64,
+    current: NodeID, // the current candidate for a pushing operation
 }
 
 impl Default for Node {
     fn default() -> Node {
-        Node{id: 0, height: 1, current:0, excess:0} // excess unset in original code
+        Node{id: 0, distance_to_sink: 0, excess: 0, height: 1, current: 0} // excess unset in original code
     }
 }
 
 struct Edge {
-    srcOrDst: NodeID
-    data: i32,
+    dst: NodeID,
+    data: i32, // value u
 }
 
 struct Graph {
-    nodes: Vec<Node>,
-    fegdes: HashMap<NodeID, HashMap<NodeID,Edge>>,
-    bedges: HashMap<NodeID, HashMap<NodeID,Edge>>,
+    nodes: HashMap<NodeID,Node>,
+    // Each node appears in the set of forward edges and in the set of backward edges:
+    // http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
+    // The value u is associated with each edge
+
+    // forward set {v,w}
+    fegdes: HashMap<NodeID, Vec<Edge>>,
+    // backward set {w,v }
+    bedges: HashMap<NodeID, Vec<Edge>>,
 }
 
 struct PreflowPush {
@@ -54,6 +66,17 @@ fn reduceCapacity(fedge: &mut Edge, bedge: &mut Edge, amount:i64) {
 }
 
 impl Graph {
+
+    fn assign_distance_to_sink(&mut self, sink:NodeID) {
+        let sink_node = self.nodes.get(sink).unwrap();
+        let d = sink_node.distance_to_sink + 1;
+        for edge in self.bedges.get(sink).get().unwrap_or(vec![]) {
+            let mut src_node = self.nodes.get_mut(edge.dst).unwrap();
+            src_node.distance_to_sink = d;
+            self.assign_distance_to_sink(edge.dst);
+        }
+    }
+
     fn relabel(&self, node: &mut Node) {
         let mut minHeight = i64::MAX;
         let mut minEdge:i64 = 0;
@@ -233,15 +256,20 @@ fn reset_node(node: Node, src: NodeID, sink: NodeID, heigth: i64) -> (NodeID, No
     (node.id, node)
 }
 
-// TODO can be run in parallel but requires some rewriting to become data parallel.
-fn update_heights(graph:Graph) -> Graph {
+
+// Challenge: How would one do a BFS through a graph in Ohua?
+// The challenge is that some nodes maybe hit twice.
+// I believe the way to do this in a data-parallel fashion is to calculate the order before-hand. But that is not all. There is more to do to accomplish this.
+fn update_heights_original(graph:&mut Graph, sink:Node) -> Vec<NodeID> {
+    let mut ctx = Vec::new();
+
 //    galois::for_each(
-//        galois::iterate({sink}),
+//        galois::iterate({sink}), --> start at the sink
     //        [&, this](const GNode& src, auto& ctx) {
 
-    // FIXME This is an iteration from sink to source!
+    // This is an iteration from sink to source!
     // In Galois, they acquire locks for all values to be updated before doing anything. (See code below.)
-    for src in graph.values() {
+    for src in backwards_iterator(sink, graph) {
     // this whole code below exists only to aquire locks!!!
 
 //          if (version != nondet) {
@@ -270,35 +298,121 @@ fn update_heights(graph:Graph) -> Graph {
 //               this->graph.edges(src, useCAS ? galois::MethodFlag::UNPROTECTED
 //                                             : galois::MethodFlag::WRITE)) {
 
-    for edge in src.edges {
-        let dst = edge.dst;
-        let rdata = edge.data_backward;
-        if (rdata > 0) {
-            let dnode = graph.get(dst).unwrap(); // this->graph.getData(dstdd, galois::MethodFlag::UNPROTECTED);
-            let new_height = src.props.height + 1; // this->graph.getData(src, galois::MethodFlag::UNPROTECTED).height + 1;
+        for edge in graph.fedges.get(src).unwrap_or(vec![]) {
+            let dst = edge.dst;
+            let rdata = edge.data;
+            // restrict global relabeling to the residual arcs and residual nodes
+            // an arc is considered residual if its capacity is large than 0.
+            if (rdata > 0) {
+                let dnode = graph.nodes.get_mut(dst).unwrap(); // this->graph.getData(dstdd, galois::MethodFlag::UNPROTECTED);
+                let new_height = src.props.height + 1; // this->graph.getData(src, galois::MethodFlag::UNPROTECTED).height + 1;
 //              if (useCAS) {
 //                int oldHeight = 0;
 //                while (newHeight < (oldHeight = node.height)) {
 //                  if (__sync_bool_compare_and_swap(&node.height, oldHeight,
 //                                                   newHeight)) {
-//                    ctx.push(dst);
+//                    ctx.push(dst); --> push the newly updated node into the loop (this is a while loop essentially!)
 //                    break;
 //                  }
 //                }
-//              } else {
-                if (newHeight < dnode.height) {
-                  dnode.height = newHeight;
-                  ctx.push(dst);
+                //              } else {
+                // the below is a condition that was added by the Galois guys to
+                // make this update idempotent. it has the effect that the first update, i.e., which is the shortest path to the sink, wins!
+                if (new_height < dnode.height) {
+                    dnode.height = new_height;
+                    // ctx.push(dst); --> push the newly updated node into the loop (this is a while loop essentially!)
                 }
-              }
             }
-          } // end for
         }
+    } // end for
+//        }
 //        galois::wl<WL>(), galois::disable_conflict_detection(),
 //        galois::loopname("updateHeights"));
-
+    ctx
 }
 
+fn update_heights(graph:&Graph, sink:Node) -> Vec<NodeID> {
+    let mut ctx = Vec::new();
+    let mut residual_nodes = Vec::new();
+    for src in backwards_iterator(sink, graph) {
+        for edge in graph.fedges.get(src).unwrap_or(vec![]) {
+            let dst = edge.dst;
+            let rdata = edge.data;
+            // restrict global relabeling to the residual arcs and residual nodes
+            // an arc is considered residual if its capacity is large than 0.
+            if (rdata > 0) {
+                let dnode = graph.nodes.get_mut(dst).unwrap();
+                let new_height = src.props.height + 1;
+                // the below is a condition that was added by the Galois guys to
+                // make this update idempotent. it has the effect that the first update, i.e., which is the shortest path to the sink, wins!
+                // but it seems to be broken because due to the reset of the nodes before, all nodes have the same
+                // height! The only way that the height could ever change is by overcoming the conditional guard!
+                if (new_height < dnode.height) {
+                    dnode.height = new_height;
+                }
+            }
+        }
+    }
+    ctx
+}
+
+/**
+In the description of the paper and in the Galois implementation, the global relabel algorithm is a breadth first traversal on the graph starting from the sink.
+Why a BFS?
+Well, because all the updates to the nodes essentially depend on the graph state before the global relabelling.
+The updates to the graphs are actually forward directed. That is, from a source node, we update all its downstream neighbours.
+Another way to look at this is to give this algorithm the old graph and instead of doing a backward traversal, we will just create a completely new set of nodes. That is, we perform this operation in functional style!
+The result of this: the whole computation is fully data parallel!!!
+
+The only remaining challenge is the fusion of duplicate nodes, as nodes maybe hit multiple times in the BFS.
+The algorithm in fact takes always the result from the shortest path to the sink.
+The distance to the sink is a property of the node itself and never changes. Hence the merge function is totally trivial.
+
+After some more thinking, I realized that the algorithm of the Galois guys does actually not work at all.
+It resets all nodes first to the same height. Afterwards it performs the updateHeights function.
+But the update to the destination node is guarded by a condition that says:
+
+     src.height + 1 < dst.height
+
+This guarding is not present in the original description of the algorithm in the paper. I get to the reason why it is there later.
+The point is that this condition can never be true because obviously we just reset the node to all have the same height (=num nodes in the graph).
+
+The reason for that guard is interesting:
+The challenge in the BFS traversal is that one could hit the same node twice because there are two or more paths to the sink starting from this
+node. That is, there are multiple updates to this node. The real challenge in parallelizing this traversal now is to handle these multiple updates to the same node. In other words, the challenge is to detect the order in which the updates are to be applied.
+In the original paper (http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf), the idea was to always take the value from the shortest path. The guard of the Galois guys was supposed to ensure this.
+Read: "The global relabeling heuristic updates the distance function by computing shortest path distances in the residual graph from all nodes to the sink."
+Their idea was that whenever the destination has a higher height than the src then it clearly accumulated more updates (+1) on the BFS traversal.
+
+On yet another note:
+Even the calculation seems wrong. It needs to update the source node, not the destination node. The final goal is that the height reflects
+the number of nodes on the shortest path to the sink where the sink has height 0.
+Here is the definition from the paper:
+"
+The distance labeling d : V -> N satisfies the following conditions: d(t) = 0 and for every residual arc (v,w), d(v) =< d(w) + 1.
+A residual arc (v,w) is admissible if d(v) = d(w) + 1.
+"
+Where t is the sink.
+
+A proper parallel implementation goes along the lines of the following recursive code:
+
+fn bfs(current:HashSet<Node>, graph:Graph) -> Graph {
+  let graph_ro = Arc::new(graph);
+  let new_nodes = Vec::new();
+  for n in current {
+    let n_new = compute(n,graph_ro);
+    new_nodes.push(n_new);
+  }
+  graph.update(new_nodes);
+  let next = get_next(current, graph_ro);
+  if next.is_empty() {
+    graph
+  } else {
+    bfs(next, graph)
+  }
+}
+
+ */
 fn global_relabel(counter: Counter, graph: Graph, src: NodeID, sink: NodeID) -> Graph {
     let mut new_graph = Graph::new();
     let l = graph.len();
@@ -312,22 +426,24 @@ fn global_relabel(counter: Counter, graph: Graph, src: NodeID, sink: NodeID) -> 
         new_graph.insert(n_id, n);
     }
 
+    // 
     new_graph.updateHeights();
 
-    galois::do_all(
-        galois::iterate(graph),
-        [&incoming, this](const GNode& src) {
-          Node& node =
-              this->graph.getData(src, galois::MethodFlag::UNPROTECTED);
-          if (src == this->sink || src == this->source ||
-              node.height >= (int)this->graph.size()) {
-            return;
-          }
-          if (node.excess > 0) {
-            incoming.push_back(src);
-          }
-        },
-        galois::loopname("FindWork"));
+      // this just reactivates nodes with execess capacity into the work list
+//    galois::do_all(
+//        galois::iterate(graph),
+//        [&incoming, this](const GNode& src) {
+//          Node& node =
+//              this->graph.getData(src, galois::MethodFlag::UNPROTECTED);
+//          if (src == this->sink || src == this->source ||
+//              node.height >= (int)this->graph.size()) {
+//            return;
+//          }
+//          if (node.excess > 0) {
+//            incoming.push_back(src);
+//          }
+//        },
+//        galois::loopname("FindWork"));
 }
 
 /**
