@@ -1,7 +1,8 @@
+use std::collections::hash_map::HashMap;
+use std::collections::HashSet;
 
 // Preflow Push measured here: https://dl.acm.org/doi/pdf/10.1145/2644865.2541964
 // Global relabeling described here: http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
-
 
 // This paper has the best description:
 // http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
@@ -13,11 +14,11 @@ static BETA: u32 = 3;
 
 type NodeID = u32;
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq,Clone)]
 struct Node {
     // constant node properties
-    id : NodeID,
-    distance_to_sink : u32,
+    id: NodeID,
+    distance_to_sink: u32,
 
     // recomputed node properties
     excess: i64,
@@ -27,81 +28,95 @@ struct Node {
 
 impl Default for Node {
     fn default() -> Node {
-        Node{id: 0, distance_to_sink: 0, excess: 0, height: 1, current: 0} // excess unset in original code
+        Node {
+            id: 0,
+            distance_to_sink: 0,
+            excess: 0,
+            height: 1,
+            current: 0,
+        } // excess unset in original code
     }
 }
 
 struct Edge {
     dst: NodeID,
-    data: i32, // value u
+    data: u32, // value u
 }
 
 struct Graph {
-    nodes: HashMap<NodeID,Node>,
+    nodes: HashMap<NodeID, Node>,
     // Each node appears in the set of forward edges and in the set of backward edges:
     // http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
     // The value u is associated with each edge
 
     // forward set {v,w}
-    fegdes: HashMap<NodeID, Vec<Edge>>,
+    fedges: HashMap<NodeID, HashMap<NodeID,Edge>>,
     // backward set {w,v }
-    bedges: HashMap<NodeID, Vec<Edge>>,
+    bedges: HashMap<NodeID, HashMap<NodeID,Edge>>,
+
+    sink: NodeID,
+    source: NodeID,
+}
+
+impl Default for Graph {
+    fn default() -> Graph {
+        Graph {
+            nodes: HashMap::new(),
+            fedges: HashMap::new(),
+            bedges: HashMap::new(),
+            sink: 0,
+            source: 0,
+        }
+    }
 }
 
 struct PreflowPush {
-    // graph specification
-    graph: Graph,
-    sink: NodeID,
-    source: NodeID,
     // configuration flag
     global_relabel_interval: i64,
     // global algorithm state
     should_global_relabel: bool,
 }
 
-
-fn reduceCapacity(fedge: &mut Edge, bedge: &mut Edge, amount:i64) {
+fn reduce_capacity(fedge: &mut Edge, bedge: &mut Edge, amount: u32) {
     fedge.data -= amount;
     bedge.data += amount;
 }
 
 impl Graph {
-
-    fn assign_distance_to_sink(&mut self, sink:NodeID) {
+    fn assign_distance_to_sink(&mut self, sink: &NodeID) {
         let sink_node = self.nodes.get(sink).unwrap();
         let d = sink_node.distance_to_sink + 1;
-        for edge in self.bedges.get(sink).get().unwrap_or(vec![]) {
-            let mut src_node = self.nodes.get_mut(edge.dst).unwrap();
+        for (dst,edge) in self.bedges.get(&sink).unwrap_or(&HashMap::new()) {
+            let mut src_node = self.nodes.get_mut(&dst).unwrap();
             src_node.distance_to_sink = d;
-            self.assign_distance_to_sink(edge.dst);
+            self.assign_distance_to_sink(dst);
         }
     }
 
     fn relabel(&self, node: &mut Node) {
-        let mut minHeight = i64::MAX;
-        let mut minEdge:i64 = 0;
+        let mut min_height = i64::MAX;
+        let mut min_edge: NodeID = 0;
 
-        let mut current:i64 = 0;
-        for ii in  self.fedges.get(node.id).unwrap() {
-            let dst = self.get(ii.srcOrDst);
-            let cap = ii.data;
-            if (cap > 0) {
-                let dnode_props = dst;
-                if (dnode.height < minHeight) {
-                    minHeight = dnode.height;
-                    minEdge   = current;
+        let mut current: NodeID = 0;
+        for (dst,edge) in self.fedges.get(&node.id).unwrap() {
+            let dst = self.nodes.get(&dst).unwrap();
+            let cap = edge.data;
+            if cap > 0 {
+                if dst.height < min_height {
+                    min_height = dst.height;
+                    min_edge = current;
                 }
             }
-            current+=1;
+            current += 1;
         }
 
-        assert!(minHeight != i64::MAX);
-        minHeight+=1;
+        assert!(min_height != i64::MAX);
+        min_height += 1;
 
         let num_nodes = self.nodes.len() as i64;
-        if (minHeight < num_nodes) {
-            node.height  = minHeight;
-            node.current = minEdge;
+        if min_height < num_nodes {
+            node.height = min_height;
+            node.current = min_edge;
         } else {
             node.height = num_nodes;
         }
@@ -117,102 +132,140 @@ impl Graph {
     contains only these changed nodes an edges.
     The update function would then merge these changes into the existing graph.
     */
-    fn discharge(&mut self, src:NodeID, sink: NodeID) -> (bool, HashSet<NodeID>, Option<(NodeID, Graph)>) {
-        let ctxt      = HashSet::new<NodeID>();
-
-        let node  = self.nodes.get_mut(src).unwrap();
+    fn discharge(
+        &mut self,
+        src: NodeID
+    ) -> (bool, (NodeID, Graph)) {
+        let node = self.nodes.get_mut(&src).unwrap();
         let relabeled = false;
 
-        if (node.excess == 0 || node.height >= (graph.nodes.len() as i64)) {
-            return (false, ctxt, Nothing);
+        let mut graph0 = Graph::default();
+        if node.excess == 0 || node.height >= (self.nodes.len() as i64) {
+            return (false, (src,graph0));
         }
 
-        let mut graph0 = Graph::default();
-        let mut node0  = node.clone();
-        graph0.nodes.put(node0.id, node0);
+        let mut node0 = node.clone();
+        graph0.nodes.insert(node0.id, node0);
 
-        while (true) {
-            let mut finished        = false;
-            let current             = node0.props.current;
+        loop {
+            let mut finished = false;
+            let current = node0.current;
 
             //auto ii = graph.edge_begin(src, flag);
             //auto ee = graph.edge_end(src, flag);
 
             //std::advance(ii, node.current);
 
-            for edge in self.fedges.get_mut(node.id).unwrap().iter().skip(node0.current) { //(; ii != ee; ++ii, ++current) {
-                let dst = edge.dst;
-                let cap = edge.data;
-                if (cap == 0) { // || current < node.current)
+            for (dst,fedge) in self
+                .fedges
+                .get_mut(&node0.id)
+                .unwrap()
+                .iter()
+                .skip(node0.current)
+            {
+                //(; ii != ee; ++ii, ++current) {
+                let dst = dst;
+                let cap = fedge.data;
+                if cap == 0 {
+                    // || current < node.current)
                     continue;
                 }
 
-                let dnode = graph.get_mut(dst).unwrap();
-                if (node0.height - 1 != dnode.height) {
+                let dnode = self.nodes.get_mut(&dst).unwrap();
+                if node0.height - 1 != dnode.height {
                     continue;
                 }
 
                 let dnode0 = dnode.clone();
-                graph0.nodes.put(dnode0.id, dnode0);
+                graph0.nodes.insert(dnode0.id, dnode0);
 
                 // Push flow
-                let amount = std::cmp::min(node0.excess, cap);
-                let edge0 = edge.clone();
-                graph0.fedges.insert(node.id, edge0);
-                reduceCapacity(edge0, amount);
+                let amount = if node0.excess < (cap as i64) { node0.excess as u32 } else { cap };
+                let mut fedge0 = fedge.clone();
+                let mut bedge0 = self.bedges.get(dst).unwrap().get(&node.id).unwrap().clone();
 
-                // Only add once
-                if (dst != sink && dst != src && dnode.excess == 0) {
-                    ctx.push(dst);
+                reduce_capacity(&mut fedge0, &mut bedge0, amount);
+
+                if !graph0.fedges.contains_key(&node0.id) {
+                    graph0.fedges.insert(node0.id, HashMap::new());
                 }
+                graph0.fedges.get_mut(&node.id).unwrap().insert(*dst, *fedge0);
 
-                assert!(node0.excess >= amount);
-                node0.excess -= amount;
-                dnode0.excess += amount;
+                if !graph0.bedges.contains_key(dst) {
+                    graph0.bedges.insert(*dst, HashMap::new());
+                }
+                graph0.bedges.get_mut(dst).unwrap().insert(node.id, *bedge0);
 
-                if (node.excess == 0) {
-                    finished     = true;
+                // Add to worklist. moved to update.
+                // Only add once
+//                if (dst != sink && dst != src && dnode.excess == 0) {
+//                    ctxt.push(dst);
+//                }
+
+                let iamount = amount as i64;
+                assert!(node0.excess >= iamount);
+                node0.excess -= iamount;
+                dnode0.excess += iamount;
+
+                if node.excess == 0 {
+                    finished = true;
                     node0.current = current;
                     break;
                 }
             }
 
-            if (finished) {
+            // really, the assumption of the above loop is that there is at least one node in the graph with excess == 0.
+            if finished {
                 break;
             }
 
-            relabel(src);
+            self.relabel(&mut node0);
             relabeled = true;
 
-            if (node0.height == (graph.nodes.len() as i64)) {
+            if node0.height == (self.nodes.len() as i64) {
                 break;
             }
 
             // prevHeight = node.height;
         }
 
-        (relabeled, ctxt, Some((src,graph0)))
+        (relabeled, (src, graph0))
     }
 
     /**
     Simple update function that detects collisions and requests a recomputation.
     Essentially implements a transaction!
      */
-    fn update(&mut self, updates:Vec<(NodeID,Graph)>) -> HashSet<NodeID> {
+    fn update(&mut self, updates: Vec<(NodeID, Graph)>) -> HashSet<NodeID> {
         let mut redo = HashSet::new();
         let mut updated = HashSet::new();
         for update in updates {
-            let (srcID,graph) = update;
-            let touched = update.edges.iter().map(|edge| edge.dst).collect(HashSet::new()).insert(srcID);
-            let noConflicts = updated.is_disjoint(touched);
-            if(noConflicts){
+            let (src, graph) = update;
+            let mut touched = graph
+                .fedges
+                .keys()
+                .collect::<HashSet<_>>();
+            touched.insert(&src);
+            let no_conflicts = updated.is_disjoint(&touched);
+
+            // 1st reason to end up in new worklist: collision
+            if no_conflicts {
                 // success: replace in graph
-                graph.retain(|nID, val| self.insert(nID, val) );
+                graph.nodes.drain().for_each(|(n, val)| { self.nodes.insert(n, val); } );
+                graph.fedges.drain().for_each(|(e, val)| { self.fedges.insert(e, val); } );
+                graph.bedges.drain().for_each(|(e, val)| { self.bedges.insert(e, val); } );
+
+                // 2nd reason to end up in new worklist: excess prop
+                for (nid,node) in graph.nodes {
+                    if nid != self.sink && nid != self.source && nid != src && node.excess == 0 {
+                        redo.insert(nid);
+                    }
+                }
             } else {
                 // failure: request redo
-                redo.insert(srcID);
+                redo.insert(src);
             }
-            updated.union(touched);
+            updated.union(&touched);
         }
         redo
     }
@@ -228,35 +281,35 @@ impl Graph {
     - The other code works best when there are a lot of collissions.
     It would be super novel to switch between these two versions at runtime!
      */
-}
-
-
-fn initializePreflow(graph:&mut Graph, source: NodeID) -> HashSet<NodeID> {
-    let initial = HashSet::new();
-    for mut edge in graph.get_mut(source).unwrap().edges {
-        let mut dst = graph.get_mut(ii.dst).unwrap();
-        let cap = edge.data_forward;
-        reduceCapacity(ii, cap);
-        let mut node = dst.props;
-        node.excess += cap;
-        if (cap > 0) {
-            initial.add(dst);
+    fn initializePreflow(&mut self) -> HashSet<NodeID> {
+        let mut initial = HashSet::new();
+        for (dst, mut fedge) in self.fedges.get_mut(&self.source).unwrap() {
+            let mut dnode = self.nodes.get_mut(&dst).unwrap();
+            let mut bedge = self.bedges.get_mut(&dst).unwrap().get_mut(&self.source).unwrap();
+            let cap = fedge.data;
+            reduce_capacity(&mut fedge, &mut bedge, cap);
+            dnode.excess += cap as i64;
+            if cap > 0 {
+                initial.insert(*dst);
+            }
         }
+        initial
     }
-    initial
 }
 
-fn reset_node(node: Node, src: NodeID, sink: NodeID, heigth: i64) -> (NodeID, Node) {;
-    node.current = 0;
-    if (src == sink) {
-        node.height = 0;
-    } else {
-        node.height = height;
+impl Node {
+    fn reset(&mut self, src: NodeID, sink: NodeID, height: i64) -> NodeID {
+        self.current = 0;
+        if src == sink {
+            self.height = 0;
+        } else {
+            self.height = height;
+        }
+        self.id
     }
-    (node.id, node)
 }
 
-
+/*
 // Challenge: How would one do a BFS through a graph in Ohua?
 // The challenge is that some nodes maybe hit twice.
 // I believe the way to do this in a data-parallel fashion is to calculate the order before-hand. But that is not all. There is more to do to accomplish this.
@@ -355,6 +408,7 @@ fn update_heights(graph:&Graph, sink:Node) -> Vec<NodeID> {
     }
     ctx
 }
+ */
 
 /**
 In the description of the paper and in the Galois implementation, the global relabel algorithm is a breadth first traversal on the graph starting from the sink.
@@ -394,7 +448,13 @@ A residual arc (v,w) is admissible if d(v) = d(w) + 1.
 "
 Where t is the sink.
 
-A proper parallel implementation goes along the lines of the following recursive code:
+
+After talking to my student Lisza, I realized that they essentially mirror the graph.
+That is the reason why the sink has actually outgoing edges. They are essentially the backwards edges.
+That makes the computation correct.
+
+
+An Ohua implementation goes along the lines of the following recursive code:
 
 fn bfs(current:HashSet<Node>, graph:Graph) -> Graph {
   let graph_ro = Arc::new(graph);
@@ -404,7 +464,7 @@ fn bfs(current:HashSet<Node>, graph:Graph) -> Graph {
     new_nodes.push(n_new);
   }
   graph.update(new_nodes);
-  let next = get_next(current, graph_ro);
+  let next = get_next(current, graph_ro); // this step needs to exclude the nodes that we already visited.
   if next.is_empty() {
     graph
   } else {
@@ -412,7 +472,10 @@ fn bfs(current:HashSet<Node>, graph:Graph) -> Graph {
   }
 }
 
+The BFS traversal and the core algorithm need to be compiled individually.
  */
+
+/*
 fn global_relabel(counter: Counter, graph: Graph, src: NodeID, sink: NodeID) -> Graph {
     let mut new_graph = Graph::new();
     let l = graph.len();
@@ -426,9 +489,10 @@ fn global_relabel(counter: Counter, graph: Graph, src: NodeID, sink: NodeID) -> 
         new_graph.insert(n_id, n);
     }
 
-    // 
+    //
     new_graph.updateHeights();
 
+    // TODO
       // this just reactivates nodes with execess capacity into the work list
 //    galois::do_all(
 //        galois::iterate(graph),
@@ -445,6 +509,7 @@ fn global_relabel(counter: Counter, graph: Graph, src: NodeID, sink: NodeID) -> 
 //        },
 //        galois::loopname("FindWork"));
 }
+*/
 
 /**
 Note that in Galois, EVERY function to the state (graph) has to declare whether the access is UNPROTECTED or WRITE.
@@ -452,26 +517,29 @@ That is, it is left to the developer to do the synchronization!
 Even more so, the iterators have unclear semantics and there are places in the code where the developer
 has to explicitly "lock" state!
  */
-fn nondet_discharge(graph:Graph, initial: HashSet<NodeID>, global_relabel_interval: i64) -> Graph {
-    let mut counter = Counter::new();
+fn nondet_discharge(graph: Graph, initial: HashSet<NodeID>, preflow: PreflowPush) -> Graph {
+    //let mut counter = Counter::new();
 
-//    // per thread <-- original code comment!
-//    const int relabel_interval =
-//        global_relabel_interval / galois::getActiveThreads();
-//
-//    galois::for_each(
-//        galois::iterate(initial),
-//        [&counter, relabel_interval, this](GNode& src, auto& ctx) {
+    //    // per thread <-- original code comment!
+    //    const int relabel_interval =
+    //        global_relabel_interval / galois::getActiveThreads();
+    //
+    //    galois::for_each(
+    //        galois::iterate(initial),
+    //        [&counter, relabel_interval, this](GNode& src, auto& ctx) {
 
-    let should_global_relabel_new = should_global_relabel;
+    //    let should_global_relabel_new = should_global_relabel;
+    let updates = Vec::new();
     for src in initial {
-        let mut increment:i64 = 1;
+        //let mut increment: i64 = 1;
         //graph.acquire(src); --> locking for graph
-        let (shouldIncr, wl_new, updates) = graph.discharge(src);
-        let redos = graph.update(updates);
+        //let (shouldIncr, wl_new, updates) = graph.discharge(src);
+        let (_, results) = graph.discharge(src);
+        updates.push(results);
         //wl_new.union(redos); // FIXME wl_new must be part of updates!
-        let increment = if shouldIncr { 1 + BETA } else { 1 };
-        counter += increment;
+        // TODO global relabel
+        //let increment = if shouldIncr { 1 + BETA } else { 1 };
+        //counter += increment;
 
         // There is certainly no way that we can really enforce this and neither can Galois code!
         // But the condition below does not work on equality. Hence, we do preserve the semantics of the algorithm specification.
@@ -480,34 +548,32 @@ fn nondet_discharge(graph:Graph, initial: HashSet<NodeID>, global_relabel_interv
         // This paper states that relabeling is done for every node: https://dl.acm.org/doi/pdf/10.1145/1594835.1504181
         // This happens as the last operation in discharge.
         // The paper for the algorithm: https://dl.acm.org/doi/pdf/10.1145/48014.61051
-        if (global_relabel_interval > 0 &&
-            counter.getLocal() >= relabel_interval) { // local check <-- taken from the source code: counter.getLocal() gets a thread-local value!
-            should_global_relabel_new = true;
-            // TODO
-            //ctx.breakLoop(); ??? SEMANTICS?! --> just a trap into the scheduler for an early exit
-            //return;
-        }
+
+        // TODO
+        //        if (global_relabel_interval > 0 &&
+        //            counter.getLocal() >= relabel_interval) { // local check <-- taken from the source code: counter.getLocal() gets a thread-local value!
+        //            should_global_relabel_new = true;
+        //            // TODO
+        //            //ctx.breakLoop(); ??? SEMANTICS?! --> just a trap into the scheduler for an early exit
+        //            //return;
+        //        }
     }
+
+    let wl_new = graph.update(updates);
 
     // TODO do global relabel here.
     // This can also be performed in a data parallel fashion.
-    global_relabel(counter, graph);
+    //   global_relabel(counter, graph);
 
-    if (wl_new.is_empty()) {
+    if wl_new.is_empty() {
         graph
     } else {
-        nondet_discharge(graph, wl_new)
+        nondet_discharge(graph, wl_new, preflow)
     }
 }
 
-fn run(source: NodeID){
-    let mut captured_graph = ...;
-    let global_relabel_interval = ...;
-    let initial = initializePreflow(captured_graph, source);
-    let result_graph = nondet_discharge(captured_graph, initial, global_relabel_interval);
+fn run(graph: Graph, preflow: PreflowPush) {
+    let initial = graph.initializePreflow();
+    let result_graph = nondet_discharge(graph, initial, preflow);
     // TODO do something with it here!
 }
-
-
-
-

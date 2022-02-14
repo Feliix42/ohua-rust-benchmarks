@@ -1,34 +1,31 @@
 [package]
-name = "preflow push"
+name = "preflow_push"
 version = "0.1.0"
 authors = ["Sebastian Ertel <sebastian.ertel@barkhauseninstitut.org>"]
-edition = "2022"
+#edition = "2022"
 
 [dependencies]
 clap = { version = "2.33", optional = true }
 cpu-time = { version = "1.0", optional = true }
 
 # Ohua stuff
-ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
-ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
 tokio = { version = "0.2", features = ["full"], optional = true }
 
 [features]
 cli = ["clap", "cpu-time"]
-ohua = ["ohua_codegen", "ohua_runtime"]
-future = ["ohua", "tokio"]
+future = ["tokio"]
 
 [[bin]]
 name = "sequential"
 path = "src/bin/seq.rs"
 required-features = ["cli"]
 
-[[bin]]
-name = "par"
-path = "src/bin/threaded.rs"
-required-features = ["cli"]
-
-[[bin]]
-name = "ohua_futures"
-path = "src/bin/ohua.rs"
-required-features = ["ohua", "cli", "future"]
+#[[bin]]
+#name = "par"
+#path = "src/bin/threaded.rs"
+#required-features = ["cli"]
+#
+#[[bin]]
+#name = "ohua_futures"
+#path = "src/bin/ohua.rs"
+#required-features = ["ohua", "cli", "future"]
