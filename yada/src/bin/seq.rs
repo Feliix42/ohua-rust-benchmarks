@@ -55,7 +55,10 @@ fn main() {
         .expect("Loading of input data failed. Ensure that all necessary files are present.");
 
     if !json_dump {
-        println!("[info] Loaded {} mesh elements.", input_data.elements.len());
+        println!(
+            "[info] Loaded {} mesh elements.",
+            input_data.elements.len() + input_data.boundary_set.len()
+        );
     }
 
     // run the benchmark itself

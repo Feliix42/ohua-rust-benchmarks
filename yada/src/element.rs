@@ -1,6 +1,9 @@
 //! In the original codebase, this was `element.c`
 
 use crate::point::Point;
+use decorum::R64;
+use std::fmt;
+use std::hash::{Hash, Hasher};
 
 const MIN_ANGLE: f64 = 30.0;
 
@@ -8,6 +11,15 @@ const MIN_ANGLE: f64 = 30.0;
 pub enum Element {
     T(Triangle),
     E(Edge),
+}
+
+impl fmt::Display for Element {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Element::E(ref e) => write!(f, "E: ({}, {}) ({}, {})", e.0.x, e.0.y, e.1.x, e.1.y),
+            Element::T(ref t) => t.fmt(f),
+        }
+    }
 }
 
 impl Element {
@@ -50,7 +62,7 @@ impl Element {
         }
     }
 
-    fn get_radius(&self, pt: Point) -> f64 {
+    fn get_radius(&self, pt: Point) -> R64 {
         match self {
             Self::T(t) => t.get_radius(pt),
             Self::E(e) => e.get_radius(pt),
@@ -58,7 +70,7 @@ impl Element {
     }
 
     /// Returns a list of points the element is composed of.
-    pub fn get_points<'a>(&'a self) -> Vec<&'a Point> {
+    pub fn get_points(&self) -> Vec<&Point> {
         match self {
             Self::T(t) => t.get_points(),
             Self::E(e) => e.get_points(),
@@ -201,6 +213,38 @@ pub struct Triangle {
     pub obtuse_angle: Option<usize>,
 }
 
+impl fmt::Display for Triangle {
+    // fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    //     writeln!(
+    //         f,
+    //         "T: ({}, {})",
+    //         self.coordinates[0].x, self.coordinates[0].y
+    //     )?;
+    //     writeln!(
+    //         f,
+    //         "   ({}, {})",
+    //         self.coordinates[1].x, self.coordinates[1].y
+    //     )?;
+    //     write!(
+    //         f,
+    //         "   ({}, {})",
+    //         self.coordinates[2].x, self.coordinates[2].y
+    //     )
+    // }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "T: ({}, {}) ({}, {}) ({}, {})",
+            self.coordinates[0].x,
+            self.coordinates[0].y,
+            self.coordinates[1].x,
+            self.coordinates[1].y,
+            self.coordinates[2].x,
+            self.coordinates[2].y
+        )
+    }
+}
+
 impl Triangle {
     /// Create a new triangle
     pub fn new(p1: Point, p2: Point, p3: Point) -> Self {
@@ -209,8 +253,15 @@ impl Triangle {
         assert_ne!(p3, p1);
 
         let mut coordinates: [Point; 3] = [p1, p2, p3];
-        // coordinates.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-        coordinates.sort_unstable();
+        // coordinates.sort_unstable();
+        // this is super counter intuitive but this is how the implementation looks
+        if p2 < p1 || p3 < p1 {
+            if p2 < p3 {
+                coordinates = [p2, p3, p1];
+            } else {
+                coordinates = [p3, p1, p2];
+            }
+        }
 
         // coordinates.sort_unstable();
         let mut obtuse = None;
@@ -254,21 +305,21 @@ impl Triangle {
         let x_len = a.distance_to(&b);
         let y_len = a.distance_to(&c);
         let cosine = (x * y) / (x_len * y_len);
-        let sine_sq = 1.0 - cosine * cosine;
+        let sine_sq = R64::from_inner(1.0) - cosine * cosine;
         let p_len = y_len / x_len;
 
         let s = p_len * cosine;
         let t = p_len * sine_sq;
 
-        let wp = (p_len - cosine) / (2f64 * t);
-        let wb = 0.5 - (wp * s);
+        let wp = (p_len - cosine) / (R64::from_inner(2.0) * t);
+        let wb = R64::from_inner(0.5) - (wp * s);
 
-        let mut tmp_val = a * (1f64 - wb - wp);
+        let mut tmp_val = a * (R64::from_inner(1f64) - wb - wp);
         tmp_val = tmp_val + (b * wb);
         tmp_val + (c * wp)
     }
 
-    pub fn get_points<'a>(&'a self) -> Vec<&'a Point> {
+    pub fn get_points(&self) -> Vec<&Point> {
         vec![
             &self.coordinates[0],
             &self.coordinates[1],
@@ -303,7 +354,7 @@ impl Triangle {
         }
     }
 
-    pub fn get_radius(&self, pt: Point) -> f64 {
+    pub fn get_radius(&self, pt: Point) -> R64 {
         pt.distance_to(&self.coordinates[0])
     }
 
@@ -328,13 +379,25 @@ impl Triangle {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Eq)]
 pub struct Edge(pub Point, pub Point);
 
 impl PartialEq for Edge {
     fn eq(&self, other: &Edge) -> bool {
         // I sure hope this won't come back to bite me
         self.0 == other.0 && self.1 == other.1 || self.0 == other.1 && self.1 == other.0
+    }
+}
+
+impl Hash for Edge {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if self.0 < self.1 {
+            self.0.hash(state);
+            self.1.hash(state);
+        } else {
+            self.1.hash(state);
+            self.0.hash(state);
+        }
     }
 }
 
@@ -356,7 +419,7 @@ impl Edge {
         (self.0 + self.1) * 0.5
     }
 
-    pub fn get_points<'a>(&'a self) -> Vec<&'a Point> {
+    pub fn get_points(&self) -> Vec<&Point> {
         vec![&self.0, &self.1]
     }
 
@@ -371,7 +434,7 @@ impl Edge {
         panic!("A line has no obtuse angles.")
     }
 
-    pub fn get_radius(&self, pt: Point) -> f64 {
+    pub fn get_radius(&self, pt: Point) -> R64 {
         pt.distance_to(&self.0)
     }
 

@@ -1,6 +1,8 @@
 //! In the original codebase, this was `coordinate.c`
 
 use decorum::R64;
+use num_traits::float::FloatConst;
+use num_traits::real::Real;
 use std::cmp::{Eq, Ord};
 use std::hash::Hash;
 use std::ops::{Add, Mul, Sub};
@@ -12,16 +14,16 @@ pub struct Point {
 }
 
 impl Point {
-    pub fn distance_to(&self, other: &Self) -> f64 {
+    pub fn distance_to(&self, other: &Self) -> R64 {
         let delta_x = self.x - other.x;
         let delta_y = self.y - other.y;
 
-        let d: f64 = ((delta_x * delta_x) + (delta_y * delta_y)).into_inner();
-        f64::sqrt(d)
+        let d = (delta_x * delta_x) + (delta_y * delta_y);
+        R64::sqrt(d)
     }
 
     /// Angle formed by b, self, c
-    pub fn angle(&self, b: &Self, c: &Self) -> f64 {
+    pub fn angle(&self, b: &Self, c: &Self) -> R64 {
         let delta_b = *b - *self;
         let delta_c = *c - *self;
 
@@ -32,9 +34,9 @@ impl Point {
         let denominator = distance_b * distance_c;
 
         let cosine = numerator / denominator;
-        let radian = f64::acos(cosine);
+        let radian = R64::acos(cosine);
 
-        180_f64 * radian / std::f64::consts::PI
+        R64::from_inner(180_f64) * radian / R64::PI() //decorum::ConstrainedFloat::PI
     }
 
     /// Angle formed by b, self, c
@@ -85,12 +87,24 @@ impl Mul<f64> for Point {
     }
 }
 
+/// The Scalar Product
+impl Mul<R64> for Point {
+    type Output = Self;
+
+    fn mul(self, rhs: R64) -> Self {
+        Self {
+            x: self.x * rhs,
+            y: self.y * rhs,
+        }
+    }
+}
+
 /// The Dot Product
 impl Mul for Point {
-    type Output = f64;
+    type Output = R64;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        (self.x * rhs.x + self.y * rhs.y).into_inner()
+        self.x * rhs.x + self.y * rhs.y
     }
 }
 

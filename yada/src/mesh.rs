@@ -258,7 +258,7 @@ impl Mesh {
         unreachable!()
     }
 
-    // TODO(feliix42): So this one is fun: It can happen that a cavity is started
+    // NOTE(feliix42): So this one is fun: It can happen that a cavity is started
     // from an edge (only happens when the cavity is initialized and overwrites
     // itself). But apparently this is never translated to this stage of execution.
     //
@@ -283,16 +283,6 @@ impl Mesh {
                     self.boundary_set.remove(e);
                 }
             }
-            // if let Some(pos) = find_pos(&self.elements, &old) {
-            //     self.elements.remove(pos);
-            //     // println!(" - found");
-            // } else {
-            //     if self.elements.contains(&old) {
-            //         panic!("Element was already removed??");
-            //     }
-            //     // println!(" - nope");
-            //     failed += 1;
-            // }
         }
         // assert!(failed == 0, "Failed in removing {} elements", failed);
 
@@ -304,8 +294,6 @@ impl Mesh {
 
         // prune old connections!
         for (old, _, outer) in cav.connections {
-            // let mut o_inner = outer.borrow_mut();
-
             match outer {
                 Element::T(ref t) => {
                     if let Some(neighborhood) = self.elements.get_mut(t) {
@@ -319,11 +307,6 @@ impl Mesh {
                     self.boundary_set.remove(e);
                 }
             }
-            // if let Some(pos) = find_pos(&o_inner.neighbors, &old) {
-            //     o_inner.neighbors.remove(pos);
-            // } else {
-            //     panic!("delete w/o success");
-            // }
         }
 
         // add new data
@@ -338,11 +321,6 @@ impl Mesh {
                 }
                 Element::E(_) => (),
             }
-            // self.elements.push(new_node.clone());
-
-            // if new_node.borrow().is_bad() {
-            //     new_bad.push_back(new_node);
-            // }
         }
 
         // this `new_edge` is somewhat unnecessary I reckon, but that was part of the original code.
@@ -370,8 +348,6 @@ impl Mesh {
                     self.boundary_set.insert(e, src);
                 }
             }
-            // src.borrow_mut().neighbors.push(dst.clone());
-            // dst.borrow_mut().neighbors.push(src);
         }
 
         // if the original "bad element" is still in the mesh that's still a todo
@@ -415,23 +391,13 @@ impl Mesh {
             cav.compute();
             //println!("Created {} new elements", cav.new_nodes.len());
             let mut result = self.update(cav, item);
-            //println!("Got {} new bad items", result.len());
-            bad.append(&mut result);
+            println!("Got {} new bad items", result.len());
+            // bad.append(&mut result);
+            for i in result {
+                bad.push_back(i);
+            }
         }
 
         println!("Did {} iterations", i);
     }
 }
-
-// fn find_pos(list: &Vec<Rc<RefCell<Element>>>, other: &Rc<RefCell<Element>>) -> Option<usize> {
-//     let mut idx = 0;
-//     for elem in list {
-//         if elem == other {
-//             return Some(idx);
-//         } else {
-//             idx += 1;
-//         }
-//     }
-
-//     None
-// }
