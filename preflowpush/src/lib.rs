@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 static ALPHA: u32 = 6;
 
-static BETA: u32 = 3;
+static BETA: u64 = 3;
 
 type NodeID = u32;
 
@@ -22,7 +22,7 @@ struct Node {
 
     // recomputed node properties
     excess: i32,
-    height: i64,
+    height: u64,
     current: usize, // the current candidate for a pushing operation
 }
 
@@ -86,9 +86,20 @@ impl Default for Graph {
 
 struct PreflowPush {
     // configuration flag
-    global_relabel_interval: i64,
+    global_relabel_interval: u64,
     // global algorithm state
     should_global_relabel: bool,
+}
+
+impl Node {
+    fn reset_height_current(&mut self, sink: &NodeID, height: u64) {
+        self.current = 0;
+        if self.id == *sink {
+            self.height = 0;
+        } else {
+            self.height = height;
+        }
+    }
 }
 
 impl Graph {
@@ -105,8 +116,11 @@ impl Graph {
                 None => (),
                 Some(new_bdsts) =>
                     for new_bdst in new_bdsts {
-                        // FIXME use only residual nodes!
-                        next_round.push(*new_bdst);
+                        // TODO idempoence on height!
+                        // use only residual nodes!
+                        if self.nodes.get(&new_bdst).unwrap().excess > 0 {
+                            next_round.push(*new_bdst);
+                        }
                     }
             }
         }
@@ -118,8 +132,32 @@ impl Graph {
         }
     }
 
+    fn global_relabel(&mut self, should_relabel: bool, config:&PreflowPush) -> HashSet<NodeID> {
+        if should_relabel {
+            // step 1: reset
+            let graph_size = self.nodes.len() as u64;
+            for node in self.nodes.values_mut() {
+                node.reset_height_current(&self.sink, graph_size);
+            }
+
+            // step 2: relabel
+            self.assign_distance_to_sink_in_residual(vec![self.sink], 0);
+
+            // step 3: reload work
+            let mut reloaded = HashSet::new();
+            for node in self.nodes.values() {
+                if node.id != self.sink && node.id != self.source && node.excess > 0 {
+                    reloaded.insert(node.id);
+                }
+            }
+            reloaded
+        } else {
+            HashSet::new()
+        }
+    }
+
     fn relabel(&self, node: &mut Node) {
-        let mut min_height = i64::MAX;
+        let mut min_height = u64::MAX;
         let mut min_edge: usize = 0;
 
         let mut current: usize = 0;
@@ -135,10 +173,10 @@ impl Graph {
             current += 1;
         }
 
-        assert!(min_height != i64::MAX);
+        assert!(min_height != u64::MAX);
         min_height += 1;
 
-        let num_nodes = self.nodes.len() as i64;
+        let num_nodes = self.nodes.len() as u64;
         if min_height < num_nodes {
             node.height = min_height;
             node.current = min_edge;
@@ -163,7 +201,7 @@ impl Graph {
         let mut relabeled = false;
 
         let mut graph0 = Graph::default();
-        if node.excess == 0 || node.height >= (graph_size as i64) {
+        if node.excess == 0 || node.height >= (graph_size as u64) {
             return (false, (src, graph0));
         }
 
@@ -236,7 +274,7 @@ impl Graph {
             self.relabel(&mut node0);
             relabeled = true;
 
-            if node0.height == (graph_size as i64) {
+            if node0.height == (graph_size as u64) {
                 break;
             }
 
@@ -254,7 +292,7 @@ impl Graph {
      */
     fn update(&mut self, updates: Vec<(NodeID, Graph)>) -> HashSet<NodeID> {
         let mut redo = HashSet::new();
-        let updated = HashSet::new();
+        let mut updated = HashSet::new();
         for update in updates {
             let (src, mut graph) = update;
             let mut touched = HashSet::new();
@@ -285,7 +323,7 @@ impl Graph {
                 // failure: request redo
                 redo.insert(src);
             }
-            updated.union(&touched);
+            updated = updated.union(&touched).map(|x| *x).collect::<HashSet<NodeID>>();
         }
         redo
     }
@@ -316,17 +354,7 @@ impl Graph {
     }
 }
 
-impl Node {
-    fn reset(&mut self, src: NodeID, sink: NodeID, height: i64) -> NodeID {
-        self.current = 0;
-        if src == sink {
-            self.height = 0;
-        } else {
-            self.height = height;
-        }
-        self.id
-    }
-}
+
 
 /*
 // Challenge: How would one do a BFS through a graph in Ohua?
@@ -530,13 +558,36 @@ fn global_relabel(counter: Counter, graph: Graph, src: NodeID, sink: NodeID) -> 
 }
 */
 
+struct Counter {
+    c:u64
+}
+
+impl Default for Counter {
+    fn default() -> Counter {
+        Counter {c:0}
+    }
+}
+
+impl Counter{
+    fn detect_global_relabel(&mut self, relabels:u64, config: &PreflowPush) -> bool {
+        let new_c = self.c + (relabels * BETA);
+        if new_c > config.global_relabel_interval {
+            self.c = 0;
+            true
+        } else {
+            self.c = new_c;
+            false
+        }
+    }
+}
+
 /**
 Note that in Galois, EVERY function to the state (graph) has to declare whether the access is UNPROTECTED or WRITE.
 That is, it is left to the developer to do the synchronization!
 Even more so, the iterators have unclear semantics and there are places in the code where the developer
 has to explicitly "lock" state!
  */
-fn nondet_discharge(mut graph: Graph, initial: HashSet<NodeID>, preflow: PreflowPush) -> Graph {
+fn nondet_discharge(mut graph: Graph, mut counter : Counter, initial: HashSet<NodeID>, preflow: PreflowPush) -> Graph {
     //let mut counter = Counter::new();
 
     //    // per thread <-- original code comment!
@@ -578,21 +629,22 @@ fn nondet_discharge(mut graph: Graph, initial: HashSet<NodeID>, preflow: Preflow
         //        }
     }
 
-    let wl_new = graph.update(updates);
+    let should_global_relabel = counter.detect_global_relabel(updates.len() as u64, &preflow);
+    let mut wl_new = graph.update(updates);
+    let wl_new0 = graph.global_relabel(should_global_relabel, &preflow);
 
-    // TODO do global relabel here.
-    // This can also be performed in a data parallel fashion.
-    //   global_relabel(counter, graph);
+    wl_new = wl_new.union(&wl_new0).map(|x| *x).collect();
 
     if wl_new.is_empty() {
         graph
     } else {
-        nondet_discharge(graph, wl_new, preflow)
+        nondet_discharge(graph, counter, wl_new, preflow)
     }
 }
 
-fn run(mut graph: Graph, preflow: PreflowPush) {
+#[allow(dead_code)]
+fn run(mut graph: Graph, preflow: PreflowPush) -> Graph {
     let initial = graph.initialize_preflow();
-    let result_graph = nondet_discharge(graph, initial, preflow);
-    // TODO do something with it here!
+    let result_graph = nondet_discharge(graph, Counter::default(), initial, preflow);
+    result_graph
 }
