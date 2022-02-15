@@ -115,8 +115,8 @@ impl Mesh {
             assert!(coords[1] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0] - 1];
-            let c_1 = coordinates[coords[1] - 1];
+            let c_0 = coordinates[coords[0]];
+            let c_1 = coordinates[coords[1]];
             edge_set.insert(Edge::new(c_0, c_1));
         }
 
@@ -153,9 +153,9 @@ impl Mesh {
             assert!(coords[2] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0] - 1];
-            let c_1 = coordinates[coords[1] - 1];
-            let c_2 = coordinates[coords[2] - 1];
+            let c_0 = coordinates[coords[0]];
+            let c_1 = coordinates[coords[1]];
+            let c_2 = coordinates[coords[2]];
             elem_vec.push(Triangle::new(c_0, c_1, c_2));
         }
 
@@ -267,6 +267,9 @@ impl Mesh {
     ///
     /// Returns a list of new bad elements
     pub fn update(&mut self, cav: Cavity, original_bad: Triangle) -> VecDeque<Triangle> {
+        // println!("Update: Replacing {} elements with {} elements.\nOld set:\n{:#?}\n--------------\nNew set:\n{:#?}", cav.previous_nodes.len(), cav.new_nodes.len(), cav.previous_nodes, cav.new_nodes);
+        // std::thread::sleep_ms(1_000);
+
         // here we'd probably have to check if all elements of the `previous_nodes`
         // are still in the mesh before updating when doing this in parallel.
         // println!("Previous nodes: {}", cav.previous_nodes.len(),);
@@ -365,15 +368,203 @@ impl Mesh {
                 .collect::<()>();
         }
 
+        println!("-- Done");
+
         new_bad
     }
 
     pub fn refine(&mut self, mut bad: VecDeque<Triangle>) {
+        // let mut bad = VecDeque::from([
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-0.416),
+        //             y: R64::from_inner(0.909),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.77),
+        //             y: R64::from_inner(2.08),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.16),
+        //             y: R64::from_inner(2.89),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-0.416),
+        //             y: R64::from_inner(0.909),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.77),
+        //             y: R64::from_inner(2.08),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-0.416),
+        //             y: R64::from_inner(0.909),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.16),
+        //             y: R64::from_inner(2.89),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(1.36),
+        //             y: R64::from_inner(3.49),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-1.35),
+        //             y: R64::from_inner(0.436),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(-0.416),
+        //             y: R64::from_inner(0.909),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(1.36),
+        //             y: R64::from_inner(3.49),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-1.31),
+        //             y: R64::from_inner(-1.51),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(-0.532),
+        //             y: R64::from_inner(-2.17),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-0.532),
+        //             y: R64::from_inner(-2.17),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0.454),
+        //             y: R64::from_inner(-2.41),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(3.12),
+        //             y: R64::from_inner(1.14),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.77),
+        //             y: R64::from_inner(2.08),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(1.45),
+        //             y: R64::from_inner(-2.21),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.29),
+        //             y: R64::from_inner(-1.66),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(3.16),
+        //             y: R64::from_inner(0.131),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(3.12),
+        //             y: R64::from_inner(1.14),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.88),
+        //             y: R64::from_inner(-0.838),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(3.16),
+        //             y: R64::from_inner(0.131),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.29),
+        //             y: R64::from_inner(-1.66),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.88),
+        //             y: R64::from_inner(-0.838),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0.454),
+        //             y: R64::from_inner(-2.41),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(1.45),
+        //             y: R64::from_inner(-2.21),
+        //         },
+        //     ),
+        // ]);
+
         // println!("Current number of bad elements: {}", bad.len());
+        println!("Elements parsed:");
+        for item in self.elements.keys() {
+            println!("{}", item);
+        }
+        println!("\n\n\n\n\n\n\n");
+
         let mut i = 0;
         while !bad.is_empty() {
             if (i % 10000) == 0 {
-                println!("Iteration: {}, bad elements: {}", i, bad.len());
+                let mut hs = HashSet::new();
+                for b in &bad {
+                    hs.insert(*b);
+                }
+                println!(
+                    "Iteration: {}, bad elements: {} (deduped: {})",
+                    i,
+                    bad.len(),
+                    hs.len()
+                );
             }
             //if i >= 100 {
             //    println!("Current number of bad elements: {}", bad.len());
@@ -383,18 +574,20 @@ impl Mesh {
             i += 1;
             let item = bad.pop_front().unwrap();
             if !self.contains_triangle(&item) {
+                println!("skip!");
                 continue;
             }
 
-            let mut cav = Cavity::new(self, item.into());
-            cav.build(self);
-            cav.compute();
-            //println!("Created {} new elements", cav.new_nodes.len());
-            let mut result = self.update(cav, item);
-            println!("Got {} new bad items", result.len());
-            // bad.append(&mut result);
-            for i in result {
-                bad.push_back(i);
+            if let Some(mut cav) = Cavity::new(self, item.into()) {
+                cav.build(self);
+                cav.compute();
+                //println!("Created {} new elements", cav.new_nodes.len());
+                let result = self.update(cav, item);
+                println!("Got {} new bad items", result.len());
+                // bad.append(&mut result);
+                for i in result {
+                    bad.push_back(i);
+                }
             }
         }
 

@@ -23,11 +23,12 @@ pub struct Cavity {
 
 impl Cavity {
     /// Initializes a new cavity.
-    pub fn new(mesh: &Mesh, node: Element) -> Self {
+    pub fn new(mesh: &Mesh, node: Element) -> Option<Self> {
         let mut frontier = VecDeque::new();
         let mut previous_nodes = Vec::new();
         let new_nodes = Vec::new();
 
+        println!("Starting with: {}", node);
         let mut center_element = node;
 
         // TODO(feliix42): What if mesh.contains(node) fails?
@@ -47,7 +48,9 @@ impl Cavity {
             }
         }
 
-        let center = center_element.get_center();
+        println!("Using center element:\n{}", center_element);
+        let center = center_element.get_center()?;
+        println!("Center: {:?}", center);
         // println!("Center: {:?}", center);
         // println!("Coordinates: {:?}", center_element.borrow().coordinates);
         let dimension = match center_element {
@@ -57,7 +60,7 @@ impl Cavity {
         frontier.push_back(center_element);
         previous_nodes.push(center_element);
 
-        Cavity {
+        Some(Cavity {
             center_element,
             center,
             frontier,
@@ -66,7 +69,7 @@ impl Cavity {
             new_connections: Vec::new(),
             connections: Vec::new(),
             dimension,
-        }
+        })
     }
 
     fn expand(&mut self, curr: Element, next: Element) -> Result<(), Element> {
@@ -80,7 +83,7 @@ impl Cavity {
                 // is segment and we're encroaching
                 return Err(next);
             } else if !self.previous_nodes.contains(&next) {
-                // println!("Adding {:?} as node", next_inner.coordinates);
+                println!("  will delete: {}", next);
                 self.previous_nodes.push(next);
                 self.frontier.push_back(next);
             }
@@ -89,8 +92,12 @@ impl Cavity {
             let edge = next.get_related_edge(&curr).unwrap();
 
             let connection = (curr, edge, next);
+            print!("  connecting to {}?", next);
             if !self.connections.contains(&connection) {
                 self.connections.push(connection);
+                println!(" - yes");
+            } else {
+                println!(" - no");
             }
         }
 
@@ -111,7 +118,7 @@ impl Cavity {
 
                     for neighbor in neighbors {
                         if let Err(other) = self.expand(curr, *neighbor) {
-                            *self = Self::new(mesh, other);
+                            *self = Self::new(mesh, other).unwrap();
                         }
                     }
                 }
@@ -122,11 +129,13 @@ impl Cavity {
                         .expect("Edge is no longer in boundary set");
 
                     if let Err(other) = self.expand(curr, *neighbor) {
-                        *self = Self::new(mesh, other);
+                        *self = Self::new(mesh, other).unwrap();
                     }
                 }
             }
         }
+
+        println!("Cavity contains {} elements.", self.previous_nodes.len());
     }
 
     /// Compute a corrected cavity
@@ -153,6 +162,7 @@ impl Cavity {
             assert_ne!(conn.1 .0, conn.1 .1);
 
             let ele = Element::T(Triangle::new(self.center, (conn.1).0, (conn.1).1));
+            println!("  new: {}", ele);
             let other = if self.previous_nodes.contains(&conn.2) {
                 // if the destination is contained in previous nodes, go for the source
                 conn.0

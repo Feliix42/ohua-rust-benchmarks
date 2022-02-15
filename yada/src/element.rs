@@ -2,6 +2,7 @@
 
 use crate::point::Point;
 use decorum::R64;
+use num_traits::real::Real;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -32,7 +33,7 @@ impl Element {
     }
 
     /// Get the center point of the element.
-    pub fn get_center(&self) -> Point {
+    pub fn get_center(&self) -> Option<Point> {
         match self {
             Self::T(t) => t.get_center(),
             Self::E(e) => e.get_center(),
@@ -78,9 +79,12 @@ impl Element {
     }
 
     pub fn in_circle(&self, p: Point) -> bool {
-        let center = self.get_center();
-        let ds = center.distance_to(&p);
-        ds <= self.get_radius(center)
+        if let Some(center) = self.get_center() {
+            let ds = center.squared_distance_to(&p);
+            ds <= self.get_radius(center)
+        } else {
+            false
+        }
     }
 
     pub fn is_triangle(&self) -> bool {
@@ -280,25 +284,52 @@ impl Triangle {
         }
     }
 
+    pub fn area(&self) -> R64 {
+        let a = self.coordinates[0];
+        let b = self.coordinates[1];
+        let c = self.coordinates[2];
+
+        ((a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y)) / 2_f64).abs()
+    }
+
     pub fn is_bad(&self) -> bool {
+        // Stopgap measure
+        if self.area() < 1e-1 {
+            return false;
+        }
+
         for i in 0..3 {
-            let ang = self.coordinates[i].angle(
+            // I'm not exactly sure what happens here, it's a verbatim copy of the Galois function
+            // But the tests say it works, so....
+            if self.coordinates[i].angle_is_greater_than(
                 &self.coordinates[(i + 1) % 3],
                 &self.coordinates[(i + 2) % 3],
-            );
-
-            if ang < MIN_ANGLE {
+                MIN_ANGLE,
+            ) {
                 return true;
             }
+            // if let Some(ang) = self.coordinates[i].angle(
+            //     &self.coordinates[(i + 1) % 3],
+            //     &self.coordinates[(i + 2) % 3],
+            // ) {
+            //     if ang < MIN_ANGLE {
+            //         return true;
+            //     }
+            // }
         }
 
         false
     }
 
-    pub fn get_center(&self) -> Point {
+    pub fn get_center(&self) -> Option<Point> {
         let a = self.coordinates[0];
         let b = self.coordinates[1];
         let c = self.coordinates[2];
+
+        // Point {
+        //     x: (a.x + b.x + c.x) / 3.0,
+        //     y: (a.y + b.y + c.y) / 3.0,
+        // }
 
         let x = b - a;
         let y = c - a;
@@ -310,13 +341,16 @@ impl Triangle {
 
         let s = p_len * cosine;
         let t = p_len * sine_sq;
+        if t.abs() < R64::epsilon() {
+            return None;
+        }
 
         let wp = (p_len - cosine) / (R64::from_inner(2.0) * t);
         let wb = R64::from_inner(0.5) - (wp * s);
 
         let mut tmp_val = a * (R64::from_inner(1f64) - wb - wp);
         tmp_val = tmp_val + (b * wb);
-        tmp_val + (c * wp)
+        Some(tmp_val + (c * wp))
     }
 
     pub fn get_points(&self) -> Vec<&Point> {
@@ -355,7 +389,7 @@ impl Triangle {
     }
 
     pub fn get_radius(&self, pt: Point) -> R64 {
-        pt.distance_to(&self.coordinates[0])
+        pt.squared_distance_to(&self.coordinates[0])
     }
 
     /// If both elements share an edge, it is returned.
@@ -415,8 +449,8 @@ impl Edge {
         false
     }
 
-    pub fn get_center(&self) -> Point {
-        (self.0 + self.1) * 0.5
+    pub fn get_center(&self) -> Option<Point> {
+        Some((self.0 + self.1) * 0.5)
     }
 
     pub fn get_points(&self) -> Vec<&Point> {
@@ -435,7 +469,7 @@ impl Edge {
     }
 
     pub fn get_radius(&self, pt: Point) -> R64 {
-        pt.distance_to(&self.0)
+        pt.squared_distance_to(&self.0)
     }
 
     pub fn contains(&self, pt: Point) -> bool {
@@ -456,54 +490,69 @@ impl Ord for Element {
     }
 }
 
+*/
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn good_triangles_work() {
-        let p0 = Point { x: 0_f64, y: 0_f64 };
+        let p0 = Point {
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(0_f64),
+        };
         let p1 = Point {
-            x: 10_f64,
-            y: 0_f64,
+            x: R64::from_inner(10_f64),
+            y: R64::from_inner(0_f64),
         };
         let p2 = Point {
-            x: 0_f64,
-            y: 10_f64,
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(10_f64),
         };
 
-        let e = Element {
-            coordinates: vec![p0, p1, p2],
-            num_coordinates: 3,
-            // the following values are possibly bogus
-            neighbors: vec![],
-            obtuse_angle: None,
-        };
+        let e = Element::T(Triangle::new(p0, p1, p2));
 
         assert!(e.is_bad() == false);
     }
 
     #[test]
     fn bad_triangles_work() {
-        let p0 = Point { x: 0_f64, y: 0_f64 };
+        let p0 = Point {
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(0_f64),
+        };
         let p1 = Point {
-            x: 10_f64,
-            y: 0_f64,
+            x: R64::from_inner(10_f64),
+            y: R64::from_inner(0_f64),
         };
         let p2 = Point {
-            x: 0_f64,
-            y: 10000_f64,
+            x: R64::from_inner(0_f64),
+            y: R64::from_inner(1000000_f64),
         };
 
-        let e = Element {
-            coordinates: vec![p0, p1, p2],
-            num_coordinates: 3,
-            // the following values are possibly bogus
-            neighbors: vec![],
-            obtuse_angle: None,
-        };
+        let e = Element::T(Triangle::new(p0, p1, p2));
 
         assert!(e.is_bad() == true);
     }
-}
 
-*/
+    #[test]
+    fn skip_small_triangles() {
+        let p0 = Point {
+            x: R64::from_inner(92.82096),
+            y: R64::from_inner(64.98023),
+        };
+        let p1 = Point {
+            x: R64::from_inner(92.82097),
+            y: R64::from_inner(64.98023),
+        };
+        let p2 = Point {
+            x: R64::from_inner(92.82096),
+            y: R64::from_inner(64.98024),
+        };
+
+        let e = Triangle::new(p0, p1, p2);
+
+        println!("{}", e.area());
+        assert!(e.is_bad() == false);
+    }
+}
