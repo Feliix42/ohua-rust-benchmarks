@@ -14,16 +14,16 @@ static BETA: u32 = 3;
 
 type NodeID = u32;
 
-#[derive(Debug,PartialEq,Clone)]
+#[derive(Debug, PartialEq, Clone)]
 struct Node {
     // constant node properties
     id: NodeID,
     distance_to_sink: u32,
 
     // recomputed node properties
-    excess: i64,
+    excess: i32,
     height: i64,
-    current: NodeID, // the current candidate for a pushing operation
+    current: usize, // the current candidate for a pushing operation
 }
 
 impl Default for Node {
@@ -40,7 +40,21 @@ impl Default for Node {
 
 struct Edge {
     dst: NodeID,
-    data: u32, // value u
+    data: i32, // value u
+}
+
+impl Edge {
+    fn get_forward_data(&self) -> i32 {
+        self.data
+    }
+
+    fn get_backward_data(&self) -> i32 {
+        -self.data
+    }
+
+    fn reduce_capacity(&mut self, amount: i32) {
+        self.data -= amount;
+    }
 }
 
 struct Graph {
@@ -50,9 +64,9 @@ struct Graph {
     // The value u is associated with each edge
 
     // forward set {v,w}
-    fedges: HashMap<NodeID, HashMap<NodeID,Edge>>,
+    fedges: HashMap<NodeID, Vec<Edge>>,
     // backward set {w,v }
-    bedges: HashMap<NodeID, HashMap<NodeID,Edge>>,
+    bedges: HashMap<NodeID, Vec<NodeID>>,
 
     sink: NodeID,
     source: NodeID,
@@ -77,29 +91,40 @@ struct PreflowPush {
     should_global_relabel: bool,
 }
 
-fn reduce_capacity(fedge: &mut Edge, bedge: &mut Edge, amount: u32) {
-    fedge.data -= amount;
-    bedge.data += amount;
-}
-
 impl Graph {
-    fn assign_distance_to_sink(&mut self, sink: &NodeID) {
-        let sink_node = self.nodes.get(sink).unwrap();
-        let d = sink_node.distance_to_sink + 1;
-        for (dst,edge) in self.bedges.get(&sink).unwrap_or(&HashMap::new()) {
-            let mut src_node = self.nodes.get_mut(&dst).unwrap();
-            src_node.distance_to_sink = d;
-            self.assign_distance_to_sink(dst);
+    /**
+    The global relabeling heuristic up dates the distance function by computing shortest path
+    distances in the residual graph from all nodes to the sink.
+    */
+    fn assign_distance_to_sink_in_residual(&mut self, bdsts: Vec<NodeID>, distance: u32) {
+        let mut next_round = Vec::new();
+        for bdst in bdsts {
+            let mut src_node = self.nodes.get_mut(&bdst).unwrap();
+            src_node.distance_to_sink = distance;
+            match self.bedges.get(&bdst) {
+                None => (),
+                Some(new_bdsts) =>
+                    for new_bdst in new_bdsts {
+                        // FIXME use only residual nodes!
+                        next_round.push(*new_bdst);
+                    }
+            }
+        }
+
+        if next_round.is_empty() {
+            ()
+        } else {
+            self.assign_distance_to_sink_in_residual(next_round, distance + 1)
         }
     }
 
     fn relabel(&self, node: &mut Node) {
         let mut min_height = i64::MAX;
-        let mut min_edge: NodeID = 0;
+        let mut min_edge: usize = 0;
 
-        let mut current: NodeID = 0;
-        for (dst,edge) in self.fedges.get(&node.id).unwrap() {
-            let dst = self.nodes.get(&dst).unwrap();
+        let mut current: usize = 0;
+        for edge in self.fedges.get(&node.id).unwrap() {
+            let dst = self.nodes.get(&edge.dst).unwrap();
             let cap = edge.data;
             if cap > 0 {
                 if dst.height < min_height {
@@ -132,80 +157,69 @@ impl Graph {
     contains only these changed nodes an edges.
     The update function would then merge these changes into the existing graph.
     */
-    fn discharge(
-        &mut self,
-        src: NodeID
-    ) -> (bool, (NodeID, Graph)) {
-        let node = self.nodes.get_mut(&src).unwrap();
-        let relabeled = false;
+    fn discharge(&mut self, src: NodeID) -> (bool, (NodeID, Graph)) {
+        let graph_size = self.nodes.len();
+        let node = self.nodes.get(&src).unwrap();
+        let mut relabeled = false;
 
         let mut graph0 = Graph::default();
-        if node.excess == 0 || node.height >= (self.nodes.len() as i64) {
-            return (false, (src,graph0));
+        if node.excess == 0 || node.height >= (graph_size as i64) {
+            return (false, (src, graph0));
         }
 
         let mut node0 = node.clone();
-        graph0.nodes.insert(node0.id, node0);
 
         loop {
             let mut finished = false;
             let current = node0.current;
 
-            //auto ii = graph.edge_begin(src, flag);
-            //auto ee = graph.edge_end(src, flag);
-
-            //std::advance(ii, node.current);
-
-            for (dst,fedge) in self
+            for fedge in self
                 .fedges
                 .get_mut(&node0.id)
                 .unwrap()
                 .iter()
                 .skip(node0.current)
             {
-                //(; ii != ee; ++ii, ++current) {
-                let dst = dst;
+                let dst = fedge.dst;
                 let cap = fedge.data;
                 if cap == 0 {
                     // || current < node.current)
                     continue;
                 }
 
-                let dnode = self.nodes.get_mut(&dst).unwrap();
+                let dnode = self.nodes.get(&dst).unwrap();
                 if node0.height - 1 != dnode.height {
                     continue;
                 }
 
-                let dnode0 = dnode.clone();
-                graph0.nodes.insert(dnode0.id, dnode0);
+                let mut dnode0 = dnode.clone();
 
                 // Push flow
-                let amount = if node0.excess < (cap as i64) { node0.excess as u32 } else { cap };
-                let mut fedge0 = fedge.clone();
-                let mut bedge0 = self.bedges.get(dst).unwrap().get(&node.id).unwrap().clone();
+                let amount = std::cmp::min(node0.excess, cap);
+                let mut fedge0 = Edge {dst:fedge.dst, data: fedge.data};
 
-                reduce_capacity(&mut fedge0, &mut bedge0, amount);
+                fedge0.reduce_capacity(amount);
 
                 if !graph0.fedges.contains_key(&node0.id) {
-                    graph0.fedges.insert(node0.id, HashMap::new());
+                    graph0.fedges.insert(node0.id, Vec::new());
                 }
-                graph0.fedges.get_mut(&node.id).unwrap().insert(*dst, *fedge0);
+                graph0.fedges.get_mut(&node.id).unwrap().push(fedge0);
 
-                if !graph0.bedges.contains_key(dst) {
-                    graph0.bedges.insert(*dst, HashMap::new());
+                if !graph0.bedges.contains_key(&dst) {
+                    graph0.bedges.insert(dst, Vec::new());
                 }
-                graph0.bedges.get_mut(dst).unwrap().insert(node.id, *bedge0);
+                graph0.bedges.get_mut(&dst).unwrap().push(node.id);
 
                 // Add to worklist. moved to update.
                 // Only add once
-//                if (dst != sink && dst != src && dnode.excess == 0) {
-//                    ctxt.push(dst);
-//                }
+                //                if (dst != sink && dst != src && dnode.excess == 0) {
+                //                    ctxt.push(dst);
+                //                }
 
-                let iamount = amount as i64;
-                assert!(node0.excess >= iamount);
-                node0.excess -= iamount;
-                dnode0.excess += iamount;
+                assert!(node0.excess >= amount);
+                node0.excess -= amount;
+                dnode0.excess += amount;
+                graph0.nodes.insert(dnode0.id, dnode0);
 
                 if node.excess == 0 {
                     finished = true;
@@ -222,12 +236,14 @@ impl Graph {
             self.relabel(&mut node0);
             relabeled = true;
 
-            if node0.height == (self.nodes.len() as i64) {
+            if node0.height == (graph_size as i64) {
                 break;
             }
 
             // prevHeight = node.height;
         }
+
+        graph0.nodes.insert(node0.id, node0);
 
         (relabeled, (src, graph0))
     }
@@ -238,25 +254,29 @@ impl Graph {
      */
     fn update(&mut self, updates: Vec<(NodeID, Graph)>) -> HashSet<NodeID> {
         let mut redo = HashSet::new();
-        let mut updated = HashSet::new();
+        let updated = HashSet::new();
         for update in updates {
-            let (src, graph) = update;
-            let mut touched = graph
-                .fedges
-                .keys()
-                .collect::<HashSet<_>>();
-            touched.insert(&src);
+            let (src, mut graph) = update;
+            let mut touched = HashSet::new();
+            graph.fedges.keys().for_each(|u| { touched.insert(*u); });
+            touched.insert(src);
             let no_conflicts = updated.is_disjoint(&touched);
 
             // 1st reason to end up in new worklist: collision
             if no_conflicts {
                 // success: replace in graph
-                graph.nodes.drain().for_each(|(n, val)| { self.nodes.insert(n, val); } );
-                graph.fedges.drain().for_each(|(e, val)| { self.fedges.insert(e, val); } );
-                graph.bedges.drain().for_each(|(e, val)| { self.bedges.insert(e, val); } );
+                graph.nodes.drain().for_each(|(n, val)| {
+                    self.nodes.insert(n, val);
+                });
+                graph.fedges.drain().for_each(|(e, val)| {
+                    self.fedges.insert(e, val);
+                });
+                graph.bedges.drain().for_each(|(e, val)| {
+                    self.bedges.insert(e, val);
+                });
 
                 // 2nd reason to end up in new worklist: excess prop
-                for (nid,node) in graph.nodes {
+                for (nid, node) in graph.nodes {
                     if nid != self.sink && nid != self.source && nid != src && node.excess == 0 {
                         redo.insert(nid);
                     }
@@ -281,16 +301,15 @@ impl Graph {
     - The other code works best when there are a lot of collissions.
     It would be super novel to switch between these two versions at runtime!
      */
-    fn initializePreflow(&mut self) -> HashSet<NodeID> {
+    fn initialize_preflow(&mut self) -> HashSet<NodeID> {
         let mut initial = HashSet::new();
-        for (dst, mut fedge) in self.fedges.get_mut(&self.source).unwrap() {
-            let mut dnode = self.nodes.get_mut(&dst).unwrap();
-            let mut bedge = self.bedges.get_mut(&dst).unwrap().get_mut(&self.source).unwrap();
+        for fedge in self.fedges.get_mut(&self.source).unwrap() {
+            let mut dnode = self.nodes.get_mut(&fedge.dst).unwrap();
             let cap = fedge.data;
-            reduce_capacity(&mut fedge, &mut bedge, cap);
-            dnode.excess += cap as i64;
+            fedge.reduce_capacity(cap);
+            dnode.excess += cap;
             if cap > 0 {
-                initial.insert(*dst);
+                initial.insert(fedge.dst);
             }
         }
         initial
@@ -517,7 +536,7 @@ That is, it is left to the developer to do the synchronization!
 Even more so, the iterators have unclear semantics and there are places in the code where the developer
 has to explicitly "lock" state!
  */
-fn nondet_discharge(graph: Graph, initial: HashSet<NodeID>, preflow: PreflowPush) -> Graph {
+fn nondet_discharge(mut graph: Graph, initial: HashSet<NodeID>, preflow: PreflowPush) -> Graph {
     //let mut counter = Counter::new();
 
     //    // per thread <-- original code comment!
@@ -529,7 +548,7 @@ fn nondet_discharge(graph: Graph, initial: HashSet<NodeID>, preflow: PreflowPush
     //        [&counter, relabel_interval, this](GNode& src, auto& ctx) {
 
     //    let should_global_relabel_new = should_global_relabel;
-    let updates = Vec::new();
+    let mut updates = Vec::new();
     for src in initial {
         //let mut increment: i64 = 1;
         //graph.acquire(src); --> locking for graph
@@ -572,8 +591,8 @@ fn nondet_discharge(graph: Graph, initial: HashSet<NodeID>, preflow: PreflowPush
     }
 }
 
-fn run(graph: Graph, preflow: PreflowPush) {
-    let initial = graph.initializePreflow();
+fn run(mut graph: Graph, preflow: PreflowPush) {
+    let initial = graph.initialize_preflow();
     let result_graph = nondet_discharge(graph, initial, preflow);
     // TODO do something with it here!
 }
