@@ -1,6 +1,6 @@
 //! In the original codebase, this was `mesh.c`
 
-// use crate::cavity::Cavity;
+use crate::cavity::Cavity;
 use crate::element::{Edge, Element, Triangle};
 use crate::point::Point;
 use decorum::R64;
@@ -10,10 +10,17 @@ use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 
 pub struct Mesh {
-    pub elements: HashMap<Triangle, [Element; 3]>,
-    //root: Rc<RefCell<Element>>,
-    //initial_bad_queue: VecDeque<()>,
-    //size: usize,
+    /// Triangles in the mesh with links to neighboring elements.
+    /// The vector will **always** have 3 elements.
+    ///
+    /// The reason for this being a `Vec<Element>` instead of `[Element; 3]` is
+    /// simply ergonimics: It's infinitely simpler to just append/remove elements
+    /// from a vector than an array. This means that in the two places where the
+    /// array is actually modified, the relaxed constraint allows the simple
+    /// removal of elements without having to use indirections like casting the
+    /// array to an array of `Option<Element>` etc.
+    pub elements: HashMap<Triangle, Vec<Element>>,
+    // pub elements: HashMap<Triangle, [Element; 3]>,
     pub boundary_set: HashMap<Edge, Element>,
 }
 
@@ -38,7 +45,7 @@ impl Mesh {
         for line in node_reader.lines() {
             let line = line?;
             // skip comments
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue;
             }
 
@@ -89,7 +96,7 @@ impl Mesh {
             let line = line?;
 
             // skip comments
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue;
             }
 
@@ -108,8 +115,8 @@ impl Mesh {
             assert!(coords[1] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0] - 1];
-            let c_1 = coordinates[coords[1] - 1];
+            let c_0 = coordinates[coords[0]];
+            let c_1 = coordinates[coords[1]];
             edge_set.insert(Edge::new(c_0, c_1));
         }
 
@@ -130,7 +137,7 @@ impl Mesh {
         for line in ele_reader.lines() {
             let line = line?;
 
-            if line.starts_with("#") {
+            if line.starts_with('#') {
                 continue;
             }
 
@@ -146,15 +153,14 @@ impl Mesh {
             assert!(coords[2] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0] - 1];
-            let c_1 = coordinates[coords[1] - 1];
-            let c_2 = coordinates[coords[2] - 1];
+            let c_0 = coordinates[coords[0]];
+            let c_1 = coordinates[coords[1]];
+            let c_2 = coordinates[coords[2]];
             elem_vec.push(Triangle::new(c_0, c_1, c_2));
         }
 
         let mut edges: HashMap<Edge, Element> = HashMap::with_capacity(num_segments);
-        let mut elems: HashMap<Triangle, [Option<Element>; 3]> =
-            HashMap::with_capacity(num_elements);
+        let mut elems: HashMap<Triangle, Vec<Element>> = HashMap::with_capacity(num_elements);
 
         // establish neighboring relations
         let mut triangle_map: HashMap<Edge, Triangle> = HashMap::new();
@@ -168,40 +174,34 @@ impl Mesh {
                     // edge is shared with an outer edge -> establish link
                     // insert the item in the linked list
                     let item = elems.entry(elem).or_default();
-                    item[0] = Some(e.into());
-                    item.rotate_left(1);
+                    item.push(e.into());
 
                     // insert backlink from the edge
                     // NOTE(feliix42): could be `assert!()`ed as `is_none()`
                     edges.insert(e, elem.into());
                 } else if let Some(other) = triangle_map.remove(&e) {
                     let item = elems.entry(elem).or_default();
-                    item[0] = Some(other.into());
-                    item.rotate_left(1);
+                    item.push(other.into());
 
                     let o_mut = elems.entry(other).or_default();
-                    o_mut[0] = Some(elem.into());
-                    o_mut.rotate_left(1);
+                    o_mut.push(elem.into());
                 } else {
-                    triangle_map.insert(e, elem.clone());
+                    triangle_map.insert(e, elem);
                 }
             }
         }
         // verify correctness
-        assert_eq!(edges.len(), edge_set.len());
-        let _ = elems
-            .iter()
-            .map(|(_, v)| assert!(v.iter().any(Option::is_none)))
-            .collect::<()>();
+        #[cfg(verify)]
+        {
+            assert_eq!(edges.len(), edge_set.len());
+            let _ = elems
+                .iter()
+                .map(|(_, v)| assert_eq!(v.len(), 3))
+                .collect::<()>();
+        }
 
         Ok(Mesh {
-            elements: elems
-                .into_iter()
-                .map(|(k, v)| {
-                    let [a, b, c] = v;
-                    (k, [a.unwrap(), b.unwrap(), c.unwrap()])
-                })
-                .collect(),
+            elements: elems,
             boundary_set: edges,
         })
     }
@@ -231,139 +231,366 @@ impl Mesh {
         self.elements.contains_key(node)
     }
 
-    // TODO: Continue with this function: Should it take a `Triangle`? I'm confused since the original code does not distinguish between edge & triangle but a edge can't have an obtuse angle...
     /// Find the node that is opposite to the obtuse angle of the element.
-    fn get_opposite(&self, node: &Element) -> Element {
+    pub fn get_opposite(&self, node: &Triangle) -> Element {
         let obtuse_pt = node.get_obtuse();
+        let opposite_edge = node.get_opposite_edge();
 
         for neighbor in self.elements.get(node).unwrap() {
-            // get related edge
-            if let Some(related_edge) = node.get_related_edge(&neighbor.borrow()) {
-                // if points of the edge don't match obtuse point, return neighbor
-                if obtuse_pt != related_edge.0 && obtuse_pt != related_edge.1 {
-                    return neighbor.clone();
+            match neighbor {
+                Element::T(ref t) => {
+                    // get related edge
+                    if let Some(related_edge) = node.get_related_edge(t) {
+                        // if points of the edge don't match obtuse point, return neighbor
+                        if !related_edge.contains(obtuse_pt) {
+                            return *neighbor;
+                        }
+                    }
+                }
+                Element::E(ref e) => {
+                    if *e == opposite_edge {
+                        return *neighbor;
+                    }
                 }
             }
         }
 
         unreachable!()
-        //std::mem::drop(inner);
-        //node
     }
 
-    // /// Update the mesh with the data of a corrected cavity. (Original code implements this in `Cavity.h`)
-    // ///
-    // /// Returns a list of new bad elements
-    // pub fn update(
-    //     &mut self,
-    //     cav: Cavity,
-    //     original_bad: Rc<RefCell<Element>>,
-    // ) -> VecDeque<Rc<RefCell<Element>>> {
-    //     // here we'd probably have to check if all elements of the `previous_nodes`
-    //     // are still in the mesh before updating when doing this in parallel.
-    //     // remove old elements
-    //     // println!("Previous nodes: {}", cav.previous_nodes.len(),);
-    //     let mut failed = 0;
-    //     for old in cav.previous_nodes.into_iter() {
-    //         // print!("Searching {:?}", old.borrow().coordinates);
-    //         if let Some(pos) = find_pos(&self.elements, &old) {
-    //             self.elements.remove(pos);
-    //             // println!(" - found");
-    //         } else {
-    //             if self.elements.contains(&old) {
-    //                 panic!("Element was already removed??");
-    //             }
-    //             // println!(" - nope");
-    //             failed += 1;
-    //         }
-    //     }
-    //     assert!(failed == 0, "Failed in removing {} elements", failed);
+    // NOTE(feliix42): So this one is fun: It can happen that a cavity is started
+    // from an edge (only happens when the cavity is initialized and overwrites
+    // itself). But apparently this is never translated to this stage of execution.
+    //
+    // It seems like that may not be a problem after all since the last few lines in the function are handling this.
+    /// Update the mesh with the data of a corrected cavity. (Original code implements this in `Cavity.h`)
+    ///
+    /// Returns a list of new bad elements
+    pub fn update(&mut self, cav: Cavity, original_bad: Triangle) -> VecDeque<Triangle> {
+        // println!("Update: Replacing {} elements with {} elements.\nOld set:\n{:#?}\n--------------\nNew set:\n{:#?}", cav.previous_nodes.len(), cav.new_nodes.len(), cav.previous_nodes, cav.new_nodes);
+        // std::thread::sleep_ms(1_000);
 
-    //     //println!(
-    //     //    "old connections: {}, new connections: {}",
-    //     //    cav.connections.len(),
-    //     //    cav.new_connections.len()
-    //     //);
+        // here we'd probably have to check if all elements of the `previous_nodes`
+        // are still in the mesh before updating when doing this in parallel.
+        // println!("Previous nodes: {}", cav.previous_nodes.len(),);
 
-    //     // prune old connections!
-    //     for (old, _, outer) in cav.connections.into_iter() {
-    //         let mut o_inner = outer.borrow_mut();
+        // remove old elements
+        // let mut failed = 0;
+        for old in cav.previous_nodes {
+            // print!("Searching {:?}", old.borrow().coordinates);
+            match old {
+                Element::T(ref t) => {
+                    self.elements.remove(t);
+                }
+                Element::E(ref e) => {
+                    self.boundary_set.remove(e);
+                }
+            }
+        }
+        // assert!(failed == 0, "Failed in removing {} elements", failed);
 
-    //         if let Some(pos) = find_pos(&o_inner.neighbors, &old) {
-    //             o_inner.neighbors.remove(pos);
-    //         } else {
-    //             panic!("delete w/o success");
-    //         }
-    //     }
+        //println!(
+        //    "old connections: {}, new connections: {}",
+        //    cav.connections.len(),
+        //    cav.new_connections.len()
+        //);
 
-    //     // add new data
-    //     let mut new_bad = VecDeque::new();
-    //     for new_node in cav.new_nodes.into_iter() {
-    //         self.elements.push(new_node.clone());
+        // prune old connections!
+        for (old, _, outer) in cav.connections {
+            match outer {
+                Element::T(ref t) => {
+                    if let Some(neighborhood) = self.elements.get_mut(t) {
+                        let _ = neighborhood
+                            .drain_filter(|&mut x| x == old)
+                            .collect::<Vec<_>>();
+                    }
+                }
+                Element::E(ref e) => {
+                    // we can just remove the edge because the new neighboring relation will add it again.
+                    self.boundary_set.remove(e);
+                }
+            }
+        }
 
-    //         if new_node.borrow().is_bad() {
-    //             new_bad.push_back(new_node);
-    //         }
-    //     }
+        // add new data
+        let mut new_bad = VecDeque::new();
+        for new_node in cav.new_nodes {
+            match new_node {
+                Element::T(t) => {
+                    self.elements.insert(t, Vec::with_capacity(3));
+                    if t.is_bad() {
+                        new_bad.push_back(t);
+                    }
+                }
+                Element::E(_) => (),
+            }
+        }
 
-    //     // this `new_edge` is somewhat unnecessary I reckon, but that was part of the original code.
-    //     // I'm now also realizing that this could probably be put into the
-    //     // `compute` function of `cavity`, but thinking ahead it's probably
-    //     // better kept here to make matters simpler when going for the parallel
-    //     // versions.
-    //     for (src, _, dst) in cav.new_connections.into_iter() {
-    //         src.borrow_mut().neighbors.push(dst.clone());
-    //         dst.borrow_mut().neighbors.push(src);
-    //     }
+        // this `new_edge` is somewhat unnecessary I reckon, but that was part of the original code.
+        // I'm now also realizing that this could probably be put into the
+        // `compute` function of `cavity`, but thinking ahead it's probably
+        // better kept here to make matters simpler when going for the parallel
+        // versions.
+        for (src, _, dst) in cav.new_connections {
+            match src {
+                Element::T(ref t) => {
+                    let neighborhood = self.elements.get_mut(t).expect("Element does not exist");
+                    neighborhood.push(dst);
+                }
+                Element::E(e) => {
+                    self.boundary_set.insert(e, dst);
+                }
+            }
 
-    //     // if the original "bad element" is still in the mesh that's still a todo
-    //     if self.contains(&original_bad) {
-    //         new_bad.push_back(original_bad);
-    //     }
+            match dst {
+                Element::T(ref t) => {
+                    let neighborhood = self.elements.get_mut(t).expect("Element does not exist");
+                    neighborhood.push(src);
+                }
+                Element::E(e) => {
+                    self.boundary_set.insert(e, src);
+                }
+            }
+        }
 
-    //     new_bad
-    // }
+        // if the original "bad element" is still in the mesh that's still a todo
+        if self.elements.contains_key(&original_bad) {
+            new_bad.push_back(original_bad);
+        }
 
-    // pub fn refine(&mut self, mut bad: VecDeque<Triangle>) {
-    //     // println!("Current number of bad elements: {}", bad.len());
-    //     let mut i = 0;
-    //     while !bad.is_empty() {
-    //         i += 1;
-    //         let item = bad.pop_front().unwrap();
-    //         if !self.contains(&item) {
-    //             continue;
-    //         }
+        // verify correctness
+        #[cfg(verify)]
+        {
+            let _ = self
+                .elements
+                .iter()
+                .map(|(_, v)| assert_eq!(v.len(), 3))
+                .collect::<()>();
+        }
 
-    //         let mut cav = Cavity::new(&self, item.clone());
-    //         cav.build(&self);
-    //         cav.compute();
-    //         //println!("Created {} new elements", cav.new_nodes.len());
-    //         let mut result = self.update(cav, item);
-    //         //println!("Got {} new bad items", result.len());
-    //         bad.append(&mut result);
+        println!("-- Done");
 
-    //         if (i % 10000) == 0 {
-    //             println!("Iteration: {}, bad elements: {}", i, bad.len());
-    //         }
-    //         //if i >= 100 {
-    //         //    println!("Current number of bad elements: {}", bad.len());
-    //         //    i = 0;
-    //         //}
-    //     }
+        new_bad
+    }
 
-    //     println!("Did {} iterations", i);
-    // }
+    pub fn refine(&mut self, mut bad: VecDeque<Triangle>) {
+        // let mut bad = VecDeque::from([
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-0.416),
+        //             y: R64::from_inner(0.909),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.77),
+        //             y: R64::from_inner(2.08),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.16),
+        //             y: R64::from_inner(2.89),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-0.416),
+        //             y: R64::from_inner(0.909),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.77),
+        //             y: R64::from_inner(2.08),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-0.416),
+        //             y: R64::from_inner(0.909),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.16),
+        //             y: R64::from_inner(2.89),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(1.36),
+        //             y: R64::from_inner(3.49),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-1.35),
+        //             y: R64::from_inner(0.436),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(-0.416),
+        //             y: R64::from_inner(0.909),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(1.36),
+        //             y: R64::from_inner(3.49),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-1.31),
+        //             y: R64::from_inner(-1.51),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(-0.532),
+        //             y: R64::from_inner(-2.17),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(-0.532),
+        //             y: R64::from_inner(-2.17),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0.454),
+        //             y: R64::from_inner(-2.41),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(3.12),
+        //             y: R64::from_inner(1.14),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.77),
+        //             y: R64::from_inner(2.08),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(1.45),
+        //             y: R64::from_inner(-2.21),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.29),
+        //             y: R64::from_inner(-1.66),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(3.16),
+        //             y: R64::from_inner(0.131),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(3.12),
+        //             y: R64::from_inner(1.14),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.88),
+        //             y: R64::from_inner(-0.838),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(3.16),
+        //             y: R64::from_inner(0.131),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.29),
+        //             y: R64::from_inner(-1.66),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(2.88),
+        //             y: R64::from_inner(-0.838),
+        //         },
+        //     ),
+        //     Triangle::new(
+        //         Point {
+        //             x: R64::from_inner(0_f64),
+        //             y: R64::from_inner(0_f64),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(0.454),
+        //             y: R64::from_inner(-2.41),
+        //         },
+        //         Point {
+        //             x: R64::from_inner(1.45),
+        //             y: R64::from_inner(-2.21),
+        //         },
+        //     ),
+        // ]);
+
+        // println!("Current number of bad elements: {}", bad.len());
+        println!("Elements parsed:");
+        for item in self.elements.keys() {
+            println!("{}", item);
+        }
+        println!("\n\n\n\n\n\n\n");
+
+        let mut i = 0;
+        while !bad.is_empty() {
+            if (i % 10000) == 0 {
+                let mut hs = HashSet::new();
+                for b in &bad {
+                    hs.insert(*b);
+                }
+                println!(
+                    "Iteration: {}, bad elements: {} (deduped: {})",
+                    i,
+                    bad.len(),
+                    hs.len()
+                );
+            }
+            //if i >= 100 {
+            //    println!("Current number of bad elements: {}", bad.len());
+            //    i = 0;
+            //}
+
+            i += 1;
+            let item = bad.pop_front().unwrap();
+            if !self.contains_triangle(&item) {
+                println!("skip!");
+                continue;
+            }
+
+            if let Some(mut cav) = Cavity::new(self, item.into()) {
+                cav.build(self);
+                cav.compute();
+                //println!("Created {} new elements", cav.new_nodes.len());
+                let result = self.update(cav, item);
+                println!("Got {} new bad items", result.len());
+                // bad.append(&mut result);
+                for i in result {
+                    bad.push_back(i);
+                }
+            }
+        }
+
+        println!("Did {} iterations", i);
+    }
 }
-
-// fn find_pos(list: &Vec<Rc<RefCell<Element>>>, other: &Rc<RefCell<Element>>) -> Option<usize> {
-//     let mut idx = 0;
-//     for elem in list {
-//         if elem == other {
-//             return Some(idx);
-//         } else {
-//             idx += 1;
-//         }
-//     }
-
-//     None
-// }
