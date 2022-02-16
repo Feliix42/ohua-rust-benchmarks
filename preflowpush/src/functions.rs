@@ -39,6 +39,7 @@ impl Default for Node {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
 struct Edge {
     dst: NodeID,
     data: i32, // value u
@@ -154,58 +155,45 @@ impl Graph {
     contains only these changed nodes an edges.
     The update function would then merge these changes into the existing graph.
     */
-    pub fn discharge(&mut self, src: NodeID) -> (bool, (NodeID, Graph)) {
+    pub fn discharge(&self, src: NodeID) -> (u64, (NodeID, Graph)) {
         let graph_size = self.nodes.len();
         let node = self.nodes.get(&src).unwrap();
-        let mut relabeled = false;
 
         let mut graph0 = Graph::default();
         if node.excess == 0 || node.height >= (graph_size as u64) {
-            return (false, (src, graph0));
+            return (0, (src, graph0));
         }
 
+        // preparation
         let mut node0 = node.clone();
+        let mut fedges0 = self.fedges.get(&node0.id).unwrap().clone();
+        let mut dnodes = Vec::new();
+        for fedge in fedges0.iter_mut().skip(node0.current) {
+            let dst = fedge.dst;
+            let dnode = self.nodes.get(&dst).unwrap();
+            dnodes.push(dnode.clone());
+        }
 
         loop {
             let mut finished = false;
             let current = node0.current;
 
-            for fedge in self
-                .fedges
-                .get_mut(&node0.id)
-                .unwrap()
-                .iter()
-                .skip(node0.current)
+            for (fedge,mut dnode) in fedges0.iter_mut().zip(dnodes.iter_mut()).skip(node0.current)
             {
-                let dst = fedge.dst;
                 let cap = fedge.data;
                 if cap == 0 {
                     // || current < node.current)
                     continue;
                 }
 
-                let dnode = self.nodes.get(&dst).unwrap();
                 if node0.height - 1 != dnode.height {
                     continue;
                 }
 
-                let mut dnode0 = dnode.clone();
-
                 // Push flow
                 let amount = std::cmp::min(node0.excess, cap);
-                let mut fedge0 = Edge {dst:fedge.dst, data: fedge.data};
 
-                fedge0.reduce_capacity(amount);
-
-                if !graph0.fedges.contains_key(&node0.id) {
-                    graph0.fedges.insert(node0.id, Vec::new());
-                }
-                graph0.fedges.get_mut(&node.id).unwrap().push(fedge0);
-
-                if !graph0.bedges.contains_key(&dst) {
-                    graph0.bedges.insert(dst, Vec::new());
-                }
-                graph0.bedges.get_mut(&dst).unwrap().push(node.id);
+                fedge.reduce_capacity(amount);
 
                 // Add to worklist. moved to update.
                 // Only add once
@@ -215,23 +203,21 @@ impl Graph {
 
                 assert!(node0.excess >= amount);
                 node0.excess -= amount;
-                dnode0.excess += amount;
-                graph0.nodes.insert(dnode0.id, dnode0);
+                dnode.excess += amount;
 
-                if node.excess == 0 {
+                if node0.excess == 0 {
                     finished = true;
                     node0.current = current;
                     break;
                 }
             }
 
-            // really, the assumption of the above loop is that there is at least one node in the graph with excess == 0.
+            // we discharge until at least one node has no excess anymore.
             if finished {
                 break;
             }
 
             self.relabel(&mut node0);
-            relabeled = true;
 
             if node0.height == (graph_size as u64) {
                 break;
@@ -240,9 +226,11 @@ impl Graph {
             // prevHeight = node.height;
         }
 
+        graph0.fedges.insert(node0.id, fedges0);
         graph0.nodes.insert(node0.id, node0);
+        dnodes.drain(..).for_each(|n| { graph0.nodes.insert(n.id, n); });
 
-        (relabeled, (src, graph0))
+        (BETA, (src, graph0))
     }
 
     /**
@@ -528,8 +516,12 @@ impl Default for Counter {
 }
 
 impl Counter{
-    pub fn detect_global_relabel(&mut self, relabels:u64, config: &PreflowPush) -> bool {
-        let new_c = self.c + (relabels * BETA);
+    pub fn add(&mut self, x:u64) {
+        self.c = x
+    }
+
+    pub fn detect_global_relabel(&mut self, relabels:Counter, config: &PreflowPush) -> bool {
+        let new_c = self.c + relabels.c;
         if new_c > config.global_relabel_interval && config.should_global_relabel {
             self.c = 0;
             true

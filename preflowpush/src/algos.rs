@@ -7,6 +7,9 @@ use std::collections::HashSet;
 The global relabeling heuristic up dates the distance function by computing shortest path
 distances in the residual graph from all nodes to the sink.
  */
+// TODO this must take a read-only graph for finding the nodes.
+// Either the nodes are in hashmap, that we can use to retrieve them and store them into a list.
+// Or we need to clone them.
 fn assign_distance_to_sink_in_residual(graph: &mut Graph, bdsts: Vec<NodeID>, distance: u32) {
     let mut next_round = Vec::new();
     for bdst in bdsts {
@@ -74,9 +77,11 @@ fn nondet_discharge(mut graph: Graph, mut counter : Counter, initial: HashSet<No
     //        [&counter, relabel_interval, this](GNode& src, auto& ctx) {
 
     let mut updates = Vec::new();
+    let mut relabel_count = Counter::default();
     for src in initial {
-        let (_, results) = graph.discharge(src);
+        let (relabel_c, results) = graph.discharge(src);
         updates.push(results);
+        relabel_count.add(relabel_c);
 
         // There is certainly no way that we can really enforce this and neither can Galois code!
         // But the condition below does not work on equality. Hence, we do preserve the semantics of the algorithm specification.
@@ -94,7 +99,7 @@ fn nondet_discharge(mut graph: Graph, mut counter : Counter, initial: HashSet<No
         //        }
     }
 
-    let should_global_relabel = counter.detect_global_relabel(updates.len() as u64, &preflow);
+    let should_global_relabel = counter.detect_global_relabel(relabel_count, &preflow);
     let mut wl_new = graph.update(updates);
     let wl_new0 = graph.global_relabel(should_global_relabel);
 
