@@ -1,6 +1,6 @@
+use algos::global_relabel_do;
 use std::collections::hash_map::HashMap;
 use std::collections::HashSet;
-use algos::global_relabel_do;
 
 // Preflow Push measured here: https://dl.acm.org/doi/pdf/10.1145/2644865.2541964
 // Global relabeling described here: http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
@@ -107,10 +107,17 @@ impl Node {
 }
 
 impl Graph {
-
     pub fn global_relabel(&mut self, should_relabel: bool) -> HashSet<NodeID> {
         if should_relabel {
-            global_relabel_do(self)
+            let mut residual_nodes = global_relabel_do(self);
+            let mut reactivate = HashSet::new();
+            residual_nodes.drain().for_each(|(id, residual_node)| {
+                self.nodes.insert(id, residual_node);
+                if id != self.sink && id != self.source {
+                    reactivate.insert(id);
+                }
+            });
+            reactivate
         } else {
             HashSet::new()
         }
@@ -178,7 +185,10 @@ impl Graph {
             let mut finished = false;
             let current = node0.current;
 
-            for (fedge,mut dnode) in fedges0.iter_mut().zip(dnodes.iter_mut()).skip(node0.current)
+            for (fedge, mut dnode) in fedges0
+                .iter_mut()
+                .zip(dnodes.iter_mut())
+                .skip(node0.current)
             {
                 let cap = fedge.data;
                 if cap == 0 {
@@ -228,7 +238,9 @@ impl Graph {
 
         graph0.fedges.insert(node0.id, fedges0);
         graph0.nodes.insert(node0.id, node0);
-        dnodes.drain(..).for_each(|n| { graph0.nodes.insert(n.id, n); });
+        dnodes.drain(..).for_each(|n| {
+            graph0.nodes.insert(n.id, n);
+        });
 
         (BETA, (src, graph0))
     }
@@ -243,7 +255,9 @@ impl Graph {
         for update in updates {
             let (src, mut graph) = update;
             let mut touched = HashSet::new();
-            graph.fedges.keys().for_each(|u| { touched.insert(*u); });
+            graph.fedges.keys().for_each(|u| {
+                touched.insert(*u);
+            });
             touched.insert(src);
             let no_conflicts = updated.is_disjoint(&touched);
 
@@ -270,7 +284,10 @@ impl Graph {
                 // failure: request redo
                 redo.insert(src);
             }
-            updated = updated.union(&touched).map(|x| *x).collect::<HashSet<NodeID>>();
+            updated = updated
+                .union(&touched)
+                .map(|x| *x)
+                .collect::<HashSet<NodeID>>();
         }
         redo
     }
@@ -300,8 +317,6 @@ impl Graph {
         initial
     }
 }
-
-
 
 /*
 // Challenge: How would one do a BFS through a graph in Ohua?
@@ -506,21 +521,21 @@ fn global_relabel(counter: Counter, graph: Graph, src: NodeID, sink: NodeID) -> 
 */
 
 pub struct Counter {
-    c:u64
+    c: u64,
 }
 
 impl Default for Counter {
     fn default() -> Counter {
-        Counter {c:0}
+        Counter { c: 0 }
     }
 }
 
-impl Counter{
-    pub fn add(&mut self, x:u64) {
+impl Counter {
+    pub fn add(&mut self, x: u64) {
         self.c = x
     }
 
-    pub fn detect_global_relabel(&mut self, relabels:Counter, config: &PreflowPush) -> bool {
+    pub fn detect_global_relabel(&mut self, relabels: Counter, config: &PreflowPush) -> bool {
         let new_c = self.c + relabels.c;
         if new_c > config.global_relabel_interval && config.should_global_relabel {
             self.c = 0;
@@ -531,4 +546,3 @@ impl Counter{
         }
     }
 }
-

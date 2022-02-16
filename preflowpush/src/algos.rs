@@ -1,62 +1,65 @@
 use functions::*;
-use std::collections::HashSet;
-
-
+use std::collections::{HashMap, HashSet};
 
 /**
 The global relabeling heuristic up dates the distance function by computing shortest path
 distances in the residual graph from all nodes to the sink.
  */
-// TODO this must take a read-only graph for finding the nodes.
-// Either the nodes are in hashmap, that we can use to retrieve them and store them into a list.
-// Or we need to clone them.
-fn assign_distance_to_sink_in_residual(graph: &mut Graph, bdsts: Vec<NodeID>, distance: u32) {
+fn assign_distance_to_sink_in_residual(
+    graph: &Graph,
+    mut residual_nodes: HashMap<NodeID, Node>,
+    bdsts: Vec<NodeID>,
+    distance: u32,
+) -> HashMap<NodeID, Node> {
     let mut next_round = Vec::new();
     for bdst in bdsts {
-        let mut src_node = graph.nodes.get_mut(&bdst).unwrap();
+        // local update
+        let mut src_node = residual_nodes.get_mut(&bdst).unwrap(); // cannot fail because we added it below
+                                                                   // where we already checked.
         src_node.distance_to_sink = distance;
+
+        // extract next
         match graph.bedges.get(&bdst) {
             None => (),
-            Some(new_bdsts) =>
+            Some(new_bdsts) => {
                 for new_bdst in new_bdsts {
-                    let new_bdst_node = graph.nodes.get(&new_bdst).unwrap();
-                    if new_bdst_node.height != (graph.nodes.len() as u64) // idempotence: select the shortest path
-                        &&
-                        new_bdst_node.excess > 0 // only residual nodes = residual graph
-                    {
-                        next_round.push(*new_bdst);
+                    let new_bdst_node = residual_nodes.get(&new_bdst);
+                    match new_bdst_node {
+                        // only residual nodes = residual graph
+                        Some(x) if x.height == (graph.nodes.len() as u64) =>
+                        // idempotence: select the shortest path.
+                        // that is, we have *not* visited this node.
+                        {
+                            next_round.push(*new_bdst)
+                        }
+                        _ => (),
                     }
                 }
+            }
         }
     }
 
     if next_round.is_empty() {
-        ()
+        residual_nodes
     } else {
-        assign_distance_to_sink_in_residual(graph, next_round, distance + 1)
+        assign_distance_to_sink_in_residual(graph, residual_nodes, next_round, distance + 1)
     }
 }
 
-
-
-pub fn global_relabel_do(graph: &mut Graph) -> HashSet<NodeID> {
+pub fn global_relabel_do(graph: &Graph) -> HashMap<NodeID, Node> {
     // step 1: reset
     let graph_size = graph.nodes.len() as u64;
-    for node in graph.nodes.values_mut() {
-        node.reset_height_current(&graph.sink, graph_size);
+    let mut residual_nodes = HashMap::new();
+    for node in graph.nodes.values() {
+        if node.excess > 0 {
+            let mut node0 = node.clone();
+            node0.reset_height_current(&graph.sink, graph_size);
+            residual_nodes.insert(node0.id, node0);
+        }
     }
 
     // step 2: relabel
-    assign_distance_to_sink_in_residual(graph, vec![graph.sink], 0);
-
-    // step 3: reload work
-    let mut reloaded = HashSet::new();
-    for node in graph.nodes.values() {
-        if node.id != graph.sink && node.id != graph.source && node.excess > 0 {
-            reloaded.insert(node.id);
-        }
-    }
-    reloaded
+    assign_distance_to_sink_in_residual(graph, residual_nodes, vec![graph.sink], 0)
 }
 
 /**
@@ -65,7 +68,12 @@ That is, it is left to the developer to do the synchronization!
 Even more so, the iterators have unclear semantics and there are places in the code where the developer
 has to explicitly "lock" state!
  */
-fn nondet_discharge(mut graph: Graph, mut counter : Counter, initial: HashSet<NodeID>, preflow: PreflowPush) -> Graph {
+fn nondet_discharge(
+    mut graph: Graph,
+    mut counter: Counter,
+    initial: HashSet<NodeID>,
+    preflow: PreflowPush,
+) -> Graph {
     //let mut counter = Counter::new();
 
     //    // per thread <-- original code comment!
