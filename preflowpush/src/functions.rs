@@ -1,4 +1,4 @@
-use algos::global_relabel_do;
+use crate::algos::global_relabel_do;
 use std::collections::hash_map::HashMap;
 use std::collections::HashSet;
 use std::fs::File;
@@ -64,6 +64,7 @@ impl Edge {
     }
 }
 
+#[derive(Clone)]
 pub struct Graph {
     pub nodes: HashMap<NodeID, Node>,
     // Each node appears in the set of forward edges and in the set of backward edges:
@@ -91,11 +92,21 @@ impl Default for Graph {
     }
 }
 
+#[derive(Clone)]
 pub struct PreflowPush {
     // configuration flag
     global_relabel_interval: u64,
     // global algorithm state
     should_global_relabel: bool,
+}
+
+impl PreflowPush {
+    pub fn new(interval: u64) -> Self {
+        Self {
+            global_relabel_interval: interval,
+            should_global_relabel: false,
+        }
+    }
 }
 
 impl Node {
@@ -127,10 +138,10 @@ impl Graph {
         // parse size headers
         let mut buf = String::new();
         file_reader.read_line(&mut buf)?;
-        let width = u32::from_str(&buf).unwrap();
+        let width = u32::from_str(buf.trim_end()).unwrap();
         buf.clear();
         file_reader.read_line(&mut buf)?;
-        let height = u32::from_str(&buf).unwrap();
+        let height = u32::from_str(buf.trim_end()).unwrap();
 
         // calculate max node #
         let mut num_nodes = width * height;

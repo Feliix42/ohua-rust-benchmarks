@@ -1,11 +1,11 @@
-use functions::*;
+use crate::functions::*;
 use std::collections::{HashMap, HashSet};
 
 /**
 The global relabeling heuristic up dates the distance function by computing shortest path
 distances in the residual graph from all nodes to the sink.
  */
-fn assign_distance_to_sink_in_residual(
+pub fn assign_distance_to_sink_in_residual(
     graph: &Graph,
     mut residual_nodes: HashMap<NodeID, Node>,
     bdsts: Vec<NodeID>,
@@ -68,7 +68,7 @@ That is, it is left to the developer to do the synchronization!
 Even more so, the iterators have unclear semantics and there are places in the code where the developer
 has to explicitly "lock" state!
  */
-fn nondet_discharge(
+pub fn nondet_discharge(
     mut graph: Graph,
     mut counter: Counter,
     initial: HashSet<NodeID>,
@@ -121,7 +121,7 @@ fn nondet_discharge(
 }
 
 #[allow(dead_code)]
-fn run(mut graph: Graph, preflow: PreflowPush) -> Graph {
+pub fn run(mut graph: Graph, preflow: PreflowPush) -> Graph {
     let initial = graph.initialize_preflow();
     let result_graph = nondet_discharge(graph, Counter::default(), initial, preflow);
     result_graph

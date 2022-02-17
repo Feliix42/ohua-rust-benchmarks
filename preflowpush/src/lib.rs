@@ -1,2 +1,2 @@
-mod algos;
-mod functions;
+pub mod algos;
+pub mod functions;
