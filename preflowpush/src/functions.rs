@@ -1,6 +1,9 @@
 use algos::global_relabel_do;
 use std::collections::hash_map::HashMap;
 use std::collections::HashSet;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::str::FromStr;
 
 // Preflow Push measured here: https://dl.acm.org/doi/pdf/10.1145/2644865.2541964
 // Global relabeling described here: http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
@@ -96,6 +99,16 @@ pub struct PreflowPush {
 }
 
 impl Node {
+    pub fn new(id: NodeID) -> Self {
+        Self {
+            id,
+            distance_to_sink: 0,
+            excess: 0,
+            height: 1,
+            current: 0,
+        }
+    }
+
     pub fn reset_height_current(&mut self, sink: &NodeID, height: u64) {
         self.current = 0;
         if self.id == *sink {
@@ -107,6 +120,78 @@ impl Node {
 }
 
 impl Graph {
+    pub fn read_from_file(filepath: &str) -> std::io::Result<Self> {
+        let inp = File::open(filepath)?;
+        let mut file_reader = BufReader::new(inp);
+
+        // parse size headers
+        let mut buf = String::new();
+        file_reader.read_line(&mut buf)?;
+        let width = u32::from_str(&buf).unwrap();
+        buf.clear();
+        file_reader.read_line(&mut buf)?;
+        let height = u32::from_str(&buf).unwrap();
+
+        // calculate max node #
+        let mut num_nodes = width * height;
+        let source_id = num_nodes;
+        let sink_id = num_nodes + 1;
+        num_nodes += 2;
+
+        // initialize the nodes of the graph
+        let mut nodes: HashMap<NodeID, Node> = HashMap::with_capacity(num_nodes as usize);
+        for i in 0..num_nodes {
+            let mut node = Node::new(i);
+
+            if i == source_id {
+                node.height = num_nodes as u64;
+            }
+
+            nodes.insert(i, node);
+        }
+
+        let mut fedges: HashMap<NodeID, Vec<Edge>> = HashMap::with_capacity(num_nodes as usize);
+        let mut bedges = HashMap::with_capacity(num_nodes as usize);
+
+        let mut src = NodeID::default();
+
+        // parse the actual graph data from file
+        // don't care for the 3rd number.
+        for line in file_reader.lines().skip(1) {
+            let line = line?;
+
+            if line.starts_with("N: ") {
+                // start processing a new node
+                let parsed: Vec<&str> = line.split_whitespace().skip(1).take(2).collect();
+
+                src = u32::from_str(parsed[0]).unwrap();
+                let cap = i32::from_str(parsed[1]).unwrap();
+
+                if cap > 0 {
+                    add_edge(&mut fedges, &mut bedges, source_id, src, cap);
+                } else {
+                    add_edge(&mut fedges, &mut bedges, src, sink_id, -cap);
+                }
+            } else if line.starts_with("->") {
+                // connect the current node to new destinations
+                let parsed: Vec<&str> = line.split_whitespace().skip(1).take(2).collect();
+
+                let dst = u32::from_str(parsed[0]).unwrap();
+                let scap = i32::from_str(parsed[1]).unwrap();
+
+                add_edge(&mut fedges, &mut bedges, src, dst, scap);
+            }
+        }
+
+        Ok(Self {
+            nodes,
+            fedges,
+            bedges,
+            sink: sink_id,
+            source: source_id,
+        })
+    }
+
     pub fn global_relabel(&mut self, should_relabel: bool) -> HashSet<NodeID> {
         if should_relabel {
             let mut residual_nodes = global_relabel_do(self);
@@ -315,6 +400,28 @@ impl Graph {
             }
         }
         initial
+    }
+}
+
+fn add_edge(
+    fedges: &mut HashMap<NodeID, Vec<Edge>>,
+    bedges: &mut HashMap<NodeID, Vec<NodeID>>,
+    src: NodeID,
+    dst: NodeID,
+    cap: i32,
+) {
+    // forward edge insertion
+    let src_entry = fedges.entry(src).or_default();
+    match src_entry.binary_search_by(|x| x.dst.cmp(&dst)) {
+        Ok(idx) => src_entry[idx].data += cap,
+        Err(idx) => src_entry.insert(idx, Edge { dst, data: cap }),
+    }
+
+    // add the backward edge
+    let dst_entry = bedges.entry(dst).or_default();
+    match dst_entry.binary_search(&src) {
+        Ok(_) => (), // nothing to do when the entry is already present
+        Err(idx) => dst_entry.insert(idx, src),
     }
 }
 
