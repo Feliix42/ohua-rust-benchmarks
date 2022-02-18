@@ -1,7 +1,6 @@
-use crate::functions::*;
-use crate::helpers;
-use std::collections::HashSet;
-use std::sync::Arc;
+use functions::*;
+use helpers;
+use std::*;
 
 /**
 Note that in Galois, EVERY function to the state (graph) has to declare whether the access is UNPROTECTED or WRITE.
@@ -25,8 +24,8 @@ pub fn nondet_discharge(
     //        galois::iterate(initial),
     //        [&counter, relabel_interval, this](GNode& src, auto& ctx) {
 
-    let mut results = Vec::new();
-    let g2 = Arc::new(graph.clone());
+    let mut results = Vec::new2();
+    let g2 = Arc::new1(graph.clone());
     // let mut relabel_count = Counter::default();
     for src in initial {
         let result = discharge(g2.clone(), src);
@@ -52,8 +51,8 @@ pub fn nondet_discharge(
 
     let (relabel_count, wl_new) = graph.update(results);
 
-    let should_global_relabel = counter.detect_global_relabel(relabel_count, preflow.clone());
-    // let wl_new = graph.update(updates);
+    let should_global_relabel = counter.detect_global_relabel(relabel_count, preflow);
+    //let wl_new = graph.update(updates);
     let wl_new0 = graph.global_relabel(should_global_relabel);
 
     // wl_new = wl_new.union(&wl_new0).map(|x| *x).collect();
@@ -67,7 +66,8 @@ pub fn nondet_discharge(
     }
 }
 
-pub fn run(mut graph: Graph, preflow: PreflowPush) -> Graph {
+pub fn run(g: Graph, preflow: PreflowPush) -> Graph {
+    let mut graph = id(g);
     let initial = graph.initialize_preflow();
     let result_graph = nondet_discharge(graph, Counter::default(), initial, preflow);
     result_graph

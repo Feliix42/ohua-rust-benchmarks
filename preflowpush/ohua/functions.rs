@@ -4,7 +4,6 @@ use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
-use std::sync::Arc;
 
 // Preflow Push measured here: https://dl.acm.org/doi/pdf/10.1145/2644865.2541964
 // Global relabeling described here: http://i.stanford.edu/pub/cstr/reports/cs/tr/94/1523/CS-TR-94-1523.pdf
@@ -261,9 +260,9 @@ impl Graph {
         let mut redo = HashSet::new();
         let mut updated = HashSet::new();
         let mut counter = 0;
-
         for (ctr, update) in updates {
             counter += ctr;
+
             let (src, mut graph) = update;
             let mut touched = HashSet::new();
             graph.fedges.keys().for_each(|u| {
@@ -300,8 +299,6 @@ impl Graph {
                 .map(|x| *x)
                 .collect::<HashSet<NodeID>>();
         }
-
-        println!("Redoing {} items", redo.len());
         (counter, redo)
     }
 
@@ -327,9 +324,6 @@ impl Graph {
                 initial.insert(fedge.dst);
             }
         }
-
-        println!("initialized with {} items.", initial.len());
-
         initial
     }
 }
@@ -354,99 +348,6 @@ fn add_edge(
         Ok(_) => (), // nothing to do when the entry is already present
         Err(idx) => dst_entry.insert(idx, src),
     }
-}
-
-/**
-The function mutates:
-  - the local node
-  - the data of the edges
-  - the data of the destination nodes
-Vital insight: operations are all commutative!
-Hence, this can be done in parallel and would return as a result a graph that
-contains only these changed nodes an edges.
-The update function would then merge these changes into the existing graph.
-*/
-pub fn discharge(graph: Arc<Graph>, src: NodeID) -> (u64, (NodeID, Graph)) {
-    let graph_size = graph.nodes.len();
-    let node = graph.nodes.get(&src).unwrap();
-
-    let mut graph0 = Graph::default();
-    if node.excess == 0 || node.height >= (graph_size as u64) {
-        return (0, (src, graph0));
-    }
-
-    // preparation
-    let mut node0 = node.clone();
-    let mut fedges0 = graph.fedges.get(&node0.id).unwrap().clone();
-    let mut dnodes = Vec::new();
-    for fedge in fedges0.iter_mut().skip(node0.current) {
-        let dst = fedge.dst;
-        let dnode = graph.nodes.get(&dst).unwrap();
-        dnodes.push(dnode.clone());
-    }
-
-    loop {
-        let mut finished = false;
-        let current = node0.current;
-
-        for (fedge, mut dnode) in fedges0
-            .iter_mut()
-            .zip(dnodes.iter_mut())
-            .skip(node0.current)
-        {
-            let cap = fedge.data;
-            if cap == 0 {
-                // || current < node.current)
-                continue;
-            }
-
-            if node0.height - 1 != dnode.height {
-                continue;
-            }
-
-            // Push flow
-            let amount = std::cmp::min(node0.excess, cap);
-
-            fedge.reduce_capacity(amount);
-
-            // Add to worklist. moved to update.
-            // Only add once
-            //                if (dst != sink && dst != src && dnode.excess == 0) {
-            //                    ctxt.push(dst);
-            //                }
-
-            assert!(node0.excess >= amount);
-            node0.excess -= amount;
-            dnode.excess += amount;
-
-            if node0.excess == 0 {
-                finished = true;
-                node0.current = current;
-                break;
-            }
-        }
-
-        // we discharge until at least one node has no excess anymore.
-        if finished {
-            break;
-        }
-
-        graph.relabel(&mut node0);
-
-        if node0.height == (graph_size as u64) {
-            break;
-        }
-
-        // prevHeight = node.height;
-    }
-
-    graph0.fedges.insert(node0.id, fedges0);
-    graph0.nodes.insert(node0.id, node0);
-    dnodes.drain(..).for_each(|n| {
-        graph0.nodes.insert(n.id, n);
-    });
-
-    (BETA, (src, graph0))
 }
 
 /*
@@ -676,4 +577,98 @@ impl Counter {
             false
         }
     }
+}
+
+
+/**
+The function mutates:
+  - the local node
+  - the data of the edges
+  - the data of the destination nodes
+Vital insight: operations are all commutative!
+Hence, this can be done in parallel and would return as a result a graph that
+contains only these changed nodes an edges.
+The update function would then merge these changes into the existing graph.
+*/
+pub fn discharge(graph: &Graph, src: NodeID) -> (u64, (NodeID, Graph)) {
+    let graph_size = graph.nodes.len();
+    let node = graph.nodes.get(&src).unwrap();
+
+    let mut graph0 = Graph::default();
+    if node.excess == 0 || node.height >= (graph_size as u64) {
+        return (0, (src, graph0));
+    }
+
+    // preparation
+    let mut node0 = node.clone();
+    let mut fedges0 = graph.fedges.get(&node0.id).unwrap().clone();
+    let mut dnodes = Vec::new();
+    for fedge in fedges0.iter_mut().skip(node0.current) {
+        let dst = fedge.dst;
+        let dnode = graph.nodes.get(&dst).unwrap();
+        dnodes.push(dnode.clone());
+    }
+
+    loop {
+        let mut finished = false;
+        let current = node0.current;
+
+        for (fedge, mut dnode) in fedges0
+            .iter_mut()
+            .zip(dnodes.iter_mut())
+            .skip(node0.current)
+        {
+            let cap = fedge.data;
+            if cap == 0 {
+                // || current < node.current)
+                continue;
+            }
+
+            if node0.height - 1 != dnode.height {
+                continue;
+            }
+
+            // Push flow
+            let amount = std::cmp::min(node0.excess, cap);
+
+            fedge.reduce_capacity(amount);
+
+            // Add to worklist. moved to update.
+            // Only add once
+            //                if (dst != sink && dst != src && dnode.excess == 0) {
+            //                    ctxt.push(dst);
+            //                }
+
+            assert!(node0.excess >= amount);
+            node0.excess -= amount;
+            dnode.excess += amount;
+
+            if node0.excess == 0 {
+                finished = true;
+                node0.current = current;
+                break;
+            }
+        }
+
+        // we discharge until at least one node has no excess anymore.
+        if finished {
+            break;
+        }
+
+        graph.relabel(&mut node0);
+
+        if node0.height == (graph_size as u64) {
+            break;
+        }
+
+        // prevHeight = node.height;
+    }
+
+    graph0.fedges.insert(node0.id, fedges0);
+    graph0.nodes.insert(node0.id, node0);
+    dnodes.drain(..).for_each(|n| {
+        graph0.nodes.insert(n.id, n);
+    });
+
+    (BETA, (src, graph0))
 }

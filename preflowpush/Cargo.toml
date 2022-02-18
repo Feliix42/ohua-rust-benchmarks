@@ -9,11 +9,11 @@ clap = { version = "2.33", optional = true }
 cpu-time = { version = "1.0", optional = true }
 
 # Ohua stuff
-tokio = { version = "0.2", features = ["full"], optional = true }
+tokio = { version = "0.2", features = ["full"] }
 
 [features]
 cli = ["clap", "cpu-time"]
-future = ["tokio"]
+#future = ["tokio"]
 
 [[bin]]
 name = "sequential"
@@ -25,7 +25,7 @@ required-features = ["cli"]
 #path = "src/bin/threaded.rs"
 #required-features = ["cli"]
 #
-#[[bin]]
-#name = "ohua_futures"
-#path = "src/bin/ohua.rs"
-#required-features = ["ohua", "cli", "future"]
+[[bin]]
+name = "ohua_futures"
+path = "src/bin/ohua.rs"
+required-features = [ "cli" ] #["ohua", "cli", "future"]

@@ -1,7 +1,7 @@
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
-use preflow_push::algos;
 use preflow_push::functions::{self, Graph, PreflowPush};
+use preflow_push::generated;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
@@ -11,7 +11,7 @@ fn main() {
     let matches = App::new("Sequential preflow push benchmark")
         .version("1.0")
         .author("Sebastian Ertel <sebastian.ertel@barkhauseninstitut.org>")
-        .about("A Rust port of the preflow push benchmark from the Galois collection, implemented in a sequential manner. Finds the maximum flow in a network using the preflow push technique.")
+        .about("A Rust port of the preflow push benchmark from the Galois collection, implemented using Ohua. Finds the maximum flow in a network using the preflow push technique.")
         .arg(
             Arg::with_name("INPUT")
                 .help("Input file name")
@@ -99,7 +99,7 @@ fn main() {
     let mut cpu_time = Vec::with_capacity(runs);
 
     if !json_dump {
-        print!("[info] Running benchmark");
+        println!("[info] Running benchmark");
     }
 
     for _ in 0..runs {
@@ -113,7 +113,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let _res = algos::run(g, c);
+        let _res = generated::run(g, c);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -137,7 +137,7 @@ fn main() {
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
-        let filename = format!("{}/seq-{}-r{}_log.json", out_dir, input, runs);
+        let filename = format!("{}/ohua-{}-r{}_log.json", out_dir, input, runs);
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
