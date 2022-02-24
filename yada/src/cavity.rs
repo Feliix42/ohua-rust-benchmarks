@@ -28,29 +28,29 @@ impl Cavity {
         let mut previous_nodes = Vec::new();
         let new_nodes = Vec::new();
 
-        println!("Starting with: {}", node);
+        // println!("Starting with: {}", node);
         let mut center_element = node;
 
         // TODO(feliix42): What if mesh.contains(node) fails?
-        let mut circ = Vec::new();
-        while mesh.contains(&center_element) && center_element.has_obtuse() {
-            if let Element::T(t) = center_element {
-                circ.push(t.into());
-                let new_center = mesh.get_opposite(&t);
-                // the original code did not handle loops at all (i.e. 2 triangles that share an opposite side)
-                if circ.contains(&new_center) {
-                    break;
-                } else {
-                    center_element = new_center;
-                }
-            } else {
-                unreachable!()
-            }
-        }
+        // let mut circ = Vec::new();
+        // while mesh.contains(&center_element) && center_element.has_obtuse() {
+        //     if let Element::T(t) = center_element {
+        //         circ.push(t.into());
+        //         let new_center = mesh.get_opposite(&t);
+        //         // the original code did not handle loops at all (i.e. 2 triangles that share an opposite side)
+        //         if circ.contains(&new_center) {
+        //             break;
+        //         } else {
+        //             center_element = new_center;
+        //         }
+        //     } else {
+        //         unreachable!()
+        //     }
+        // }
 
-        println!("Using center element:\n{}", center_element);
+        // println!("Using center element:\n{}", center_element);
         let center = center_element.get_center()?;
-        println!("Center: {:?}", center);
+        // println!("Center: {:?}", center);
         // println!("Center: {:?}", center);
         // println!("Coordinates: {:?}", center_element.borrow().coordinates);
         let dimension = match center_element {
@@ -83,7 +83,7 @@ impl Cavity {
                 // is segment and we're encroaching
                 return Err(next);
             } else if !self.previous_nodes.contains(&next) {
-                println!("  will delete: {}", next);
+                // println!("  will delete: {}", next);
                 self.previous_nodes.push(next);
                 self.frontier.push_back(next);
             }
@@ -92,12 +92,12 @@ impl Cavity {
             let edge = next.get_related_edge(&curr).unwrap();
 
             let connection = (curr, edge, next);
-            print!("  connecting to {}?", next);
+            // print!("  connecting to {}?", next);
             if !self.connections.contains(&connection) {
                 self.connections.push(connection);
-                println!(" - yes");
+                // println!(" - yes");
             } else {
-                println!(" - no");
+                // println!(" - no");
             }
         }
 
@@ -118,6 +118,7 @@ impl Cavity {
 
                     for neighbor in neighbors {
                         if let Err(other) = self.expand(curr, *neighbor) {
+                            // println!("won't use the original, though");
                             *self = Self::new(mesh, other).unwrap();
                         }
                     }
@@ -135,7 +136,7 @@ impl Cavity {
             }
         }
 
-        println!("Cavity contains {} elements.", self.previous_nodes.len());
+        // println!("Cavity contains {} elements.", self.previous_nodes.len());
     }
 
     /// Compute a corrected cavity
@@ -162,7 +163,7 @@ impl Cavity {
             assert_ne!(conn.1 .0, conn.1 .1);
 
             let ele = Element::T(Triangle::new(self.center, (conn.1).0, (conn.1).1));
-            println!("  new: {}", ele);
+            // println!("  new: {}", ele);
             let other = if self.previous_nodes.contains(&conn.2) {
                 // if the destination is contained in previous nodes, go for the source
                 conn.0

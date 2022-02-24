@@ -242,9 +242,12 @@ impl Mesh {
                     // get related edge
                     if let Some(related_edge) = node.get_related_edge(t) {
                         // if points of the edge don't match obtuse point, return neighbor
-                        if !related_edge.contains(obtuse_pt) {
+                        if related_edge == opposite_edge {
                             return *neighbor;
                         }
+                        // if !related_edge.contains(obtuse_pt) {
+                        //     return *neighbor;
+                        // }
                     }
                 }
                 Element::E(ref e) => {
@@ -276,6 +279,10 @@ impl Mesh {
 
         // remove old elements
         // let mut failed = 0;
+        // println!(
+        //     "Is original bad in prev nodes? {}",
+        //     cav.previous_nodes.contains(&Element::T(original_bad))
+        // );
         for old in cav.previous_nodes {
             // print!("Searching {:?}", old.borrow().coordinates);
             match old {
@@ -319,6 +326,7 @@ impl Mesh {
                 Element::T(t) => {
                     self.elements.insert(t, Vec::with_capacity(3));
                     if t.is_bad() {
+                        // println!("Appending triangle with area: {}", t.area());
                         new_bad.push_back(t);
                     }
                 }
@@ -355,6 +363,7 @@ impl Mesh {
 
         // if the original "bad element" is still in the mesh that's still a todo
         if self.elements.contains_key(&original_bad) {
+            // println!("Ah shit here we go again");
             new_bad.push_back(original_bad);
         }
 
@@ -368,7 +377,7 @@ impl Mesh {
                 .collect::<()>();
         }
 
-        println!("-- Done");
+        // println!("-- Done");
 
         new_bad
     }
@@ -546,11 +555,11 @@ impl Mesh {
         // ]);
 
         // println!("Current number of bad elements: {}", bad.len());
-        println!("Elements parsed:");
-        for item in self.elements.keys() {
-            println!("{}", item);
-        }
-        println!("\n\n\n\n\n\n\n");
+        // println!("Elements parsed:");
+        // for item in self.elements.keys() {
+        //     println!("{}", item);
+        // }
+        // println!("\n\n\n\n\n\n\n");
 
         let mut i = 0;
         while !bad.is_empty() {
@@ -574,7 +583,7 @@ impl Mesh {
             i += 1;
             let item = bad.pop_front().unwrap();
             if !self.contains_triangle(&item) {
-                println!("skip!");
+                // println!("skip!");
                 continue;
             }
 
