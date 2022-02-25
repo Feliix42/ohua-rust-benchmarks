@@ -72,6 +72,7 @@ fn main() {
     let mut cpu_results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
     let mut retry_counts = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     for _ in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -98,6 +99,7 @@ fn main() {
             cpu_results.push(cpu_runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
             retry_counts.push(retries);
+            computations.push(retries + paths.len());
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -130,6 +132,7 @@ fn main() {
     \"runs\": {runs},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
+    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -140,6 +143,7 @@ fn main() {
             runs = runs,
             mapped = mapped_paths,
             collisions = retry_counts,
+            comps = computations,
             cpu = cpu_results,
             res = results
         ))
@@ -153,6 +157,7 @@ fn main() {
         println!("    Runs:               {}", runs);
         println!("    Mapped:             {:?}", mapped_paths);
         println!("    Collisions:         {:?}", retry_counts);
+        println!("    Computations:       {:?}", computations);
         println!("\nCPU time: {:?} ms", cpu_results);
         println!("Routing Time: {:?} ms", results);
     }

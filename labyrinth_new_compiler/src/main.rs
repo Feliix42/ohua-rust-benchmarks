@@ -7,14 +7,14 @@ use std::str::FromStr;
 use time::PreciseTime;
 //use tokio::runtime::{Builder, Runtime};
 
-mod generated;
-mod original;
 mod benchs;
-mod parser;
+mod generated;
 mod grid;
+mod original;
+mod parser;
 
-mod no_data_par;
 mod no_amorphous;
+mod no_data_par;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -108,6 +108,7 @@ fn main() {
     let mut mapped_paths: Vec<usize> = Vec::with_capacity(runs);
     #[allow(unused_mut)]
     let mut collisions: Vec<usize> = Vec::with_capacity(runs);
+    let mut computations: Vec<usize> = Vec::with_capacity(runs);
 
     for r in 0..runs {
         //let maze = Arc::new(Maze::new(dimensions.clone(), None));
@@ -124,7 +125,7 @@ fn main() {
 
         //#[ohua]
         //let (filled_maze, rollbacks) =
-            //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
+        //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
         let (filled_maze, retries) = if sequential {
             original::run(dims2, paths2, 200)
         } else if ndp {
@@ -150,6 +151,7 @@ fn main() {
             cpu_results.push(cpu_runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
             collisions.push(retries);
+            computations.push(retries + paths.len());
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -179,6 +181,7 @@ fn main() {
     \"update_frequency\": {freq},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
+    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -187,6 +190,7 @@ fn main() {
             runs = runs,
             seq = sequential,
             threadcount = threadcount,
+            comps = computations,
             freq = updates,
             mapped = mapped_paths,
             collisions = collisions,
@@ -204,6 +208,7 @@ fn main() {
         println!("    Update frequency:   {}", updates);
         println!("    Mapped:             {:?}", mapped_paths);
         println!("    Collisions:         {:?}", collisions);
+        println!("    Computations:       {:?}", computations);
         println!("\nCPU time used: {:?} ms", cpu_results);
         println!("Routing Time: {:?} ms", results);
     }

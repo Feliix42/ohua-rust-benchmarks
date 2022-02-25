@@ -108,6 +108,7 @@ fn main() {
     // run the benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_time = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     if !json_dump {
         print!("[info] Running benchmark");
@@ -122,7 +123,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let _res = run_annealer(netlist, initial_temp as f64, steps, swap_count, threadcount);
+        let comps = run_annealer(netlist, initial_temp as f64, steps, swap_count, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -136,6 +137,7 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_time.push(cpu_runtime_ms);
+        computations.push(comps);
     }
 
     // write output
@@ -158,6 +160,7 @@ fn main() {
     \"initial_temperature\": {init_tmp},
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
+    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -167,6 +170,7 @@ fn main() {
             init_tmp = initial_temp,
             steps = steps.unwrap_or(-1),
             swaps_per_temp = swap_count,
+            comps = computations,
             cpu = cpu_time,
             res = results
         ))
@@ -186,6 +190,7 @@ fn main() {
         println!("    Initial Temperature: {}", initial_temp);
         println!("    Maximal number of temperature steps: {:?}", steps);
         println!("    Swaps per temperature step: {}", swap_count);
+        println!("    Computations {:?}", computations);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
         println!("Runtime (ms): {:?}", results);
     }
@@ -197,7 +202,7 @@ fn run_annealer(
     max_temperature_steps: Option<i32>,
     swaps_per_temp: usize,
     threadcount: usize,
-) {
+) -> usize {
     let accepted_good_moves = TVar::new(0);
     let accepted_bad_moves = TVar::new(-1);
     let mut temp_steps_completed = 0;
@@ -236,6 +241,7 @@ fn run_annealer(
 
         // spawn individual threads
         let h = thread::spawn(move || loop {
+            let mut computations = 0;
             // wait for the "go" from the main thread
             if let Err(_) = start_rx.recv() {
                 break;
@@ -250,7 +256,7 @@ fn run_annealer(
                 // atomically() requires a non-mutable item, which means I cannot use the RNG within
                 let random_value = thread_rng.gen();
 
-                atomically(|trans| {
+                let (_, retries) = atomically(|trans| {
                     let delta_cost = calculate_delta_routing_cost(
                         &netlist.elements[idx_a].read(trans)?,
                         &netlist.elements[idx_b].read(trans)?,
@@ -269,13 +275,17 @@ fn run_annealer(
                         MoveDecision::Rejected => Ok(()),
                     }
                 });
+
+                computations += 1 + retries;
             }
 
             // notify main thread we're done
-            end_sx.send(()).unwrap();
+            end_sx.send(computations).unwrap();
         });
         handles.push(h);
     }
+
+    let mut computations_total = 0;
 
     // main thread -> takes care of the decision making
     while keep_going(
@@ -298,7 +308,7 @@ fn run_annealer(
 
         // wait for execution completion
         for rx in &end_channels {
-            rx.recv().unwrap();
+            computations_total += rx.recv().unwrap();
         }
 
         temp_steps_completed += 1;
@@ -308,4 +318,6 @@ fn run_annealer(
         "[info] Finished after {} temperature steps.",
         temp_steps_completed
     );
+
+    computations_total
 }
