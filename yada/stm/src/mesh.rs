@@ -8,7 +8,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
+use std::thread;
+use stm::{StmError, StmResult, TVar, Transaction};
 
+#[derive(Clone)]
 pub struct Mesh {
     /// Triangles in the mesh with links to neighboring elements.
     /// The vector will **always** have 3 elements.
@@ -19,9 +22,9 @@ pub struct Mesh {
     /// array is actually modified, the relaxed constraint allows the simple
     /// removal of elements without having to use indirections like casting the
     /// array to an array of `Option<Element>` etc.
-    pub elements: HashMap<Triangle, Vec<Element>>,
+    pub elements: TVar<HashMap<Triangle, TVar<Vec<Element>>>>,
     // pub elements: HashMap<Triangle, [Element; 3]>,
-    pub boundary_set: HashMap<Edge, Element>,
+    pub boundary_set: TVar<HashMap<Edge, Element>>,
 }
 
 impl Mesh {
@@ -201,15 +204,22 @@ impl Mesh {
         }
 
         Ok(Mesh {
-            elements: elems,
-            boundary_set: edges,
+            elements: TVar::new(elems.into_iter().map(|(k, v)| (k, TVar::new(v))).collect()),
+            boundary_set: TVar::new(edges),
         })
     }
 
+    /// Reads the data structure atomically
     pub fn find_bad(&self) -> VecDeque<Triangle> {
         let mut r = VecDeque::new();
 
-        for elem in self.elements.keys() {
+        for elem in self
+            .elements
+            .read_ref_atomic()
+            .downcast_ref::<HashMap<Triangle, TVar<Vec<Element>>>>()
+            .unwrap()
+            .keys()
+        {
             if elem.is_bad() {
                 r.push_back(elem.to_owned());
             }
@@ -219,46 +229,52 @@ impl Mesh {
     }
 
     /// Tests whether `node` is contained in the graph.
-    pub fn contains(&self, node: &Element) -> bool {
+    pub fn contains(&self, node: &Element, trans: &mut Transaction) -> StmResult<bool> {
         match node {
-            Element::E(ref e) => self.boundary_set.contains_key(e),
-            Element::T(ref t) => self.elements.contains_key(t),
+            Element::E(ref e) => Ok(self.boundary_set.read(trans)?.contains_key(e)),
+            Element::T(ref t) => Ok(self.elements.read(trans)?.contains_key(t)),
         }
     }
 
     /// Tests whether `node` is contained in the graphs triangle set.
+    ///
+    /// Reads atomically
     pub fn contains_triangle(&self, node: &Triangle) -> bool {
-        self.elements.contains_key(node)
+        self.elements
+            .read_ref_atomic()
+            .downcast_ref::<HashMap<Triangle, TVar<Vec<Element>>>>()
+            .unwrap()
+            .contains_key(node)
     }
 
-    /// Find the node that is opposite to the obtuse angle of the element.
-    pub fn get_opposite(&self, node: &Triangle) -> Element {
-        let opposite_edge = node.get_opposite_edge();
+    // /// Find the node that is opposite to the obtuse angle of the element.
+    // pub fn get_opposite(&self, node: &Triangle) -> Element {
+    //     let opposite_edge = node.get_opposite_edge();
 
-        for neighbor in self.elements.get(node).unwrap() {
-            match neighbor {
-                Element::T(ref t) => {
-                    // get related edge
-                    if let Some(related_edge) = node.get_related_edge(t) {
-                        // if points of the edge don't match obtuse point, return neighbor
-                        if related_edge == opposite_edge {
-                            return *neighbor;
-                        }
-                        // if !related_edge.contains(obtuse_pt) {
-                        //     return *neighbor;
-                        // }
-                    }
-                }
-                Element::E(ref e) => {
-                    if *e == opposite_edge {
-                        return *neighbor;
-                    }
-                }
-            }
-        }
+    //     for neighbor in self.elements.get(node).unwrap() {
+    //         match neighbor {
+    //             Element::T(ref t) => {
+    //                 // get related edge
+    //                 if let Some(related_edge) = node.get_related_edge(t) {
+    //                     // if points of the edge don't match obtuse point, return neighbor
+    //                     if related_edge == opposite_edge {
+    //                         return *neighbor;
+    //                     }
+    //                     // if !related_edge.contains(obtuse_pt) {
+    //                     //     return *neighbor;
+    //                     // }
+    //                 }
+    //             }
+    //             Element::E(ref e) => {
+    //                 if *e == opposite_edge {
+    //                     return *neighbor;
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        unreachable!()
-    }
+    //     unreachable!()
+    // }
 
     // NOTE(feliix42): So this one is fun: It can happen that a cavity is started
     // from an edge (only happens when the cavity is initialized and overwrites
@@ -268,7 +284,12 @@ impl Mesh {
     /// Update the mesh with the data of a corrected cavity. (Original code implements this in `Cavity.h`)
     ///
     /// Returns a list of new bad elements
-    pub fn update(&mut self, cav: Cavity, original_bad: Triangle) -> VecDeque<Triangle> {
+    pub fn update(
+        &self,
+        cav: Cavity,
+        original_bad: Triangle,
+        trans: &mut Transaction,
+    ) -> StmResult<VecDeque<Triangle>> {
         // println!("Update: Replacing {} elements with {} elements.\nOld set:\n{:#?}\n--------------\nNew set:\n{:#?}", cav.previous_nodes.len(), cav.new_nodes.len(), cav.previous_nodes, cav.new_nodes);
         // std::thread::sleep_ms(1_000);
 
@@ -282,14 +303,17 @@ impl Mesh {
         //     "Is original bad in prev nodes? {}",
         //     cav.previous_nodes.contains(&Element::T(original_bad))
         // );
+        let mut elements = self.elements.read(trans)?;
+        let mut boundary_set = self.boundary_set.read(trans)?;
+
         for old in cav.previous_nodes {
             // print!("Searching {:?}", old.borrow().coordinates);
             match old {
                 Element::T(ref t) => {
-                    self.elements.remove(t);
+                    elements.remove(t);
                 }
                 Element::E(ref e) => {
-                    self.boundary_set.remove(e);
+                    boundary_set.remove(e);
                 }
             }
         }
@@ -305,15 +329,15 @@ impl Mesh {
         for (old, _, outer) in cav.connections {
             match outer {
                 Element::T(ref t) => {
-                    if let Some(neighborhood) = self.elements.get_mut(t) {
-                        let _ = neighborhood
-                            .drain_filter(|&mut x| x == old)
-                            .collect::<Vec<_>>();
+                    if let Some(neighborhood) = elements.get(t) {
+                        let _ = neighborhood.modify(trans, |v| {
+                            v.into_iter().filter(|x| x != &old).collect::<Vec<_>>()
+                        })?;
                     }
                 }
                 Element::E(ref e) => {
                     // we can just remove the edge because the new neighboring relation will add it again.
-                    self.boundary_set.remove(e);
+                    boundary_set.remove(e);
                 }
             }
         }
@@ -323,7 +347,7 @@ impl Mesh {
         for new_node in cav.new_nodes {
             match new_node {
                 Element::T(t) => {
-                    self.elements.insert(t, Vec::with_capacity(3));
+                    elements.insert(t, TVar::new(Vec::with_capacity(3)));
                     if t.is_bad() {
                         // println!("Appending triangle with area: {}", t.area());
                         new_bad.push_back(t);
@@ -341,27 +365,39 @@ impl Mesh {
         for (src, _, dst) in cav.new_connections {
             match src {
                 Element::T(ref t) => {
-                    let neighborhood = self.elements.get_mut(t).expect("Element does not exist");
-                    neighborhood.push(dst);
+                    if let Some(neighborhood) = elements.get(t) {
+                        neighborhood.modify(trans, |mut v| {
+                            v.push(dst);
+                            v
+                        })?;
+                    } else {
+                        return Err(StmError::Retry);
+                    }
                 }
                 Element::E(e) => {
-                    self.boundary_set.insert(e, dst);
+                    boundary_set.insert(e, dst);
                 }
             }
 
             match dst {
                 Element::T(ref t) => {
-                    let neighborhood = self.elements.get_mut(t).expect("Element does not exist");
-                    neighborhood.push(src);
+                    if let Some(neighborhood) = elements.get(t) {
+                        neighborhood.modify(trans, |mut v| {
+                            v.push(src);
+                            v
+                        })?;
+                    } else {
+                        return Err(StmError::Retry);
+                    }
                 }
                 Element::E(e) => {
-                    self.boundary_set.insert(e, src);
+                    boundary_set.insert(e, src);
                 }
             }
         }
 
         // if the original "bad element" is still in the mesh that's still a todo
-        if self.elements.contains_key(&original_bad) {
+        if elements.contains_key(&original_bad) {
             // println!("Ah shit here we go again");
             new_bad.push_back(original_bad);
         }
@@ -378,49 +414,82 @@ impl Mesh {
 
         // println!("-- Done");
 
-        new_bad
+        self.elements.write(trans, elements)?;
+        self.boundary_set.write(trans, boundary_set)?;
+
+        Ok(new_bad)
     }
+}
 
-    pub fn refine(&mut self, mut bad: VecDeque<Triangle>) {
-        let mut i = 0;
-        while !bad.is_empty() {
-            if (i % 10000) == 0 {
-                let mut hs = HashSet::new();
-                for b in &bad {
-                    hs.insert(*b);
+pub fn refine(mesh: Mesh, bad: VecDeque<Triangle>, threadcount: usize) {
+    let vs = splitup(bad, threadcount);
+
+    let mut handles = Vec::new();
+    for mut v in vs {
+        let m = mesh.clone();
+        handles.push(thread::spawn(move || {
+            while !v.is_empty() {
+                let item = v.pop_front().unwrap();
+                if !m.contains_triangle(&item) {
+                    continue;
                 }
-                println!(
-                    "Iteration: {}, bad elements: {} (deduped: {})",
-                    i,
-                    bad.len(),
-                    hs.len()
-                );
-            }
-            //if i >= 100 {
-            //    println!("Current number of bad elements: {}", bad.len());
-            //    i = 0;
-            //}
 
-            i += 1;
-            let item = bad.pop_front().unwrap();
-            if !self.contains_triangle(&item) {
-                // println!("skip!");
-                continue;
-            }
+                let (result, _) = stm::atomically(|trans| {
+                    if let Some(mut cav) = Cavity::new(&m, item.into()) {
+                        cav.build(&m, trans)?;
+                        cav.compute();
+                        m.update(cav, item, trans)
+                    } else {
+                        Ok(VecDeque::with_capacity(0))
+                    }
+                });
 
-            if let Some(mut cav) = Cavity::new(self, item.into()) {
-                cav.build(self);
-                cav.compute();
-                //println!("Created {} new elements", cav.new_nodes.len());
-                let result = self.update(cav, item);
-                //println!("Got {} new bad items", result.len());
-                // bad.append(&mut result);
                 for i in result {
-                    bad.push_back(i);
+                    v.push_back(i);
                 }
             }
-        }
-
-        println!("Did {} iterations", i);
+        }));
     }
+
+    handles.into_iter().for_each(|h| h.join().unwrap());
+}
+
+fn splitup<T>(vec: VecDeque<T>, split_size: usize) -> Vec<VecDeque<T>>
+where
+    T: Clone,
+{
+    let vec = vec.into_iter().collect::<Vec<_>>();
+    let size = split_size * 2;
+    let element_count = vec.len();
+    let mut rest = element_count % size;
+    let window_len: usize = element_count / size;
+    let per_vec = if rest != 0 {
+        window_len + 1
+    } else {
+        window_len
+    };
+
+    let mut res = vec![Vec::with_capacity(per_vec); size];
+
+    let mut start = 0;
+    for i in 0..size {
+        // calculate the length of the window (for even distribution of the `rest` elements)
+        let len = if rest > 0 {
+            rest -= 1;
+            window_len + 1
+        } else {
+            window_len
+        };
+
+        let dst = start + len;
+
+        res[i].extend_from_slice(&vec[start..dst]);
+
+        start = dst;
+    }
+
+    return res
+        .into_iter()
+        .map(|v| v.into_iter().collect::<VecDeque<_>>())
+        .collect();
 }

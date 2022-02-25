@@ -2,6 +2,7 @@ use crate::element::{Edge, Element, Triangle};
 use crate::mesh::Mesh;
 use crate::point::Point;
 use std::collections::VecDeque;
+use stm::{StmError, StmResult, Transaction};
 
 /// Connection between two elements. Format: (src, edge, dest)
 type Connection = (Element, Edge, Element);
@@ -105,38 +106,39 @@ impl Cavity {
     }
 
     /// Expand the cavity to cover all related elements.
-    pub fn build(&mut self, mesh: &Mesh) {
+    pub fn build(&mut self, mesh: &Mesh, trans: &mut Transaction) -> StmResult<()> {
         while !self.frontier.is_empty() {
             let curr = self.frontier.pop_back().unwrap();
 
             match curr {
                 Element::T(ref t) => {
-                    let neighbors = mesh
-                        .elements
-                        .get(t)
-                        .expect("Triangle is no longer in elements set");
-
-                    for neighbor in neighbors {
-                        if let Err(other) = self.expand(curr, *neighbor) {
-                            // println!("won't use the original, though");
-                            *self = Self::new(mesh, other).unwrap();
+                    let neighbors = mesh.elements.read(trans)?;
+                    if let Some(neighbors) = neighbors.get(t) {
+                        for neighbor in neighbors.read(trans)? {
+                            if let Err(other) = self.expand(curr, neighbor) {
+                                // println!("won't use the original, though");
+                                *self = Self::new(mesh, other).unwrap();
+                            }
                         }
+                    } else {
+                        return Err(StmError::Retry);
                     }
                 }
                 Element::E(ref e) => {
-                    let neighbor = mesh
-                        .boundary_set
-                        .get(e)
-                        .expect("Edge is no longer in boundary set");
-
-                    if let Err(other) = self.expand(curr, *neighbor) {
-                        *self = Self::new(mesh, other).unwrap();
+                    let neighbor = mesh.boundary_set.read(trans)?;
+                    if let Some(neighbor) = neighbor.get(e) {
+                        if let Err(other) = self.expand(curr, *neighbor) {
+                            *self = Self::new(mesh, other).unwrap();
+                        }
+                    } else {
+                        return Err(StmError::Retry);
                     }
                 }
             }
         }
 
         // println!("Cavity contains {} elements.", self.previous_nodes.len());
+        Ok(())
     }
 
     /// Compute a corrected cavity

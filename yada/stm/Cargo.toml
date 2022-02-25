@@ -11,3 +11,5 @@ decorum = "0.3"
 num-traits = "0.2.11"
 clap = "2.33"
 cpu-time = "1.0"
+
+stm = { git = "https://github.com/feliix42/rust-stm", branch = "retry-count" }

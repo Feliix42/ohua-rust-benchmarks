@@ -1,10 +1,16 @@
+#![feature(drain_filter)]
+mod cavity;
+mod element;
+mod mesh;
+mod point;
+
+use crate::mesh::Mesh;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use std::time::Instant;
-use yada::mesh::Mesh;
 
 fn main() {
     let matches = App::new("Sequential yada benchmark")
@@ -24,6 +30,14 @@ fn main() {
                 .takes_value(true)
                 .help("The number of runs to conduct.")
                 .default_value("1")
+        )
+        .arg(
+            Arg::with_name("threadcount")
+                .long("threads")
+                .short("t")
+                .takes_value(true)
+                .help("The number of threads to use.")
+                .default_value("4")
         )
         .arg(
             Arg::with_name("json")
@@ -49,6 +63,8 @@ fn main() {
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
+    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap())
+        .expect("Could not parse threadcount");
 
     // read and parse input data
     let input_data = Mesh::load_from_file(&input_file)
@@ -57,7 +73,7 @@ fn main() {
     if !json_dump {
         println!(
             "[info] Loaded {} mesh elements.",
-            input_data.elements.len() + input_data.boundary_set.len()
+            input_data.elements.read_atomic().len() + input_data.boundary_set.read_atomic().len()
         );
     }
 
@@ -71,14 +87,14 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let mut mesh = Mesh::load_from_file(&input_file).expect("Failed to parse input file");
+        let mesh = Mesh::load_from_file(&input_file).expect("Failed to parse input file");
 
         // start the clock
         let cpu_start = ProcessTime::now();
         let start = Instant::now();
 
         // run the algorithm
-        let _res = run_refining(&mut mesh);
+        let _res = run_refining(mesh.clone(), threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -103,7 +119,7 @@ fn main() {
         let filename = format!(
             "{}/seq-{}ele-r{}_log.json",
             out_dir,
-            input_data.elements.len(),
+            input_data.elements.read_atomic().len(),
             runs
         );
         let mut f = File::create(&filename).unwrap();
@@ -115,7 +131,7 @@ fn main() {
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
-            ele = input_data.elements.len(),
+            ele = input_data.elements.read_atomic().len(),
             runs = runs,
             cpu = cpu_time,
             res = results
@@ -126,7 +142,10 @@ fn main() {
 
         println!("[info] All runs completed.");
         println!("\nStatistics:");
-        println!("    Number of Mesh elements: {}", input_data.elements.len());
+        println!(
+            "    Number of Mesh elements: {}",
+            input_data.elements.read_atomic().len()
+        );
         println!("    Input file used: {}", input_file);
         println!("    Runs: {}", runs);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
@@ -134,8 +153,8 @@ fn main() {
     }
 }
 
-fn run_refining(mesh: &mut Mesh) {
+fn run_refining(mesh: Mesh, threadcount: usize) {
     let bad_queue = mesh.find_bad();
 
-    mesh.refine(bad_queue);
+    mesh::refine(mesh, bad_queue, threadcount);
 }
