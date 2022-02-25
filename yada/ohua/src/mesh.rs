@@ -9,6 +9,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
 
+use std::sync::Arc;
+
+#[derive(Clone)]
 pub struct Mesh {
     /// Triangles in the mesh with links to neighboring elements.
     /// The vector will **always** have 3 elements.
@@ -19,9 +22,9 @@ pub struct Mesh {
     /// array is actually modified, the relaxed constraint allows the simple
     /// removal of elements without having to use indirections like casting the
     /// array to an array of `Option<Element>` etc.
-    pub elements: HashMap<Triangle, Vec<Element>>,
+    pub elements: Arc<HashMap<Triangle, Vec<Element>>>,
     // pub elements: HashMap<Triangle, [Element; 3]>,
-    pub boundary_set: HashMap<Edge, Element>,
+    pub boundary_set: Arc<HashMap<Edge, Element>>,
 }
 
 impl Mesh {
@@ -201,17 +204,17 @@ impl Mesh {
         }
 
         Ok(Mesh {
-            elements: elems,
-            boundary_set: edges,
+            elements: Arc::new(elems),
+            boundary_set: Arc::new(edges),
         })
     }
 
-    pub fn find_bad(&self) -> VecDeque<Triangle> {
-        let mut r = VecDeque::new();
+    pub fn find_bad(&self) -> Vec<Triangle> {
+        let mut r = Vec::new();
 
         for elem in self.elements.keys() {
             if elem.is_bad() {
-                r.push_back(elem.to_owned());
+                r.push(elem.to_owned());
             }
         }
 
@@ -233,7 +236,6 @@ impl Mesh {
 
     /// Find the node that is opposite to the obtuse angle of the element.
     pub fn get_opposite(&self, node: &Triangle) -> Element {
-        let obtuse_pt = node.get_obtuse();
         let opposite_edge = node.get_opposite_edge();
 
         for neighbor in self.elements.get(node).unwrap() {
@@ -270,6 +272,8 @@ impl Mesh {
     ///
     /// Returns a list of new bad elements
     pub fn update(&mut self, cav: Cavity, original_bad: Triangle) -> VecDeque<Triangle> {
+        let elems = Arc::get_mut(&mut self.elements).unwrap();
+        let bounds = Arc::get_mut(&mut self.boundary_set).unwrap();
         // println!("Update: Replacing {} elements with {} elements.\nOld set:\n{:#?}\n--------------\nNew set:\n{:#?}", cav.previous_nodes.len(), cav.new_nodes.len(), cav.previous_nodes, cav.new_nodes);
         // std::thread::sleep_ms(1_000);
 
@@ -287,10 +291,10 @@ impl Mesh {
             // print!("Searching {:?}", old.borrow().coordinates);
             match old {
                 Element::T(ref t) => {
-                    self.elements.remove(t);
+                    elems.remove(t);
                 }
                 Element::E(ref e) => {
-                    self.boundary_set.remove(e);
+                    bounds.remove(e);
                 }
             }
         }
@@ -306,7 +310,7 @@ impl Mesh {
         for (old, _, outer) in cav.connections {
             match outer {
                 Element::T(ref t) => {
-                    if let Some(neighborhood) = self.elements.get_mut(t) {
+                    if let Some(neighborhood) = elems.get_mut(t) {
                         let _ = neighborhood
                             .drain_filter(|&mut x| x == old)
                             .collect::<Vec<_>>();
@@ -314,7 +318,7 @@ impl Mesh {
                 }
                 Element::E(ref e) => {
                     // we can just remove the edge because the new neighboring relation will add it again.
-                    self.boundary_set.remove(e);
+                    bounds.remove(e);
                 }
             }
         }
@@ -324,7 +328,7 @@ impl Mesh {
         for new_node in cav.new_nodes {
             match new_node {
                 Element::T(t) => {
-                    self.elements.insert(t, Vec::with_capacity(3));
+                    elems.insert(t, Vec::with_capacity(3));
                     if t.is_bad() {
                         // println!("Appending triangle with area: {}", t.area());
                         new_bad.push_back(t);
@@ -342,27 +346,27 @@ impl Mesh {
         for (src, _, dst) in cav.new_connections {
             match src {
                 Element::T(ref t) => {
-                    let neighborhood = self.elements.get_mut(t).expect("Element does not exist");
+                    let neighborhood = elems.get_mut(t).expect("Element does not exist");
                     neighborhood.push(dst);
                 }
                 Element::E(e) => {
-                    self.boundary_set.insert(e, dst);
+                    bounds.insert(e, dst);
                 }
             }
 
             match dst {
                 Element::T(ref t) => {
-                    let neighborhood = self.elements.get_mut(t).expect("Element does not exist");
+                    let neighborhood = elems.get_mut(t).expect("Element does not exist");
                     neighborhood.push(src);
                 }
                 Element::E(e) => {
-                    self.boundary_set.insert(e, src);
+                    bounds.insert(e, src);
                 }
             }
         }
 
         // if the original "bad element" is still in the mesh that's still a todo
-        if self.elements.contains_key(&original_bad) {
+        if elems.contains_key(&original_bad) {
             // println!("Ah shit here we go again");
             new_bad.push_back(original_bad);
         }
@@ -370,8 +374,7 @@ impl Mesh {
         // verify correctness
         #[cfg(verify)]
         {
-            let _ = self
-                .elements
+            let _ = elems
                 .iter()
                 .map(|(_, v)| assert_eq!(v.len(), 3))
                 .collect::<()>();
@@ -382,46 +385,46 @@ impl Mesh {
         new_bad
     }
 
-    pub fn refine(&mut self, mut bad: VecDeque<Triangle>) {
-        let mut i = 0;
-        while !bad.is_empty() {
-            if (i % 10000) == 0 {
-                let mut hs = HashSet::new();
-                for b in &bad {
-                    hs.insert(*b);
-                }
-                println!(
-                    "Iteration: {}, bad elements: {} (deduped: {})",
-                    i,
-                    bad.len(),
-                    hs.len()
-                );
-            }
-            //if i >= 100 {
-            //    println!("Current number of bad elements: {}", bad.len());
-            //    i = 0;
-            //}
+    pub fn apply_updates(&mut self, cavities: Vec<Option<Cavity>>) -> Vec<Triangle> {
+        let mut deleted_items: HashSet<Element> = HashSet::new();
+        let mut old_work_items = Vec::new();
+        let mut new_work_items = Vec::new();
 
-            i += 1;
-            let item = bad.pop_front().unwrap();
-            if !self.contains_triangle(&item) {
-                // println!("skip!");
-                continue;
-            }
-
-            if let Some(mut cav) = Cavity::new(self, item.into()) {
-                cav.build(self);
-                cav.compute();
-                //println!("Created {} new elements", cav.new_nodes.len());
-                let result = self.update(cav, item);
-                println!("Got {} new bad items", result.len());
-                // bad.append(&mut result);
-                for i in result {
-                    bad.push_back(i);
+        for cavity in cavities {
+            if let Some(cav) = cavity {
+                // if either:
+                // a) a replaced element has already been touched or
+                // b) a connection element is no longer in the mesh
+                // -> Try again next iteration!
+                if cav
+                    .previous_nodes
+                    .iter()
+                    .any(|it| deleted_items.contains(it))
+                    || cav
+                        .connections
+                        .iter()
+                        .map(|(_, _, dst)| dst)
+                        .any(|it| !self.contains(it))
+                {
+                    // we already changed this one
+                    old_work_items.push(cav.original_center);
+                } else {
+                    // add items
+                    deleted_items.extend(cav.previous_nodes.iter().copied());
+                    // add elements
+                    let orig = cav.original_center;
+                    let new_work = self.update(cav, orig);
+                    new_work_items.extend(new_work.into_iter());
                 }
             }
         }
 
-        println!("Did {} iterations", i);
+        old_work_items.append(&mut new_work_items);
+
+        old_work_items
+    }
+
+    pub fn has_more_work(&self) -> bool {
+        !self.find_bad().is_empty()
     }
 }
