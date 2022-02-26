@@ -94,6 +94,7 @@ fn main() {
     // run the benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_time = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     if !json_dump {
         print!("[info] Running benchmark");
@@ -108,9 +109,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let _res = run_annealer(netlist, initial_temp as f64, steps, swap_count);
-
-        // TODO: CONTINUE HERE
+        let comp = run_annealer(netlist, initial_temp as f64, steps, swap_count);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -124,6 +123,7 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_time.push(cpu_runtime_ms);
+        computations.push(comp);
     }
 
     // write output
@@ -144,6 +144,7 @@ fn main() {
     \"initial_temperature\": {init_tmp},
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
+    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -152,6 +153,7 @@ fn main() {
             init_tmp = initial_temp,
             steps = steps.unwrap_or(-1),
             swaps_per_temp = swap_count,
+            comps = computations,
             cpu = cpu_time,
             res = results
         ))
@@ -180,11 +182,13 @@ fn run_annealer(
     starting_temperature: f64,
     max_temperature_steps: Option<i32>,
     swaps_per_temp: usize,
-) {
+) -> usize {
     let mut accepted_good_moves = 0;
     let mut accepted_bad_moves = -1;
     let mut temp_steps_completed = 0;
     let mut temperature = starting_temperature;
+
+    let mut computations = 0;
 
     // calculated property in C++ version
     let moves_per_temp = swaps_per_temp;
@@ -206,6 +210,7 @@ fn run_annealer(
         temperature /= 1.5;
         accepted_good_moves = 0;
         accepted_bad_moves = 0;
+        computations += moves_per_temp;
 
         for _ in 0..moves_per_temp {
             // get a single new element
@@ -237,4 +242,6 @@ fn run_annealer(
         "[info] Finished after {} temperature steps.",
         temp_steps_completed
     );
+
+    computations
 }

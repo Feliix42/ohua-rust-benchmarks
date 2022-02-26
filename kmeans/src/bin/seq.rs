@@ -91,6 +91,7 @@ fn main() {
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
     let mut convergence_after = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -102,7 +103,7 @@ fn main() {
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        let iterations = run_kmeans(input_data, initial_centers, threshold);
+        let (iterations, comp) = run_kmeans(input_data, initial_centers, threshold);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -117,6 +118,7 @@ fn main() {
         results.push(runtime_ms);
         cpu_results.push(cpu_runtime_ms);
         convergence_after.push(iterations);
+        computations.push(comp);
     }
 
     // generate output
@@ -136,6 +138,7 @@ fn main() {
     \"values-count\": {value_count},
     \"runs\": {runs},
     \"converged_after\": {conv:?},
+    \"computations\": {comp:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -145,6 +148,7 @@ fn main() {
             value_count = clusters.len(),
             runs = runs,
             conv = convergence_after,
+            comp = computations,
             cpu = cpu_results,
             res = results
         ))
@@ -163,14 +167,22 @@ fn main() {
     }
 }
 
-fn run_kmeans(mut values: Vec<Value>, mut centroids: Vec<Centroid>, threshold: f32) -> usize{
+fn run_kmeans(
+    mut values: Vec<Value>,
+    mut centroids: Vec<Centroid>,
+    threshold: f32,
+) -> (usize, usize) {
     let mut runs = 0;
     let mut delta = std::f32::MAX;
+
+    let mut computations = 0;
 
     // exit conditions: either we are below our self-set threshold or 500 iterations have passed
     while runs < 500 && delta > threshold {
         runs += 1;
         delta = 0f32;
+
+        computations += values.len();
 
         // Step 1: Assign all clusters to a centroid
         for val in values.iter_mut() {
@@ -186,5 +198,5 @@ fn run_kmeans(mut values: Vec<Value>, mut centroids: Vec<Centroid>, threshold: f
         centroids = Centroid::from_assignments(&values, centroids.len());
     }
 
-    runs
+    (runs, computations)
 }

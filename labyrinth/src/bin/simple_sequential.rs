@@ -55,6 +55,7 @@ fn main() {
 
     let mut results = Vec::with_capacity(runs);
     let mut mapped_paths = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     for _ in 0..runs {
         let maze = Maze::new(dimensions.clone(), None);
@@ -76,6 +77,7 @@ fn main() {
         if filled_maze.is_valid() {
             results.push(runtime_ms);
             mapped_paths.push(filled_maze.paths.len());
+            computations.push(paths.len());
         } else {
             eprintln!("Incorrect path mappings found in maze: {:?}", filled_maze);
             return;
@@ -97,6 +99,7 @@ fn main() {
     \"configuration\": \"{conf}\",
     \"paths\": {paths},
     \"threads\": 1,
+    \"computations\": {comps:?},
     \"runs\": {runs},
     \"mapped\": {mapped:?},
     \"results\": {res:?}
@@ -104,6 +107,7 @@ fn main() {
             conf = dimensions,
             paths = paths.len(),
             runs = runs,
+            comps = computations,
             mapped = mapped_paths,
             res = results
         ))

@@ -381,7 +381,7 @@ impl Mesh {
         new_bad
     }
 
-    pub fn refine(&mut self, mut bad: VecDeque<Triangle>) {
+    pub fn refine(&mut self, mut bad: VecDeque<Triangle>) -> usize {
         let mut i = 0;
         while !bad.is_empty() {
             if (i % 10000) == 0 {
@@ -422,5 +422,6 @@ impl Mesh {
         }
 
         println!("Did {} iterations", i);
+        i
     }
 }

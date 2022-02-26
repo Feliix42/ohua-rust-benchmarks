@@ -70,6 +70,7 @@ fn main() {
     // run the benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_time = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     if !json_dump {
         print!("[info] Running benchmark");
@@ -84,7 +85,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let _res = run_refining(&mut mesh);
+        let comp = run_refining(&mut mesh);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -101,6 +102,7 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_time.push(cpu_runtime_ms);
+        computations.push(comp);
     }
 
     // write output
@@ -118,11 +120,13 @@ fn main() {
     \"algorithm\": \"sequential\",
     \"elements\": {ele},
     \"runs\": {runs},
+    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             ele = input_data.elements.len(),
             runs = runs,
+            comps = computations,
             cpu = cpu_time,
             res = results
         ))
@@ -136,12 +140,13 @@ fn main() {
         println!("    Input file used: {}", input_file);
         println!("    Runs: {}", runs);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
+        println!("Computations: {:?}", computations);
         println!("Runtime (ms): {:?}", results);
     }
 }
 
-fn run_refining(mesh: &mut Mesh) {
+fn run_refining(mesh: &mut Mesh) -> usize {
     let bad_queue = mesh.find_bad();
 
-    mesh.refine(bad_queue);
+    mesh.refine(bad_queue)
 }
