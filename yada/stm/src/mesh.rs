@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
-use std::thread;
+use std::thread::{self, JoinHandle};
 use stm::{StmError, StmResult, TVar, Transaction};
 
 #[derive(Clone)]
@@ -421,20 +421,21 @@ impl Mesh {
     }
 }
 
-pub fn refine(mesh: Mesh, bad: VecDeque<Triangle>, threadcount: usize) {
+pub fn refine(mesh: Mesh, bad: VecDeque<Triangle>, threadcount: usize) -> usize {
     let vs = splitup(bad, threadcount);
 
     let mut handles = Vec::new();
     for mut v in vs {
         let m = mesh.clone();
         handles.push(thread::spawn(move || {
+            let mut computations = 0;
             while !v.is_empty() {
                 let item = v.pop_front().unwrap();
                 if !m.contains_triangle(&item) {
                     continue;
                 }
 
-                let (result, _) = stm::atomically(|trans| {
+                let (result, xtra) = stm::atomically(|trans| {
                     if let Some(mut cav) = Cavity::new(&m, item.into()) {
                         cav.build(&m, trans)?;
                         cav.compute();
@@ -444,14 +445,20 @@ pub fn refine(mesh: Mesh, bad: VecDeque<Triangle>, threadcount: usize) {
                     }
                 });
 
+                computations += xtra + result.len();
                 for i in result {
                     v.push_back(i);
                 }
             }
+            computations
         }));
     }
 
-    handles.into_iter().for_each(|h| h.join().unwrap());
+    handles
+        .into_iter()
+        .map(JoinHandle::join)
+        .map(Result::unwrap)
+        .sum::<usize>()
 }
 
 fn splitup<T>(vec: VecDeque<T>, split_size: usize) -> Vec<VecDeque<T>>

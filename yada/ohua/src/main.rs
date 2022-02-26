@@ -92,6 +92,7 @@ fn main() {
     // run the benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_time = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     if !json_dump {
         print!("[info] Running benchmark");
@@ -123,16 +124,19 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_time.push(cpu_runtime_ms);
+        computations.push(res.computation_steps);
     }
 
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/seq-{}ele-r{}_log.json",
+            "{}/ohua-{}ele-r{}-t{}-b{}_log.json",
             out_dir,
             input_data.elements.len(),
-            runs
+            runs,
+            generated::THREADCOUNT,
+            generated::BATCHSIZE,
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
@@ -141,6 +145,7 @@ fn main() {
     \"elements\": {ele},
     \"threadcount\": {threads},
     \"update_frequency\": {freq},
+    \"computations\": {comps:?},
     \"runs\": {runs},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
@@ -148,6 +153,7 @@ fn main() {
             ele = input_data.elements.len(),
             threads = generated::THREADCOUNT,
             freq = generated::BATCHSIZE,
+            comps = computations,
             runs = runs,
             cpu = cpu_time,
             res = results
@@ -163,6 +169,7 @@ fn main() {
         println!("    Thread count: {}", generated::THREADCOUNT);
         println!("    Batch size: {}", generated::BATCHSIZE);
         println!("    Runs: {}", runs);
+        println!("    Computations: {:?}", computations);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
         println!("Runtime (ms): {:?}", results);
     }

@@ -198,8 +198,12 @@ impl Netlist {
 
         let mut changed = vec![false; elems.len()];
 
+        let mut computations_this_step = 0;
+
         for updts in updt_sets {
             let mut tmp = Vec::with_capacity(updts.len());
+            computations_this_step += updts.len();
+
             for updt in updts {
                 let (a, b) = updt.1;
 
@@ -234,6 +238,8 @@ impl Netlist {
             res.push(tmp);
         }
 
+        self.internal_state.total_moves += computations_this_step;
+
         if res.iter().flatten().count() == 0 {
             //println!("Current done!");
             // current worklist done!
@@ -247,9 +253,9 @@ impl Netlist {
                 res = self.internal_state.generate_worklist();
             }
         } /* else {
-            println!("Remaining elements: {}", res.len());
-            println!("Failed updates: {}", self.failed_updates);
-        } */
+              println!("Remaining elements: {}", res.len());
+              println!("Failed updates: {}", self.failed_updates);
+          } */
 
         res
     }
@@ -262,7 +268,7 @@ impl Netlist {
         }
     }
 }
-    
+
 /// Swap the location information for two elements, effectively swapping their positions
 pub fn swap_locations(elems: &mut Vec<NetlistElement>, idx_a: usize, idx_b: usize) {
     let mut tmp = std::mem::take(&mut elems[idx_a].location);
@@ -313,6 +319,7 @@ pub fn process_move(
 pub struct InternalState {
     rng: ChaCha12Rng,
     total_elements: usize,
+    pub total_moves: usize,
     accepted_good_moves: u32,
     accepted_bad_moves: u32,
     max_steps: Option<i32>,
@@ -321,10 +328,15 @@ pub struct InternalState {
 }
 
 impl InternalState {
-    pub fn initialize(total_elements: usize, max_steps: Option<i32>, swaps_per_temp: usize) -> Self {
+    pub fn initialize(
+        total_elements: usize,
+        max_steps: Option<i32>,
+        swaps_per_temp: usize,
+    ) -> Self {
         Self {
             rng: ChaCha12Rng::seed_from_u64(0),
             total_elements,
+            total_moves: 0,
             accepted_good_moves: 0,
             accepted_bad_moves: 0,
             max_steps,
@@ -334,30 +346,28 @@ impl InternalState {
     }
 
     //pub fn generate_worklist(
-        //&mut self,
+    //&mut self,
     //) -> Vec<(usize, usize)> {
-        //let mut res = Vec::with_capacity(self.swaps_per_temp);
-        //let mut idx_a;
-        //let mut idx_b;
+    //let mut res = Vec::with_capacity(self.swaps_per_temp);
+    //let mut idx_a;
+    //let mut idx_b;
 
-        //for _ in 0..self.swaps_per_temp {
-            //// todo
-            //idx_a = self.rng.gen_range(0..self.total_elements);
-            //idx_b = self.rng.gen_range(0..self.total_elements);
-            
-            //while idx_a == idx_b {
-                //idx_b = self.rng.gen_range(0..self.total_elements);
-            //}
+    //for _ in 0..self.swaps_per_temp {
+    //// todo
+    //idx_a = self.rng.gen_range(0..self.total_elements);
+    //idx_b = self.rng.gen_range(0..self.total_elements);
 
-            //res.push((idx_a, idx_b));
-        //}
-
-        //res
+    //while idx_a == idx_b {
+    //idx_b = self.rng.gen_range(0..self.total_elements);
     //}
 
-    pub fn generate_worklist(
-        &mut self,
-    ) -> Vec<Vec<(usize, usize)>> {
+    //res.push((idx_a, idx_b));
+    //}
+
+    //res
+    //}
+
+    pub fn generate_worklist(&mut self) -> Vec<Vec<(usize, usize)>> {
         // Optimization: Bigger work packages
         let mut res = Vec::with_capacity(self.swaps_per_temp / 100);
         let mut idx_a;
@@ -368,7 +378,7 @@ impl InternalState {
             // todo
             idx_a = self.rng.gen_range(0..self.total_elements);
             idx_b = self.rng.gen_range(0..self.total_elements);
-            
+
             while idx_a == idx_b {
                 idx_b = self.rng.gen_range(0..self.total_elements);
             }
@@ -389,5 +399,3 @@ impl InternalState {
         res
     }
 }
-
-

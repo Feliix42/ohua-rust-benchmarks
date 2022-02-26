@@ -25,6 +25,8 @@ pub struct Mesh {
     pub elements: Arc<HashMap<Triangle, Vec<Element>>>,
     // pub elements: HashMap<Triangle, [Element; 3]>,
     pub boundary_set: Arc<HashMap<Edge, Element>>,
+
+    pub computation_steps: usize,
 }
 
 impl Mesh {
@@ -206,6 +208,7 @@ impl Mesh {
         Ok(Mesh {
             elements: Arc::new(elems),
             boundary_set: Arc::new(edges),
+            computation_steps: 0,
         })
     }
 
@@ -235,6 +238,7 @@ impl Mesh {
     }
 
     /// Find the node that is opposite to the obtuse angle of the element.
+    #[allow(dead_code)]
     pub fn get_opposite(&self, node: &Triangle) -> Element {
         let opposite_edge = node.get_opposite_edge();
 
@@ -389,6 +393,8 @@ impl Mesh {
         let mut deleted_items: HashSet<Element> = HashSet::new();
         let mut old_work_items = Vec::new();
         let mut new_work_items = Vec::new();
+
+        self.computation_steps += cavities.len();
 
         for cavity in cavities {
             if let Some(cav) = cavity {

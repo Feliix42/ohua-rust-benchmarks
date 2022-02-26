@@ -13,10 +13,10 @@ use std::str::FromStr;
 use std::time::Instant;
 
 fn main() {
-    let matches = App::new("Sequential yada benchmark")
+    let matches = App::new("STM yada benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
-        .about("A Rust port of the yada benchmark from the Galois collection, implemented in a sequential manner.")
+        .about("A Rust port of the yada benchmark from the Galois collection, implemented using STM.")
         .arg(
             Arg::with_name("INPUT")
                 .help("Input file name stem.")
@@ -80,6 +80,7 @@ fn main() {
     // run the benchmark itself
     let mut results = Vec::with_capacity(runs);
     let mut cpu_time = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     if !json_dump {
         print!("[info] Running benchmark");
@@ -94,7 +95,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let _res = run_refining(mesh.clone(), threadcount);
+        let comps = run_refining(mesh.clone(), threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -111,13 +112,15 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_time.push(cpu_runtime_ms);
+        computations.push(comps);
     }
 
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/seq-{}ele-r{}_log.json",
+            "{}/stm-t{}-{}ele-r{}_log.json",
+            threadcount,
             out_dir,
             input_data.elements.read_atomic().len(),
             runs
@@ -127,12 +130,16 @@ fn main() {
             "{{
     \"algorithm\": \"sequential\",
     \"elements\": {ele},
+    \"threadcount\": {tc},
     \"runs\": {runs},
+    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             ele = input_data.elements.read_atomic().len(),
+            tc = threadcount,
             runs = runs,
+            comps = computations,
             cpu = cpu_time,
             res = results
         ))
@@ -148,13 +155,18 @@ fn main() {
         );
         println!("    Input file used: {}", input_file);
         println!("    Runs: {}", runs);
+        println!("    Threads: {}", threadcount);
+        println!("    Computations: {:?}", computations);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
         println!("Runtime (ms): {:?}", results);
     }
 }
 
-fn run_refining(mesh: Mesh, threadcount: usize) {
+fn run_refining(mesh: Mesh, threadcount: usize) -> usize {
     let bad_queue = mesh.find_bad();
+    let comps = bad_queue.len();
 
-    mesh::refine(mesh, bad_queue, threadcount);
+    let c = mesh::refine(mesh, bad_queue, threadcount);
+
+    comps + c
 }

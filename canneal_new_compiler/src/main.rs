@@ -93,7 +93,8 @@ fn main() {
     let frequency = FREQUENCY;
 
     // read and parse input data
-    let input_data = Netlist::new(input_file, steps, swap_count).expect("Failed to parse input file");
+    let input_data =
+        Netlist::new(input_file, steps, swap_count).expect("Failed to parse input file");
 
     if !json_dump {
         println!(
@@ -106,6 +107,7 @@ fn main() {
     let mut results = Vec::with_capacity(runs);
     let mut cpu_time = Vec::with_capacity(runs);
     let mut collisions = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     if !json_dump {
         print!("[info] Running benchmark");
@@ -114,7 +116,8 @@ fn main() {
     for _ in 0..runs {
         // clone the necessary data
         // read and parse input data
-        let mut netlist = Netlist::new(input_file, steps, swap_count).expect("Failed to parse input file");
+        let mut netlist =
+            Netlist::new(input_file, steps, swap_count).expect("Failed to parse input file");
         let workset = netlist.internal_state.generate_worklist();
 
         // start the clock
@@ -123,18 +126,10 @@ fn main() {
 
         // run the algorithm
         let netlist = if sequential {
-            original::annealer(
-                netlist,
-                workset,
-                initial_temp as f64,
-            )
+            original::annealer(netlist, workset, initial_temp as f64)
         } else {
-            generated::annealer(
-                netlist,
-                workset,
-                initial_temp as f64,
-            )
-         };
+            generated::annealer(netlist, workset, initial_temp as f64)
+        };
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -149,6 +144,7 @@ fn main() {
         results.push(runtime_ms);
         cpu_time.push(cpu_runtime_ms);
         collisions.push(netlist.failed_updates);
+        computations.push(netlist.internal_state.total_moves);
     }
 
     // write output
@@ -173,6 +169,7 @@ fn main() {
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
     \"collisions\": {coll:?},
+    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -184,6 +181,7 @@ fn main() {
             steps = steps.unwrap_or(-1),
             swaps_per_temp = swap_count,
             coll = collisions,
+            comps = computations,
             cpu = cpu_time,
             res = results
         ))
@@ -204,8 +202,8 @@ fn main() {
         println!("    Maximal number of temperature steps: {:?}", steps);
         println!("    Swaps per temperature step: {}", swap_count);
         println!("    Collisions: {:?}", collisions);
+        println!("    Computations: {:?}", computations);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
         println!("Runtime (ms): {:?}", results);
     }
 }
-

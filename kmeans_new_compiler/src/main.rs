@@ -106,6 +106,7 @@ fn main() {
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
     let mut convergence_after = Vec::with_capacity(runs);
+    let mut computations = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -120,7 +121,9 @@ fn main() {
         let runs_necessary = if sequential {
             original::calculate(input_data, initial_centers, threshold, 0)
         } else {
-            calculate(input_data, initial_centers, threshold, 0)
+            let (r, comps) = calculate(input_data, initial_centers, threshold, 0);
+            computations.push(comps);
+            r
         };
 
         // stop the clock
@@ -161,6 +164,7 @@ fn main() {
     \"runs\": {runs},
     \"sequential\": {seq},
     \"converged_after\": {conv:?},
+    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -172,6 +176,7 @@ fn main() {
             runs = runs,
             seq = sequential,
             conv = convergence_after,
+            comps = computations,
             cpu = cpu_results,
             res = results
         ))
@@ -186,6 +191,7 @@ fn main() {
         println!("    Threads used:                {}", threadcount);
         println!("    Runs:                        {}", runs);
         println!("\nConvergence after: {:?}", convergence_after);
+        println!("Computations: {:?}", computations);
         println!("CPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
     }
@@ -226,4 +232,3 @@ where
 
     return res;
 }
-

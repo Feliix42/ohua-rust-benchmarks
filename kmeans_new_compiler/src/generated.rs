@@ -32,7 +32,7 @@ pub fn calculate(
     centroids: Arc<Vec<Centroid>>,
     threshold: f32,
     iterations: u32,
-) -> u32 {
+) -> (u32, usize) {
     #[derive(Debug)]
     enum RunError {
         SendFailed,
@@ -184,9 +184,11 @@ pub fn calculate(
             }
         }
     }));
+    let (ctr_sx, ctr_rx) = std::sync::mpsc::channel();
     tasks.push(Box::new(move || -> _ {
         let ctrlSig = (true, 1);
         ctrl_0_0_0_tx.send(ctrlSig)?;
+        ctr_sx.send(values.iter().map(Vec::len).sum::<usize>())?;
         values_0_0_0_tx.send(values)?;
         centroids_0_0_1_tx.send(centroids)?;
         threshold_0_0_1_tx.send(threshold)?;
@@ -198,6 +200,7 @@ pub fn calculate(
             let loop_res_1 = new_centroids_0_0_0_rx.recv()?;
             let loop_res_2 = threshold_0_0_0_0_rx.recv()?;
             let loop_res_3 = inc_iter_0_0_0_rx.recv()?;
+            ctr_sx.send(loop_res_0.iter().map(Vec::len).sum::<usize>())?;
             values_0_0_0_tx.send(loop_res_0)?;
             centroids_0_0_1_tx.send(loop_res_1)?;
             threshold_0_0_1_tx.send(loop_res_2)?;
@@ -298,8 +301,9 @@ pub fn calculate(
         }
     }
     let _ = tokio_rx.recv().unwrap();
+    let comps = Iterator::sum(ctr_rx.iter());
     match h_0_0_rx.recv() {
-        Ok(res) => res,
+        Ok(res) => (res, comps),
         Err(e) => panic!("[Ohua Runtime Internal Exception] {}", e),
     }
 }

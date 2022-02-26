@@ -18,7 +18,7 @@ ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional
 tokio = { version = "0.2", features = ["full"], optional = true }
 
 # stm stuff
-stm = { git = "https://github.com/feliix42/rust-stm", optional = true }
+stm = { git = "https://github.com/feliix42/rust-stm", branch = "retry-count", optional = true }
 
 [features]
 cli = ["time", "clap", "cpu-time"]
