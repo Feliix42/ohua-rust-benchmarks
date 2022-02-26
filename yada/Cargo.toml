@@ -1,0 +1,9 @@
+[workspace]
+
+members = [
+    "seq",
+    "ohua",
+    "stm",
+]
+
+resolver = "2"
