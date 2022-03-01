@@ -32,6 +32,17 @@ do
     target/release/labyrinth_new_compiler ../labyrinth/inputs/random-x256-y256-z5-n256.txt --json --outdir ../$TODAY-results/labyrinth/ --runs 30
 done
 cd ..
+# labyrinth w/o pipelining
+cd labyrinth_no_pipelining
+for ((i=0; i < ${#labtcs[@]}; i++))
+do
+    sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = ${labtcs[$i]}/" src/generated.rs
+    sed -i "s/FREQUENCY: usize = [0-9]\+/FREQUENCY: usize = ${labfre[$i]}/" src/generated.rs
+    cargo build --quiet --release
+
+    target/release/labyrinth_no_pipelining ../labyrinth/inputs/random-x256-y256-z5-n256.txt --json --outdir ../$TODAY-results/labyrinth/ --runs 30
+done
+cd ..
 
 
 echo "Current time: $(date)\n\n"
