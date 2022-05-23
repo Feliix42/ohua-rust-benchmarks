@@ -346,3 +346,66 @@ impl NetT for Net {
 }
 
 
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test1{
+        let num_node = 100;
+        {
+            let mut net = Net::new(num_node);
+            let mut visited = Vec::with_capacity(num_node);
+            visited.fill(false);
+            let work_queue = Vec::new();
+    
+            assert!(!net.is_cycle());
+    
+            let aId = 31;
+            let bId = 14;
+            let cId = 5;
+            let dId = 92;
+    
+            net.apply_operation(Operation::Insert, aId, bId);
+            assert!(net.is_path(aId, bId, &mut visited, &mut work_queue));
+            assert!(!net.is_path(bId, aId, visited, work_queue));
+            assert!(!net.is_path(aId, cId, visited, work_queue));
+            assert!(!net.is_path(aId, dId, visited, work_queue));
+            assert!(!net.is_cycle());
+    
+            net.apply_operation(Operation::Insert, bId, cId);
+            net.apply_operation(Operation::Insert, aId, cId);
+            net.apply_operation(Operation::Insert, dId, aId);
+            assert!(!net.is_cycle());
+            net.apply_operation(Operation::Insert, cId, dId);
+            assert!(net.is_cycle());
+            net.apply_operation(Operation::Reverse, cId, dId);
+            assert!(!net.is_cycle());
+            net.apply_operation(Operation::Reverse, dId, cId);
+            assert!(net.is_cycle());
+            assert!(net.is_path(aId, dId, &mut visited, &mut work_queue));
+            net.apply_operation(Operation::Removew, cId, dId);
+            assert!(!net.is_path(aId, dId, &mut visited, &mut work_queue));
+    
+            let ancestor= Vec::with_capacity(num_node);
+            ancestor.fill(false);
+            let status = net.find_ancestors(cId, &mut ancestor, &mut work_queue);
+            assert!(status);
+            assert!(ancestor.get(aId).unwrap());
+            assert!(ancestor.get(bId).unwrap());
+            assert!(ancestor.get(dId).unwrap());
+            assert!(ancestor.filter(|x| x).len() == 3);
+    
+            let descendant = Vec::with_capacity(num_node);
+            descendant.fill(false);
+            let status = net.find_descendants(aId, &mut descendant, &mut work_queue);
+            assert!(status);
+            assert!(descendant.get(bId).unwrap());
+            assert!(descendant.get(cId).unwrap());
+            assert!(descendant.filter(|x| x).len() == 2);
+        }
+        {
+            let random = Random::new();
+            let net = Net::new(num_node);
+            net.generate_random_edges(10, 10, &random);
+        }
+}
