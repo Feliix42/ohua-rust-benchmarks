@@ -55,7 +55,76 @@ impl LearnerT for Learner {
         }
     }
     
-    fn createTaskList (&self, id: usize, num_chunks: usize) {
+    /* =============================================================================
+    * learner_run
+    * -- Call AdTree::make before this
+    * =============================================================================
+    */
+    fn run(&mut self) {
+        // data parallel operations across a pool of threads
+        // thread_start(&createTaskList, (void*)learnerPtr);
+        // thread_start(&learnStructure, (void*)learnerPtr);
+        
+        //for t in 0..self.
+        // FIXME
+        unimplemented!()
+    }
+
+
+    /* =============================================================================
+     * learner_score
+     * -- Score entire network
+     * =============================================================================
+     */
+    fn score(&self, ad_tree: AdTree, net: Net) -> f32
+    {
+        //vector_t* queryVectorPtr = vector_alloc(1);
+        //assert(queryVectorPtr);
+        //vector_t* parentQueryVectorPtr = vector_alloc(1);
+        //assert(parentQueryVectorPtr);
+        let mut queries = Vec::with_capacity(1);
+        let mut parent_queries = Vec::with_capacity(1);
+
+        //long numVar = adtreePtr->numVar;
+        //query_t* queries = (query_t*)malloc(numVar * sizeof(query_t));
+        //assert(queries);
+        //long v;
+        for v in 0..(ad_tree.num_var) {
+            queries.push(Query::new(v, Val::WildCard));
+        }
+
+        let mut num_total_parent = 0;
+        let mut log_likelihood = 0.0;
+
+        for v in 0..(ad_tree.num_var) {
+            let parent_id_list = net.get_parent_id_list(v);
+            num_total_parent += parent_id_list.len();
+
+            populate_query_vectors(&net,
+                                 v,
+                                 //queries,
+                                 &queries,
+                                 &parent_queries);
+            let local_log_likelihood = 
+                compute_local_log_likelihood(
+                    v,
+                    &ad_tree,
+                    &net,
+                    //queries,
+                    &queries,
+                    &parent_queries);
+            log_likelihood += local_log_likelihood;
+        }
+
+        let num_record = ad_tree.num_record;
+        let penalty = -0.5 * num_total_parent * log(num_record); //(float)(-0.5 * (double)numTotalParent * log((double)numRecord));
+        let score = penalty + num_record * log_likelihood;
+
+        score
+    }
+
+   
+    fn create_task_list (&mut self, id: usize, num_chunks: usize) {
         //TM_THREAD_ENTER();
 
         //long myId = thread_getId();
@@ -95,143 +164,153 @@ impl LearnerT for Learner {
         for v in v_start..v_stop {
 
             let mut local_base_log_likelihood = 0.0;
-            queries.put(Query::new(v, 0));
+            queries.push(Query::new(v, 0));
             local_base_log_likelihood +=
                 compute_specific_local_log_likelihood(&self.ad_tree,
                                                       &queries,
                                                       &parent_queries);
-
-            queries[0].value = 1;// FIXME
-            localBaseLogLikelihood +=
+            {
+                let mut q = queries.get_mut(0).expect("Invariant broken");
+                q.value = 1;
+            }
+            local_base_log_likelihood +=
                 compute_specific_local_log_likelihood(&self.ad_tree,
                                                       &queries,
                                                       &parent_queries);
+            base_log_likelihood += local_base_log_likelihood;
+            self.local_base_log_likelihoods.put(local_base_log_likelihood);
 
-        localBaseLogLikelihoods[v] = localBaseLogLikelihood;
-        baseLogLikelihood += localBaseLogLikelihood;
+        } /* foreach variable */
 
-    } /* foreach variable */
-
-    TM_BEGIN();
-    float globalBaseLogLikelihood =
-        TM_SHARED_READ_F(learnerPtr->baseLogLikelihood);
-    TM_SHARED_WRITE_F(learnerPtr->baseLogLikelihood,
-                      (baseLogLikelihood + globalBaseLogLikelihood));
-    TM_END();
-
-    /*
-     * For each variable, find if the addition of any edge _to_ it is better
-     */
-
-    status = PVECTOR_PUSHBACK(parentQueryVectorPtr, (void*)&parentQuery);
-    assert(status);
-
-    for (v = v_start; v < v_stop; v++) {
+        //TM_BEGIN();
+        //float globalBaseLogLikelihood =
+        //    TM_SHARED_READ_F(learnerPtr->baseLogLikelihood);
+        //TM_SHARED_WRITE_F(learnerPtr->baseLogLikelihood,
+        //                  (baseLogLikelihood + globalBaseLogLikelihood));
+        //TM_END();
+        let global_base_log_likelihood = self.base_log_likelihood;
+        self.base_log_likelihood = base_log_likelihood + global_base_log_likelihood;
 
         /*
-         * Compute base log likelihood for this variable
+         * For each variable, find if the addition of any edge _to_ it is better
          */
 
-        queries[0].index = v;
-        long bestLocalIndex = v;
-        float bestLocalLogLikelihood = localBaseLogLikelihoods[v];
+        //status = PVECTOR_PUSHBACK(parentQueryVectorPtr, (void*)&parentQuery);
+        //assert(status);
+    
+        for v in v_start..v_stop {
+            /*
+             * Compute base log likelihood for this variable
+             */
+    
+           //queries[0].index = v;
+            let best_local_index = v;
+            let bestLocalLogLikelihood = local_base_log_likelihoods[v];
 
-        status = PVECTOR_PUSHBACK(queryVectorPtr, (void*)&queries[1]);
-        assert(status);
+            //status = PVECTOR_PUSHBACK(queryVectorPtr, (void*)&queries[1]);
+            //assert(status);
 
-        long vv;
-        for (vv = 0; vv < numVar; vv++) {
+            for vv in 0..num_var {
+                if (vv == v) {
+                    //continue;
+                } else {
+                    let (qi0, qi1) = if (v < vv) { (v,vv) } else { (vv,v) };
 
-            if (vv == v) {
-                continue;
-            }
-            parentQuery.index = vv;
-            if (v < vv) {
-                queries[0].index = v;
-                queries[1].index = vv;
+                    // FIXME in-place updates if performance suffers
+
+                    queries.push(Query::new(qi0, 0));
+                    queries.push(Query::new(qi1, 0));
+                    parent_queries.push(Query::new(vv, 0));
+                    let new_local_log_likelihood =
+                        compute_specific_local_log_likelihood(
+                            &ad_tree,
+                            &queries,
+                            &parent_queries);
+                    queries.pop();
+                    queries.pop();
+                    parent_queries.pop();
+
+                    queries.push(Query::new(qi0, 0));
+                    queries.push(Query::new(qi1, 1));
+                    parent_queries.push(
+                        Query::new(vv, if vv < v { 0 } else { 1 });
+                    new_local_log_likelihood +=
+                        compute_specific_local_log_likelihood(
+                            &ad_tree,
+                            &queries,
+                            &parent_queries);
+                    queries.pop();
+                    queries.pop();
+                    parent_queries.pop();
+
+                    queries.push(Query::new(qi0, 1));
+                    queries.push(Query::new(qi1, 0));
+                    parent_queries.push(
+                        Query::new(vv, if vv < v { 1 } else { 0 });
+                    new_local_log_likelihood +=
+                        compute_specific_local_log_likelihood(
+                            &ad_tree,
+                            &queries,
+                            &parent_queries);
+                    queries.pop();
+                    queries.pop();
+                    parent_queries.pop();
+
+                    queries.push(Query::new(qi0, 1));
+                    queries.push(Query::new(qi1, 1));
+                    parent_queries.push(Query::new(vv, 1);
+                    new_local_log_likelihood +=
+                        compute_specific_local_log_likelihood(
+                            &ad_tree,
+                            &queries,
+                            &parent_queries);
+
+                    if new_local_log_likelihood > best_local_log_likelihood {
+                        best_local_index = vv;
+                        best_local_log_likelihood = new_local_log_likelihood;
+                    } else {
+                        // no update
+                    }
+                }
+            } /* foreach other variable */
+
+            queries.pop();
+
+            if best_local_index != v {
+                let log_likelihood = num_record * (base_log_likelihood +
+                                                    + best_local_log_likelihood
+                                                    - local_base_log_likelihoods[v]);
+                let score = penalty + log_likelihood;
+                let mut task = tasks.get_mut(v);
+                task.op = OPERATION_INSERT;
+                task.from_id = best_local_index;
+                task.to_id = v;
+                task.score = score;
+                //TM_BEGIN();
+                //status = TMLIST_INSERT(taskListPtr, (void*)taskPtr);
+                //TM_END();
+                //assert(status);
             } else {
-                queries[0].index = vv;
-                queries[1].index = v;
+                // no task update
             }
 
-            float newLocalLogLikelihood = 0.0;
+        } /* for each variable */
 
-            queries[0].value = 0;
-            queries[1].value = 0;
-            parentQuery.value = 0;
-            newLocalLogLikelihood +=
-                computeSpecificLocalLogLikelihood(adtreePtr,
-                                                  queryVectorPtr,
-                                                  parentQueryVectorPtr);
+        //PVECTOR_FREE(queryVectorPtr);
+        //PVECTOR_FREE(parentQueryVectorPtr);
 
-            queries[0].value = 0;
-            queries[1].value = 1;
-            parentQuery.value = ((vv < v) ? 0 : 1);
-            newLocalLogLikelihood +=
-                computeSpecificLocalLogLikelihood(adtreePtr,
-                                                  queryVectorPtr,
-                                                  parentQueryVectorPtr);
-
-            queries[0].value = 1;
-            queries[1].value = 0;
-            parentQuery.value = ((vv < v) ? 1 : 0);
-            newLocalLogLikelihood +=
-                computeSpecificLocalLogLikelihood(adtreePtr,
-                                                  queryVectorPtr,
-                                                  parentQueryVectorPtr);
-
-            queries[0].value = 1;
-            queries[1].value = 1;
-            parentQuery.value = 1;
-            newLocalLogLikelihood +=
-                computeSpecificLocalLogLikelihood(adtreePtr,
-                                                  queryVectorPtr,
-                                                  parentQueryVectorPtr);
-
-            if (newLocalLogLikelihood > bestLocalLogLikelihood) {
-                bestLocalIndex = vv;
-                bestLocalLogLikelihood = newLocalLogLikelihood;
-            }
-
-        } /* foreach other variable */
-
-        PVECTOR_POPBACK(queryVectorPtr);
-
-        if (bestLocalIndex != v) {
-            float logLikelihood = numRecord * (baseLogLikelihood +
-                                                + bestLocalLogLikelihood
-                                                - localBaseLogLikelihoods[v]);
-            float score = penalty + logLikelihood;
-            learner_task_t* taskPtr = &tasks[v];
-            taskPtr->op = OPERATION_INSERT;
-            taskPtr->fromId = bestLocalIndex;
-            taskPtr->toId = v;
-            taskPtr->score = score;
-            TM_BEGIN();
-            status = TMLIST_INSERT(taskListPtr, (void*)taskPtr);
-            TM_END();
-            assert(status);
-        }
-
-    } /* for each variable */
-
-    PVECTOR_FREE(queryVectorPtr);
-    PVECTOR_FREE(parentQueryVectorPtr);
-
-#ifdef TEST_LEARNER
-    list_iter_t it;
-    list_iter_reset(&it, taskListPtr);
-    while (list_iter_hasNext(&it, taskListPtr)) {
-        learner_task_t* taskPtr = (learner_task_t*)list_iter_next(&it, taskListPtr);
-        printf("[task] op=%i from=%li to=%li score=%lf\n",
-               taskPtr->op, taskPtr->fromId, taskPtr->toId, taskPtr->score);
+        //#ifdef TEST_LEARNER
+        //    list_iter_t it;
+        //    list_iter_reset(&it, taskListPtr);
+        //    while (list_iter_hasNext(&it, taskListPtr)) {
+        //        learner_task_t* taskPtr = (learner_task_t*)list_iter_next(&it, taskListPtr);
+        //        printf("[task] op=%i from=%li to=%li score=%lf\n",
+        //               taskPtr->op, taskPtr->fromId, taskPtr->toId, taskPtr->score);
+        //    }
+        //#endif /* TEST_LEARNER */
+        //
+        //    TM_THREAD_EXIT();
     }
-#endif /* TEST_LEARNER */
-
-    TM_THREAD_EXIT();
-}
-
-
 }
 
 fn compute_specific_local_log_likelihood(
@@ -268,4 +347,158 @@ fn create_partition (min:usize, max: usize, id: usize, n: usize) -> (usize, usiz
     (start, stop)
 }
 
+/* =============================================================================
+ * computeLocalLogLikelihoodHelper
+ * -- Recursive helper routine
+ * =============================================================================
+ */
+fn compute_local_log_likelihood_helper (
+    i: usize,
+    //num_parent: usize,
+    ad_tree: &AdTree,
+    //query_t* queries,
+    queries: &mut Vec<Query>,
+    parent_queries: &Vec<Query>) -> f32
+{
+    match parent_queries.get(i) {
+        None => compute_specific_local_log_likelihood(
+                    &adtree,
+                    &queries,
+                    &parent_queries),
+        Some(parent_query) => {
+            //queries[parentIndex].value = 0;
+            {
+                let mut q = queries.get_mut(parent_query.index).expect("invariant broken");
+                q.value = 0;
+            }
+            let local_log_likelihood = 
+                compute_local_log_likelihood_helper(
+                    (i + 1),
+                    parent_queries.len(), //numParent,
+                    &ad_tree,
+                    //queries,
+                    &queries,
+                    &parent_queries);
+
+            //queries[parentIndex].value = 1;
+            {
+                let mut q = queries.get_mut(parent_query.index).expect("invariant broken");
+                q.value = 1;
+            }
+            local_log_likelihood += 
+                compute_local_log_likelihood_helper(
+                    (i + 1),
+                    parent_queries.len(), //numParent,
+                    &ad_tree,
+                    //queries,
+                    &queries,
+                    &parent_queries);
+
+            queries[parentIndex].value = QUERY_VALUE_WILDCARD;
+
+            local_log_likelihood
+        }
+    }
+}
+
+
+/* =============================================================================
+ * computeLocalLogLikelihood
+ * -- Populate the query vectors before passing as args
+ * =============================================================================
+ */
+fn compute_local_log_likelihood (
+    id: usize,
+    ad_tree: &AdTree,
+    net: &Net,
+    // query_t* queries,
+    queries: &Vec<Query>,
+    parent_queries: &Vec<Query>) -> f32
+{
+    //long numParent = vector_getSize(parentQueryVectorPtr);
+    //float localLogLikelihood = 0.0;
+
+    // queries[id].value = 0;
+    {
+        let mut q = queries.get_mut(id).expect("invariant broken");
+        q.value = Val::Zero;
+    }
+    let local_log_likelihood = 
+        compute_local_log_likelihood_helper(
+            0,
+            //numParent,
+            &ad_tree,
+            //queries,
+            &queries,
+            &parent_queries);
+
+    // queries[id].value = 1;
+    {
+        let mut q = queries.get_mut(id).expect("invariant broken");
+        q.value = Val::One;
+    }
+    localLogLikelihood += 
+        compute_local_log_likelihood_helper(
+            0,
+            //numParent,
+            &ad_tree,
+            //queries,
+            &queries,
+            &parent_queries);
+
+    // queries[id].value = QUERY_VALUE_WILDCARD;
+    {
+        let mut q = queries.get_mut(parent_query.index).expect("invariant broken");
+        q.value = Val::WildCard;
+    }
+
+    local_log_likelihood
+}
+
+/* =============================================================================
+ * populateParentQuery
+ * -- Modifies contents of parentQueryVectorPtr
+ * =============================================================================
+ */
+fn populate_parent_query_vector (
+    net: &Net,
+    id: usize,
+    // query_t* queries,
+    // vector_t* parentQueryVectorPtr
+    ) -> Vec<Query>
+{
+    //vector_clear(parentQueryVectorPtr);
+
+    list_t* parentIdListPtr = net_getParentIdListPtr(netPtr, id);
+    list_iter_t it;
+    list_iter_reset(&it, parentIdListPtr);
+    while (list_iter_hasNext(&it, parentIdListPtr)) {
+        long parentId = (long)list_iter_next(&it, parentIdListPtr);
+        bool_t status = vector_pushBack(parentQueryVectorPtr,
+                                        (void*)&queries[parentId]);
+        assert(status);
+    }
+}
+
+/* =============================================================================
+ * populateQueryVectors
+ * -- Modifies contents of queryVectorPtr and parentQueryVectorPtr
+ * =============================================================================
+ */
+fn populate_query_vectors(
+    net: &Net,
+    id: usize,
+    //query_t* queries,
+  //  queries: Vec<Query>,
+  //                    vector_t* parentQueryVectorPtr
+    ) -> (Vec<Query>, Vec<Query>)
+{
+    populateParentQueryVector(netPtr, id, queries, parentQueryVectorPtr);
+
+    bool_t status;
+    status = vector_copy(queryVectorPtr, parentQueryVectorPtr);
+    assert(status);
+    status = vector_pushBack(queryVectorPtr, (void*)&queries[id]);
+    assert(status);
+    vector_sort(queryVectorPtr, &compareQuery);
 

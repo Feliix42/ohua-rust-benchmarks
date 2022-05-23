@@ -6,7 +6,6 @@ enum Val {
 }
 
 struct Query {
-    // TODO
     index: usize,
     val: Val
 }
