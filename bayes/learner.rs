@@ -38,6 +38,21 @@ impl Task {
     }
 }
 
+struct findBestTaskArg {
+    to_id : usize,
+    learner : &Learner,
+    queries : &Vec<Query>,
+    parent_queries : &Vec<Query>,
+    num_total_parent : usize,
+    base_penalty : f32,
+    base_log_likelihood : f32,
+    bitmap : &Vec<bool>,
+    work_queue : &Vec<Task>,
+    a_queries : &Vec<Query>,
+    b_queries :  &Vec<Query>
+};
+
+
 impl Learner {
 
 }
@@ -311,6 +326,270 @@ impl LearnerT for Learner {
         //
         //    TM_THREAD_EXIT();
     }
+
+    /* =============================================================================
+     * learnStructure
+     *
+     * Note it is okay if the score is not exact, as we are relaxing the greedy
+     * search. This means we do not need to communicate baseLogLikelihood across
+     * threads.
+     * =============================================================================
+     */
+    fn learn_structure(&mut self, global_operation_quality_factor: f32)
+    {
+        // TM_THREAD_ENTER();
+
+        //net_t* netPtr = learnerPtr->netPtr;
+        //adtree_t* adtreePtr = learnerPtr->adtreePtr;
+        //long numRecord = adtreePtr->numRecord;
+        //float* localBaseLogLikelihoods = learnerPtr->localBaseLogLikelihoods;
+        //list_t* taskListPtr = learnerPtr->taskListPtr;
+    
+        let mut visited = Vec::with_capacity(self.ad_tree.num_var);
+        visited.fill(false);
+        let work_queue = Vec::new();
+    
+        //long numVar = adtreePtr->numVar;
+        let mut queries = Vec::with_capacity(self.ad_tree.num_var);
+        
+        for v in 0 ..(self.ad_tree.num_var) {
+            queries.push(Query::new(v, Val::WildCard));
+        }
+
+        let base_penalty:f32 = -0.5 * log(self.ad_tree.num_record));
+
+        // vector_t* queryVectorPtr = PVECTOR_ALLOC(1);
+        // assert(queryVectorPtr);
+        let queries0 = Vec::with_capacity(1);
+        // vector_t* parentQueryVectorPtr = PVECTOR_ALLOC(1);
+        // assert(parentQueryVectorPtr);
+        let parent_queries = Vec::with_capacity(1);
+        // vector_t* aQueryVectorPtr = PVECTOR_ALLOC(1);
+        // assert(aQueryVectorPtr);
+        // vector_t* bQueryVectorPtr = PVECTOR_ALLOC(1);
+        // assert(bQueryVectorPtr);
+
+        //findBestTaskArg_t arg;
+        //arg.learnerPtr           = learnerPtr;
+        //arg.queries              = queries;
+        //arg.queryVectorPtr       = queryVectorPtr;
+        //arg.parentQueryVectorPtr = parentQueryVectorPtr;
+        //arg.bitmapPtr            = visitedBitmapPtr;
+        //arg.workQueuePtr         = workQueuePtr;
+        //arg.aQueryVectorPtr      = aQueryVectorPtr;
+        //arg.bQueryVectorPtr      = bQueryVectorPtr;
+
+    loop {
+        match self.tasks.pop() {
+            None => break,
+            Some(task) => {
+                let op = task.op;
+                let from_id = task.from_id;
+                let to_id = task.to_id;
+
+                /*
+                 * Check if task is still valid
+                 */
+                let is_task_valid = true;
+                match op {
+                    Operation::Insert => {
+                        if self.net.has_edge(&from_id, &to_id) ||
+                           self.net.is_path(&to_id, &from_id, &visited, &work_queue)
+                        {
+                            is_task_valid = false;
+                        }
+                    },
+                    Operation::Remove => {
+                        /* Can never create cycle, so always valid */
+                    },
+                    Operation::Reverse => {
+                        /* Temporarily remove edge for check */
+                        self.net.apply_operation(Operation::Remove, &from_id, &to_id);
+                        if self.net.is_path(&from_id, &to_id, &visited, &work)
+                        {
+                            is_task_valid = false;
+                        }
+                        self.net.apply_operation(Operation::Insert, &from_id, &to_id);
+                    }
+                }
+
+//#ifdef TEST_LEARNER
+//        printf("[task] op=%i from=%li to=%li score=%lf valid=%s\n",
+//               taskPtr->op, taskPtr->fromId, taskPtr->toId, taskPtr->score,
+//               (isTaskValid ? "yes" : "no"));
+//        fflush(stdout);
+//#endif
+
+                /*
+                 * Perform task: update graph and probabilities
+                 */
+    
+                if is_task_valid {
+                    self.net.apply_operation(op, &from_id, &to_id);
+                }
+    
+                let mut delta_log_likelihood = 0.0;
+    
+                if is_task_valid {
+
+                    let new_base_log_likelihood =
+                        match op {
+                            Operation::Insert => {
+                                let (a,b) = populate_query_vectors(&self.net,
+                                                   &to_id,
+                                                   &queries);
+                                queries0 = a;
+                                parent_queries = b;
+                                let new_base_log_likelihood =
+                                    compute_local_log_likelihood(&to_id,
+                                                          &self.ad_tree,
+                                                          &self.net,
+                                                          &queries0,
+                                                          &parent_queries);
+                                let to_local_base_log_likelihood =
+                                    local_base_log_likelihoods[to_id];
+                                delta_log_likelihood +=
+                                    to_local_base_log_likelihood - new_base_log_likelihood;
+                                local_base_log_likelihoods[toId] = new_base_log_likelihood;
+                                let num_total_parent = self.num_total_parent;
+                                self.num_total_parent = num_total_parent + 1;
+                                new_base_log_likelihood
+                            },
+                            Operation::Remove => {
+                                let (a,b) = populate_query_vectors(self.&net,
+                                                       &from_id,
+                                                       &queries);
+                                queries0 = a;
+                                parent_queries = b;
+                                let new_base_log_likelihood =
+                                    compute_local_log_likelihood(&from_id,
+                                                              &self.adtree,
+                                                              &self.net,
+                                                              &queries0,
+                                                              &parent_queries);
+                                let from_local_base_log_likelihood =
+                                    local_base_log_likelihoods[from_id];
+                                delta_log_likelihood +=
+                                    from_local_base_log_likelihood - new_base_log_likelihood;
+                                local_base_log_likelihoods[fromId] =
+                                                  new_base_log_likelihood;
+                                let num_total_parent = self.num_total_parent;
+                                self.num_total_parent = num_total_parent - 1;
+                                new_base_log_likelihood
+                            },
+                            Operation::Reverse => {
+                                let (a,b) = populate_query_vectors(&self.net,
+                                                       &from_id,
+                                                       &queries);
+                                queries0 = a;
+                                parent_queries = b;
+                                let new_base_log_likelihood =
+                                    compute_local_log_likelihood(&from_id,
+                                                              &self.adtree,
+                                                              &self.net,
+                                                              &queries0,
+                                                              &parent_queries);
+                                let from_local_base_log_likelihood =
+                                    local_base_log_likelihoods[fromId];
+                                delta_log_likelihood +=
+                                    from_local_base_log_likelihood - new_base_log_likelihood;
+                                local_base_log_likelihoods[fromId] = new_base_log_likelihood;
+                                let (a,b) = populate_query_vectors(&self.net,
+                                                       &to_id,
+                                                       &queries);
+                                queries0 = a;
+                                parent_queries = b;
+                                let new_base_log_likelihood =
+                                    compute_local_log_likelihood(&to_Id,
+                                                              &self.adtree,
+                                                              &self.net,
+                                                              &queries0,
+                                                              &parent_queries);
+                                let to_local_base_log_likelihood =
+                                    local_base_log_likelihoods[toId];
+                                delta_log_likelihood +=
+                                    to_local_base_log_likelihood - new_base_log_likelihood;
+                                local_base_log_likelihoods[toId] = new_base_log_likelihood;
+                                new_base_log_likelihood
+                            }
+                    }; /* switch op */
+            } /* if isTaskValid */
+
+            /*
+             * Update/read globals
+             */
+    
+            let old_base_log_likelihood = self.base_log_likelihood;
+            let new_base_log_likelihood = old_base_log_likelihood + delta_log_likelihood;
+            self.base_log_likelihood = new_base_log_likelihood);
+            let base_log_likelihood = new_base_log_likelihood;
+            let num_total_parent = self.num_total_parent;
+    
+            /*
+             * Find next task
+             */
+    
+            let base_score = (num_total_parent * base_penalty)
+                               + (num_record * base_log_likelihood);
+    
+    //        let best_task = Task {
+    //            op: NUM_OPERATION,
+    //            to_id   : -1,
+    //            from_id : -1,
+    //            score  : base_score};
+    
+            // TODO
+            arg.toId              = toId;
+            arg.numTotalParent    = numTotalParent;
+            arg.basePenalty       = basePenalty;
+            arg.baseLogLikelihood = baseLogLikelihood;
+    
+            let new_task = find_best_insert_task(&arg);
+    
+            let best_task = 
+                if ((new_task.from_id != new_task.toId) &&
+                    (new_task.score > (base_score / operation_quality_factor)))
+                {
+                    Some(new_task)
+                } else {
+                    None
+                };
+    
+    //#ifdef LEARNER_TRY_REMOVE
+    //        TM_BEGIN();
+    //        newTask = TMfindBestRemoveTask(TM_ARG  &arg);
+    //        TM_END();
+    //
+    //        if ((newTask.fromId != newTask.toId) &&
+    //            (newTask.score > (bestTask.score / operationQualityFactor)))
+    //        {
+    //            bestTask = newTask;
+    //        }
+    //#endif /* LEARNER_TRY_REMOVE */
+    //
+    //#ifdef LEARNER_TRY_REVERSE
+    //        TM_BEGIN();
+    //        newTask = TMfindBestReverseTask(TM_ARG  &arg);
+    //        TM_END();
+    //
+    //        if ((newTask.fromId != newTask.toId) &&
+    //            (newTask.score > (bestTask.score / operationQualityFactor)))
+    //        {
+    //            bestTask = newTask;
+    //        }
+    //#endif /* LEARNER_TRY_REVERSE */
+            match best_task {
+                None => (),
+                Some(t) => self.tasks[to_id] = t
+            }
+    //#ifdef TEST_LEARNER
+    //            printf("[new]  op=%i from=%li to=%li score=%lf\n",
+    //                   bestTask.op, bestTask.fromId, bestTask.toId, bestTask.score);
+    //            fflush(stdout);
+    //#endif
+            }
+        } /* while (tasks) */
+    }
 }
 
 fn compute_specific_local_log_likelihood(
@@ -457,48 +736,45 @@ fn compute_local_log_likelihood (
 
 /* =============================================================================
  * populateParentQuery
- * -- Modifies contents of parentQueryVectorPtr
  * =============================================================================
  */
 fn populate_parent_query_vector (
     net: &Net,
     id: usize,
-    // query_t* queries,
-    // vector_t* parentQueryVectorPtr
+    queries: &Vec<Query>,
     ) -> Vec<Query>
 {
     //vector_clear(parentQueryVectorPtr);
+    let mut parent_queries = Vec::new();
 
-    list_t* parentIdListPtr = net_getParentIdListPtr(netPtr, id);
-    list_iter_t it;
-    list_iter_reset(&it, parentIdListPtr);
-    while (list_iter_hasNext(&it, parentIdListPtr)) {
-        long parentId = (long)list_iter_next(&it, parentIdListPtr);
-        bool_t status = vector_pushBack(parentQueryVectorPtr,
-                                        (void*)&queries[parentId]);
-        assert(status);
+    let parent_ids = net.get_parent_id_list(id);
+    for parent_id in parent_ids {
+        let status = parent_queries.push(&queries[parent_id]);
+        assert!(status);
     }
+
+    parent_queries
 }
 
 /* =============================================================================
  * populateQueryVectors
- * -- Modifies contents of queryVectorPtr and parentQueryVectorPtr
  * =============================================================================
  */
 fn populate_query_vectors(
     net: &Net,
     id: usize,
-    //query_t* queries,
-  //  queries: Vec<Query>,
-  //                    vector_t* parentQueryVectorPtr
+    queries: &Vec<Query>,
     ) -> (Vec<Query>, Vec<Query>)
 {
-    populateParentQueryVector(netPtr, id, queries, parentQueryVectorPtr);
+    let parent_queries = populate_parent_query_vector(net, id, queries);
+    let mut queries0 = parent_queries.clone();
+    queries0.push(&queries[id]);
+    queries0.sort_by(|a,b| a.compare(&b));
 
-    bool_t status;
-    status = vector_copy(queryVectorPtr, parentQueryVectorPtr);
-    assert(status);
-    status = vector_pushBack(queryVectorPtr, (void*)&queries[id]);
-    assert(status);
-    vector_sort(queryVectorPtr, &compareQuery);
+    (queries0, parent_queries)
+}
+
+
+
+
 

@@ -220,7 +220,7 @@ impl NetT for Net {
         result
     }
 
-    fn getParentIdListPtr (net_t* netPtr, long id) -> &Vec<usize>
+    fn get_parent_id_list (self, id:usize) -> &Vec<usize>
     {
         self.nodes.get(id).expect("invariant broken").parent_ids
     }

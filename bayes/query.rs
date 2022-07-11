@@ -15,7 +15,11 @@ impl Query {
         Query {index, val}
     }
 
-    fn compare(&self, other: &Query) -> i64 {
-        self.index - other.index
+    fn compare(&self, other: &Query) -> Ordering {
+        match self.index - other.index {
+            x if x>0 => Ordering.Greater,
+            0 => Ordering.Equal,
+            _ => Ordering.Less
+        }
     }
 }
