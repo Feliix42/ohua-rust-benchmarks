@@ -52,7 +52,7 @@ trait NetT {
     fn find_descendants (&self,
                          id: usize,
                          descendant: &BitMap,
-                         work_queue: &Vec<???>) -> bool;
+                         work_queue: &Vec<usize>) -> bool;
 
     /* =============================================================================
      * net_generateRandomEdges

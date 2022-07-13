@@ -37,8 +37,8 @@ impl Task {
         }
     }
 }
-
-struct findBestTaskArg {
+/*
+struct FindBestTaskArg {
     to_id : usize,
     learner : &Learner,
     queries : &Vec<Query>,
@@ -51,7 +51,7 @@ struct findBestTaskArg {
     a_queries : &Vec<Query>,
     b_queries :  &Vec<Query>
 };
-
+*/
 
 impl Learner {
 
@@ -774,7 +774,112 @@ fn populate_query_vectors(
     (queries0, parent_queries)
 }
 
+fn findBestInsertTask(
+    to_id : usize,
+    learner : &Learner,
+    queries : &Vec<Query>,
+    mut queries0 : &mut Vec<Query>,
+//    parent_queries : &Vec<Query>,
+    num_total_parent : usize,
+    base_penalty : f32,
+    base_log_likelihood : f32,
+    mut invalid_bitmap : &mut Vec<bool>,
+    work_queue : &Vec<Task>,
+//    base_parent_queries : &Vec<Query>,
+//    base_queries :  &Vec<Query>
+    ) -> Task
+{
+    let parent_queries = populate_parent_query_vector(&learner.net, &to_id, &queries);
 
+    /*
+     * Create base query and parentQuery
+     */
 
+    let mut base_parent_queries = parent_queries.clone(); 
+    let mut base_queries0 = base_parent_queries.clone();
+    base_queries0.push(queries[to_id]);
+    queries0.sort_by(|a b| a.compare(&b)); // FIXME Why does he sort the incoming vector here???
+
+    /*
+     * Search all possible valid operations for better local log likelihood
+     */
+
+    let best_from_id = to_id; /* flag for not found */
+    let old_local_log_likelihood = learner.local_base_log_likelihoods[to_id];
+    let best_local_log_likelihood = old_local_log_likelihood;
+
+    net.find_desendants(&to_id, invalid_bitmap, work_queue);
+    let mut from_id = -1;
+
+    let parent_id_list = net.get_parent_id_list(to_id);
+
+    let max_num_edge_learned = global_max_num_edge_learned;
+
+    if (max_num_edge_learned < 0) ||
+        (parent_id_list.size() <= max_num_edge_learned)
+    {
+        for parent_id in parent_id_list {
+            invalid_bitmap[parent_id] = true;
+        }
+
+        let from_id = invalid_bitmap.first(|a| !a);
+        while from_id >= 0 {
+//        while ((fromId = bitmap_findClear(invalidBitmapPtr, (fromId + 1))) >= 0) {
+
+            if (from_id == to_id) {
+                // nothing to do
+            } else {
+                base_queries0 = queries0.clone();
+                queries0.push(queries[from_id])
+                queries0.sort_by(|a b| a.compare(&b));
+                base_parent_queries = parent_queries.clone();
+                parent_queries.push(queries[from_id]);
+                parent_queries.sort_by(|a b| a.compare(&b));
+
+                let new_local_log_likelihood =
+                    compute_local_log_ikelihood(to_id,
+                                              &learner.adtree,
+                                              &learner.net,
+                                              &queries,
+                                              &queries0,
+                                              &parent_queries);
+
+                if (new_local_log_likelihood > best_local_log_likelihood) {
+                    best_local_log_likelihood = new_local_log_likelihood;
+                    best_from_id = from_id;
+                }
+
+                from_id = invalid_bitmap.first(|a| !a);
+            }
+
+        } /* foreach valid parent */
+
+    } /* if have not exceeded max number of edges to learn */
+
+    /*
+     * Return best task; Note: if none is better, fromId will equal toId
+     */
+
+    let mut  best_task = Task {
+        op : Operation::Insert,
+        from_id : best_from_id,
+        to_id : to_id,
+        score : 0.0 
+    };
+
+    if (best_from_id != to_id) {
+        let num_record = learner.adtree.num_record;
+        let num_parent = parent_id_list.size() + 1;
+        let penalty =
+            (num_total_parent + num_parent * global_insert_penalty) * base_penalty;
+        let log_likelihood = num_record * (base_log_likelihood +
+                                           + best_local_log_likelihood
+                                           - old_local_log_likelihood);
+        let best_score = penalty + log_likelihood;
+        best_task.score  = best_score;
+    }
+
+    return best_task;
+}
 
 
