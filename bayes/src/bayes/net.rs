@@ -31,7 +31,7 @@ trait NetT {
         &self,
         from_id: usize,
         to_id: usize,
-        visited: &BitMap,
+        visited: &Vec<bool>,
         work_queue: &Vec<usize>,
     ) -> bool;
     fn is_cycle(&self) -> bool;
@@ -44,7 +44,7 @@ trait NetT {
      * -- Returns false if id is not root node (i.e., has cycle back id)
      * =============================================================================
      */
-    fn find_ancestors(&self, id: usize, ancestors: &BitMap, work_queue: &Vec<usize>) -> bool;
+    fn find_ancestors(&self, id: usize, ancestors: &Vec<bool>, work_queue: &Vec<usize>) -> bool;
 
     /* =============================================================================
      * net_findDescendants
@@ -52,7 +52,7 @@ trait NetT {
      * -- Returns false if id is not root node (i.e., has cycle back id)
      * =============================================================================
      */
-    fn find_descendants(&self, id: usize, descendant: &BitMap, work_queue: &Vec<usize>) -> bool;
+    fn find_descendants(&self, id: usize, descendant: &Vec<bool>, work_queue: &Vec<usize>) -> bool;
 
     /* =============================================================================
      * net_generateRandomEdges
@@ -103,6 +103,33 @@ impl Net {
             Operation::Reverse => self.reverse_edge(from_id, to_id),
         }
     }
+
+    fn is_cycle0(&self, node: &Node) -> bool {
+        match node.mark {
+            NodeMark::Init => {
+                node.mark = NodeMark::TEST;
+                let mut result = false;
+                for child_id in node.child_ids {
+                    let child_node = self.nodes.get(child_id).expect("invariant broken");
+                    if self.is_cycle0(&child_node) {
+                        result = true;
+                        break;
+                    } else {
+                        // continue
+                    }
+                }
+                if !result {
+                    node.mark = NodeMark::Done;
+                } else {
+                    // the original code only sets this when `false`
+                }
+                result
+            }
+            NodeMark::TEST => true,
+            NodeMark::Done => false,
+        }
+    }
+
 }
 
 impl NetT for Net {
@@ -161,31 +188,6 @@ impl NetT for Net {
         result
     }
 
-    fn is_cycle0(node: &Node) -> bool {
-        match node.mark {
-            NodeMark::Init => {
-                node.mark = NodeMark::TEST;
-                let mut result = false;
-                for child_id in node.child_ids {
-                    let child_node = self.nodes.get(child_id).expect("invariant broken");
-                    if is_cycle0(&child_node) {
-                        result = true;
-                        break;
-                    } else {
-                        // continue
-                    }
-                }
-                if !result {
-                    node.mark = NodeMark::Done;
-                } else {
-                    // the original code only sets this when `false`
-                }
-                result
-            }
-            NodeMark::TEST => true,
-            NodeMark::Done => false,
-        }
-    }
 
     // This is yet another function that seems to answer a totally harmless
     // boolean question. Yet it alters the state of the nodes.
@@ -194,14 +196,14 @@ impl NetT for Net {
     fn is_cycle(&mut self) -> bool {
         let num_node = self.nodes.len();
         for node in self.nodes {
-            node.mark = NET_NODE_MARK_INIT;
+            node.mark = 0; //NET_NODE_MARK_INIT;
         }
 
         let result = false;
         for node in self.nodes {
             match node.mark {
                 NodeMark::Init => {
-                    if (is_cycle0(&node)) {
+                    if self.is_cycle0(&node) {
                         result = true;
                         break;
                     } else {
@@ -216,7 +218,7 @@ impl NetT for Net {
         result
     }
 
-    fn get_parent_id_list(self, id: usize) -> &Vec<usize> {
+    fn get_parent_id_list(&self, id: usize) -> &Vec<usize> {
         self.nodes.get(id).expect("invariant broken").parent_ids
     }
 
@@ -295,7 +297,7 @@ impl NetT for Net {
         while !work_queue.is_empty() {
             let child_id = work_queue.pop();
             if child_id == id {
-                working_queue.clear();
+                work_queue.clear();
                 result = false;
             } else {
                 for grand_child_id in self
@@ -315,7 +317,7 @@ impl NetT for Net {
         result
     }
 
-    fn generate_random_edges(&self, max_num_parent: usize, percent_parent: usize, random: &Random) {
+    fn generate_random_edges<T:RngCore>(&self, max_num_parent: usize, percent_parent: usize, random: &T) {
         let num_node = self.nodes.len();
         let mut visited = Vec::with_capacitiy(num_node);
         visited.fill(false);
@@ -330,7 +332,7 @@ impl NetT for Net {
                         && !self.has_edge(parent, n)
                         && !self.is_path(n, parent, &mut visited, &mut work_queue)
                     {
-                        net.insert_edge(parent, n);
+                        self.insert_edge(parent, n);
                     }
                 }
             }

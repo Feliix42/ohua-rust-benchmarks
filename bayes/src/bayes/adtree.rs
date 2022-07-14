@@ -1,4 +1,5 @@
 use crate::bayes::query::{Query,Val};
+use crate::bayes::data::DataT;
 
 struct Node {
     index: usize,
@@ -28,7 +29,7 @@ trait AdTreeT {
      * -- Records in dataPtr will get rearranged
      * =============================================================================
      */
-    fn make(&mut self, data: DataT);
+    fn make<T:RngCore>(&mut self, data: &Data<T>);
 
     /* =============================================================================
      * adtree_getCount
@@ -43,13 +44,13 @@ impl Node {
         Node{ index, value, count, vary }
     }
 
-    fn make(
+    fn make<T:DataT>(
         parent_index: usize,
         index: usize,
         start: usize,
         num_record: usize,
         value: u64,
-        data: &Data) -> Node {
+        data: &T) -> Node {
         
         let vary = Vec::with_capacity(data.num_var - index + 1);
         for v in (index + 1)..data.num_var {
@@ -158,11 +159,11 @@ impl Vary {
         Vary{ index, most_common_value, zero, one }
     }
 
-    fn make(parent_index: usize,
+    fn make<T:DataT>(parent_index: usize,
           index: usize,
           start: usize,
           num_record: usize,
-          mut data: Data) -> Vary {
+          mut data: T) -> Vary {
         if (parent_index + 1 != index) && (num_record > 1) {
             data.sort(start, num_record, index);
         }
@@ -192,7 +193,7 @@ impl AdTreeT for AdTree {
         AdTree{ num_var, num_record, root }
     }
 
-    fn make(mut data: &mut Data) -> AdTree {
+    fn make<T:DataT>(mut data: &mut T) -> AdTree {
         let num_record = data.num_record;
         let num_var = data.num_var;
 

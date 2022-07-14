@@ -35,3 +35,6 @@ labyrinth/bench-split-freq.sh
 
 intruder/src/bin/ohua-split*.rs
 intruder/src/algos/split*_detector.ohuac
+
+### VIM metadata files
+**/*.swp
