@@ -39,7 +39,6 @@ fn main() {
                 .help("Sets the output directory for JSON dumps")
                 .takes_value(true)
                 .default_value("results")
-                .requires("json")
         )
         .get_matches();
 
