@@ -2,11 +2,16 @@
 use crate::types::{at_grid_coordinates, Field, Grid, Maze, Path, Point};
 #[cfg(feature = "transactional")]
 use crate::stm_grid::StmGrid;
-#[cfg(all(feature = "transactional", feature = "naive"))]
-use stm::{Transaction, StmResult};
+//#[cfg(all(feature = "transactional", feature = "naive"))]
+//use stm::{Transaction, StmResult};
 #[cfg(all(feature = "transactional", feature = "naive"))]
 use crate::types::at_stm_grid_coordinates;
 use std::collections::{HashMap, LinkedList};
+#[cfg(feature = "transactional")]
+use swym::RwTx;
+#[cfg(feature = "transactional")]
+use swym::tx::{Status, Ordering};
+use std::ops::Deref;
 
 /// This HashMap contains the information on how to get back from the end point to the start.
 /// Each point is assigned the previous point in the path to allow easy backtracking.
@@ -67,6 +72,58 @@ pub fn find_path(maze: &Maze, points: (Point, Point)) -> Option<Path> {
     None
 }
 
+#[cfg(all(feature = "transactional", not(feature = "naive")))]
+pub fn find_path<'tcell>(points: (Point, Point), grid: &'tcell StmGrid, transaction: &mut RwTx<'tcell>) -> Result<Option<Path>, Status> {
+    // TODO: Add costs?
+    let (start, end) = points;
+
+    // check if the route is still available
+    if grid[start.x][start.y][start.z].borrow(transaction, Ordering::Read)?.deref() != &Field::Free {
+        return Ok(None);
+    }
+    if grid[end.x][end.y][end.z].borrow(transaction, Ordering::Read)?.deref() != &Field::Free {
+        return Ok(None);
+    }
+    
+    let mut enqueued = vec![vec![vec![false; grid[0][0].len()]; grid[0].len()]; grid.len()];
+    let mut unseen_points = LinkedList::new();
+
+    // set the start point
+    enqueued[start.x][start.y][start.z] = true;
+    unseen_points.push_back(start);
+
+    // the meta_info map contains the backtrack-information for the path
+    let mut meta_info: BacktrackMetaData = HashMap::new();
+    meta_info.insert(start, None);
+
+    while !unseen_points.is_empty() {
+        let current = unseen_points.pop_front().unwrap();
+
+        // stop when reacing the end node
+        if current == end {
+            return Ok(Some(generate_path(current, meta_info)));
+        }
+
+        // get a list of all possible successors
+        for child in get_successors(&current, grid) {
+            // sort out anything that has been seen or is blocked
+            match grid[child.x][child.y][child.z].get(transaction, Ordering::Read)? {
+                Field::Used => continue,
+                Field::Wall => continue,
+                Field::Free => (),
+            }
+
+            if !enqueued[child.x][child.y][child.z] {
+                meta_info.insert(child, Some(current));
+                unseen_points.push_back(child);
+                enqueued[child.x][child.y][child.z] = true;
+            }
+        }
+    }
+
+    // All points have been processed and no path was found
+    Ok(None)
+}
 
 
 #[cfg(all(feature = "transactional", feature = "naive"))]
@@ -122,7 +179,7 @@ pub fn find_path(points: (Point, Point), grid: &StmGrid, transaction: &mut Trans
 }
 
 
-#[cfg(all(not(feature = "ohua"), not(feature = "naive")))]
+#[cfg(all(not(feature = "ohua"), not(feature = "transactional")))]
 pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
     // TODO: Add costs?
     let (start, end) = points;
@@ -172,7 +229,7 @@ pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
     None
 }
 
-#[cfg(not(feature = "naive"))]
+#[cfg(not(feature = "transactional"))]
 fn get_successors(cur: &Point, grid: &Grid) -> Vec<Point> {
     let mut res = Vec::with_capacity(6);
 
@@ -222,7 +279,7 @@ fn get_successors(cur: &Point, grid: &Grid) -> Vec<Point> {
     res
 }
 
-#[cfg(all(feature = "transactional", feature = "naive"))]
+#[cfg(feature = "transactional")]
 fn get_successors(cur: &Point, grid: &StmGrid) -> Vec<Point> {
     let mut res = Vec::with_capacity(6);
 

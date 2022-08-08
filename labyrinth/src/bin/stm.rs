@@ -8,7 +8,8 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use std::thread;
-use stm::atomically;
+use std::sync::Arc;
+use swym::thread_key;
 use time::PreciseTime;
 
 fn main() {
@@ -83,7 +84,7 @@ fn main() {
 
         let start = PreciseTime::now();
         let cpu_start = ProcessTime::now();
-        let (filled_maze, retries) = route_paths(maze, paths.clone(), thread_number);
+        let (mut filled_maze, retries) = route_paths(maze, paths.clone(), thread_number);
         let cpu_end = ProcessTime::now();
         let end = PreciseTime::now();
 
@@ -190,9 +191,11 @@ fn route_paths(
 
     let mut handles = Vec::new();
 
-    for points in paths_to_map.drain(..) {
-        let g = maze.grid.clone();
-        handles.push(thread::spawn(move || route(&g, points)));
+    let grid = Arc::new(maze.grid);
+    for points in paths_to_map {
+        //let g = maze.grid.clone();
+        let g = grid.clone();
+        handles.push(thread::spawn(move || route(g, points)));
     }
 
     for handle in handles {
@@ -202,35 +205,39 @@ fn route_paths(
         global_retries += retries;
     }
 
+    maze.grid = Arc::try_unwrap(grid).unwrap();
     (maze, global_retries)
 }
 
 /// Attempts to route the paths from `to_map` on he grid using STM.
 fn route(
-    grid: &StmGrid,
+    grid: Arc<StmGrid>,
     mut to_map: Vec<(Point, Point)>,
 ) -> (Vec<Path>, Vec<(Point, Point)>, usize) {
     let mut mapped = Vec::new();
     let mut unmappable_paths = Vec::new();
-    let mut overall_retries = 0;
+    let overall_retries = 0;
+
+    let thread_key = thread_key::get();
 
     // search for a path for all point pairs (sort out any pairs w/o path)
     for pair in to_map.drain(..) {
-        #[cfg(feature = "naive")]
-        let ta_result = atomically(|trans| {
-            if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
-                stm_grid::update_grid(&grid, &path, trans)?;
-                Ok(Some(path))
-            } else {
-                Ok(None)
-            }
-        });
+        // TODO(feliix42): Implement this again
+        //#[cfg(feature = "naive")]
+        //let ta_result = atomically(|trans| {
+            //if let Some(path) = pathfinder::find_path(pair.clone(), &grid, trans)? {
+                //stm_grid::update_grid(&grid, &path, trans)?;
+                //Ok(Some(path))
+            //} else {
+                //Ok(None)
+            //}
+        //});
 
         #[cfg(not(feature = "naive"))]
-        let ta_result = atomically(|trans| {
-            let copy_grid = stm_grid::create_working_copy(&grid);
-            if let Some(path) = pathfinder::find_path(pair.clone(), &copy_grid) {
-                stm_grid::update_grid(&grid, &path, trans)?;
+        let ta_result = thread_key.rw(|tx| {
+            //let copy_grid = stm_grid::create_working_copy(&grid);
+            if let Some(path) = pathfinder::find_path(pair.clone(), &grid, tx)? {
+                stm_grid::update_grid(&grid, &path, tx)?;
                 Ok(Some(path))
             } else {
                 Ok(None)
@@ -238,13 +245,13 @@ fn route(
         });
 
         match ta_result {
-            (Some(path), retries) => {
+            Some(path) => {
                 mapped.push(path);
-                overall_retries += retries;
+                //overall_retries += retries;
             }
-            (None, retries) => {
+            None => {
                 unmappable_paths.push(pair);
-                overall_retries += retries;
+                //overall_retries += retries;
             }
         }
     }

@@ -60,26 +60,36 @@ impl Maze {
 
     /// Validates the maze by checking if every path is mapped and every point only used once
     #[cfg(feature = "transactional")]
-    pub fn is_valid(&self) -> bool {
-        let mut ctrl_grid: Vec<Vec<Vec<Field>>> = self
-            .grid
-            .iter()
-            .map(|x| {
-                x.iter()
-                    .map(|y| y.iter().map(|var| var.read_atomic()).collect())
-                    .collect()
-            })
-            .collect();
-
+    pub fn is_valid(&mut self) -> bool {
         for path in &self.paths {
             for pt in &path.path {
-                if ctrl_grid[pt.x][pt.y][pt.z] == Field::Used {
-                    ctrl_grid[pt.x][pt.y][pt.z] = Field::Free;
+                let status = self.grid[pt.x][pt.y][pt.z].borrow_mut();
+                if *status == Field::Used {
+                    *status = Field::Free;
                 } else {
                     return false;
                 }
             }
         }
+        //let mut ctrl_grid: Vec<Vec<Vec<Field>>> = self
+            //.grid
+            //.iter()
+            //.map(|x| {
+                //x.iter()
+                    //.map(|y| y.iter().map(|var| var.read_atomic()).collect())
+                    //.collect()
+            //})
+            //.collect();
+
+        //for path in &self.paths {
+            //for pt in &path.path {
+                //if ctrl_grid[pt.x][pt.y][pt.z] == Field::Used {
+                    //ctrl_grid[pt.x][pt.y][pt.z] = Field::Free;
+                //} else {
+                    //return false;
+                //}
+            //}
+        //}
 
         true
     }
