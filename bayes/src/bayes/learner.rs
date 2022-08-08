@@ -29,24 +29,38 @@ trait LearnerT {
     fn score(&self) -> f32;
 }
 
-enum Cmp { Eq(i64), Gt, Lt }
+// enum Cmp { Eq(i64), Gt, Lt }
 
-impl Task {
-    fn compare(&self, other: &Task) -> Cmp {
-        if self.score < other.score {
-            Cmp::Lt
-        } else {
-            if self.score > other.score {
-                Cmp::Gt
-            } else {
-                Cmp::Eq(self.to_id - other.to_id)
-            }
-        }
+// impl Task {
+//     fn compare(&self, other: &Task) -> Cmp {
+//         if self.score < other.score {
+//             Cmp::Lt
+//         } else {
+//             if self.score > other.score {
+//                 Cmp::Gt
+//             } else {
+//                 Cmp::Eq(self.to_id - other.to_id)
+//             }
+//         }
+//     }
+// }
+
+impl PartialEq for Task {
+    fn eq(&self, other: &Self) -> bool {
+        self.score == other.score
+    }
+}
+
+impl Eq for Task {}
+
+impl PartialOrd for Task {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for Task {
-    fn cmp(&self, other: &Query) -> Ordering {
+    fn cmp(&self, other: &Self) -> Ordering {
         match self.score - other.score {
             x if x>0 => Ordering::Greater,
             0 => Ordering::Equal,
@@ -137,7 +151,7 @@ impl Learner {
     
            //queries[0].index = v;
             let best_local_index = v;
-            let bestLocalLogLikelihood = self.local_base_log_likelihoods[v];
+            let best_local_log_likelihood = self.local_base_log_likelihoods[v];
 
             //status = PVECTOR_PUSHBACK(queryVectorPtr, (void*)&queries[1]);
             //assert(status);
@@ -209,9 +223,9 @@ impl Learner {
             queries.pop();
 
             if best_local_index != v {
-                let log_likelihood = self.num_record * (base_log_likelihood +
+                let log_likelihood = self.num_record * (base_log_likelihood
                                                     + best_local_log_likelihood
-                                                    - local_base_log_likelihoods[v]);
+                                                    - self.local_base_log_likelihoods[v]);
                 let score = penalty + log_likelihood;
                 let mut task = self.tasks.get_mut(v);
                 task.op = Operation::Insert;
@@ -273,7 +287,7 @@ impl Learner {
             queries.push(Query::new(v, Val::WildCard));
         }
 
-        let base_penalty:f32 = -0.5 * log(self.ad_tree.num_record);
+        let base_penalty:f32 = -0.5 * self.ad_tree.num_record.log();
 
         // vector_t* queryVectorPtr = PVECTOR_ALLOC(1);
         // assert(queryVectorPtr);
@@ -296,39 +310,36 @@ impl Learner {
         //arg.aQueryVectorPtr      = aQueryVectorPtr;
         //arg.bQueryVectorPtr      = bQueryVectorPtr;
 
-    loop {
-        match self.tasks.pop() {
-            None => break,
-            Some(task) => {
-                let op = task.op;
-                let from_id = task.from_id;
-                let to_id = task.to_id;
+        while let Some(task) = self.tasks.pop() {
+            let op = task.op;
+            let from_id = task.from_id;
+            let to_id = task.to_id;
 
-                /*
-                 * Check if task is still valid
-                 */
-                let is_task_valid = true;
-                match op {
-                    Operation::Insert => {
-                        if self.net.has_edge(&from_id, &to_id) ||
-                           self.net.is_path(&to_id, &from_id, &visited, &work_queue)
-                        {
-                            is_task_valid = false;
-                        }
-                    },
-                    Operation::Remove => {
-                        /* Can never create cycle, so always valid */
-                    },
-                    Operation::Reverse => {
-                        /* Temporarily remove edge for check */
-                        self.net.apply_operation(Operation::Remove, &from_id, &to_id);
-                        if self.net.is_path(&from_id, &to_id, &visited, &work_queue)
-                        {
-                            is_task_valid = false;
-                        }
-                        self.net.apply_operation(Operation::Insert, &from_id, &to_id);
+            /*
+             * Check if task is still valid
+             */
+            let is_task_valid = true;
+            match op {
+                Operation::Insert => {
+                    if self.net.has_edge(&from_id, &to_id) ||
+                       self.net.is_path(&to_id, &from_id, &visited, &work_queue)
+                    {
+                        is_task_valid = false;
                     }
+                },
+                Operation::Remove => {
+                    /* Can never create cycle, so always valid */
+                },
+                Operation::Reverse => {
+                    /* Temporarily remove edge for check */
+                    self.net.apply_operation(Operation::Remove, &from_id, &to_id);
+                    if self.net.is_path(&from_id, &to_id, &visited, &work_queue)
+                    {
+                        is_task_valid = false;
+                    }
+                    self.net.apply_operation(Operation::Insert, &from_id, &to_id);
                 }
+            }
 
 //#ifdef TEST_LEARNER
 //        printf("[task] op=%i from=%li to=%li score=%lf valid=%s\n",
@@ -337,99 +348,99 @@ impl Learner {
 //        fflush(stdout);
 //#endif
 
-                /*
-                 * Perform task: update graph and probabilities
-                 */
+            /*
+             * Perform task: update graph and probabilities
+             */
     
-                if is_task_valid {
-                    self.net.apply_operation(op, &from_id, &to_id);
-                }
+            if is_task_valid {
+                self.net.apply_operation(op, &from_id, &to_id);
+            }
     
-                let mut delta_log_likelihood = 0.0;
+            let mut delta_log_likelihood = 0.0;
     
-                if is_task_valid {
+            if is_task_valid {
 
-                    let new_base_log_likelihood =
-                        match op {
-                            Operation::Insert => {
-                                let (a,b) = populate_query_vectors(&self.net,
-                                                   &to_id,
+                let new_base_log_likelihood =
+                    match op {
+                        Operation::Insert => {
+                            let (a,b) = populate_query_vectors(&self.net,
+                                               &to_id,
+                                               &queries);
+                            queries0 = a;
+                            parent_queries = b;
+                            let new_base_log_likelihood =
+                                compute_local_log_likelihood(&to_id,
+                                                      &self.ad_tree,
+                                                      &self.net,
+                                                      &queries0,
+                                                      &parent_queries);
+                            let to_local_base_log_likelihood =
+                                local_base_log_likelihoods[to_id];
+                            delta_log_likelihood +=
+                                to_local_base_log_likelihood - new_base_log_likelihood;
+                            local_base_log_likelihoods[to_id] = new_base_log_likelihood;
+                            let num_total_parent = self.num_total_parent;
+                            self.num_total_parent = num_total_parent + 1;
+                            new_base_log_likelihood
+                        },
+                        Operation::Remove => {
+                            let (a,b) = populate_query_vectors(&self.net,
+                                                   &from_id,
                                                    &queries);
-                                queries0 = a;
-                                parent_queries = b;
-                                let new_base_log_likelihood =
-                                    compute_local_log_likelihood(&to_id,
-                                                          &self.ad_tree,
+                            queries0 = a;
+                            parent_queries = b;
+                            let new_base_log_likelihood =
+                                compute_local_log_likelihood(&from_id,
+                                                          &self.adtree,
                                                           &self.net,
                                                           &queries0,
                                                           &parent_queries);
-                                let to_local_base_log_likelihood =
-                                    local_base_log_likelihoods[to_id];
-                                delta_log_likelihood +=
-                                    to_local_base_log_likelihood - new_base_log_likelihood;
-                                local_base_log_likelihoods[to_id] = new_base_log_likelihood;
-                                let num_total_parent = self.num_total_parent;
-                                self.num_total_parent = num_total_parent + 1;
-                                new_base_log_likelihood
-                            },
-                            Operation::Remove => {
-                                let (a,b) = populate_query_vectors(&self.net,
-                                                       &from_id,
-                                                       &queries);
-                                queries0 = a;
-                                parent_queries = b;
-                                let new_base_log_likelihood =
-                                    compute_local_log_likelihood(&from_id,
-                                                              &self.adtree,
-                                                              &self.net,
-                                                              &queries0,
-                                                              &parent_queries);
-                                let from_local_base_log_likelihood =
-                                    local_base_log_likelihoods[from_id];
-                                delta_log_likelihood +=
-                                    from_local_base_log_likelihood - new_base_log_likelihood;
-                                local_base_log_likelihoods[fromId] =
-                                                  new_base_log_likelihood;
-                                let num_total_parent = self.num_total_parent;
-                                self.num_total_parent = num_total_parent - 1;
-                                new_base_log_likelihood
-                            },
-                            Operation::Reverse => {
-                                let (a,b) = populate_query_vectors(&self.net,
-                                                       &from_id,
-                                                       &queries);
-                                queries0 = a;
-                                parent_queries = b;
-                                let new_base_log_likelihood =
-                                    compute_local_log_likelihood(&from_id,
-                                                              &self.adtree,
-                                                              &self.net,
-                                                              &queries0,
-                                                              &parent_queries);
-                                let from_local_base_log_likelihood =
-                                    local_base_log_likelihoods[fromId];
-                                delta_log_likelihood +=
-                                    from_local_base_log_likelihood - new_base_log_likelihood;
-                                local_base_log_likelihoods[fromId] = new_base_log_likelihood;
-                                let (a,b) = populate_query_vectors(&self.net,
-                                                       &to_id,
-                                                       &queries);
-                                queries0 = a;
-                                parent_queries = b;
-                                let new_base_log_likelihood =
-                                    compute_local_log_likelihood(&to_Id,
-                                                              &self.adtree,
-                                                              &self.net,
-                                                              &queries0,
-                                                              &parent_queries);
-                                let to_local_base_log_likelihood =
-                                    local_base_log_likelihoods[toId];
-                                delta_log_likelihood +=
-                                    to_local_base_log_likelihood - new_base_log_likelihood;
-                                local_base_log_likelihoods[toId] = new_base_log_likelihood;
-                                new_base_log_likelihood
-                            }
-                    }; /* switch op */
+                            let from_local_base_log_likelihood =
+                                local_base_log_likelihoods[from_id];
+                            delta_log_likelihood +=
+                                from_local_base_log_likelihood - new_base_log_likelihood;
+                            local_base_log_likelihoods[fromId] =
+                                              new_base_log_likelihood;
+                            let num_total_parent = self.num_total_parent;
+                            self.num_total_parent = num_total_parent - 1;
+                            new_base_log_likelihood
+                        },
+                        Operation::Reverse => {
+                            let (a,b) = populate_query_vectors(&self.net,
+                                                   &from_id,
+                                                   &queries);
+                            queries0 = a;
+                            parent_queries = b;
+                            let new_base_log_likelihood =
+                                compute_local_log_likelihood(&from_id,
+                                                          &self.adtree,
+                                                          &self.net,
+                                                          &queries0,
+                                                          &parent_queries);
+                            let from_local_base_log_likelihood =
+                                local_base_log_likelihoods[fromId];
+                            delta_log_likelihood +=
+                                from_local_base_log_likelihood - new_base_log_likelihood;
+                            local_base_log_likelihoods[fromId] = new_base_log_likelihood;
+                            let (a,b) = populate_query_vectors(&self.net,
+                                                   &to_id,
+                                                   &queries);
+                            queries0 = a;
+                            parent_queries = b;
+                            let new_base_log_likelihood =
+                                compute_local_log_likelihood(&to_Id,
+                                                          &self.adtree,
+                                                          &self.net,
+                                                          &queries0,
+                                                          &parent_queries);
+                            let to_local_base_log_likelihood =
+                                local_base_log_likelihoods[toId];
+                            delta_log_likelihood +=
+                                to_local_base_log_likelihood - new_base_log_likelihood;
+                            local_base_log_likelihoods[toId] = new_base_log_likelihood;
+                            new_base_log_likelihood
+                        }
+                }; /* switch op */
             } /* if isTaskValid */
 
             /*
@@ -438,7 +449,7 @@ impl Learner {
     
             let old_base_log_likelihood = self.base_log_likelihood;
             let new_base_log_likelihood = old_base_log_likelihood + delta_log_likelihood;
-            self.base_log_likelihood = new_base_log_likelihood);
+            self.base_log_likelihood = new_base_log_likelihood;
             let base_log_likelihood = new_base_log_likelihood;
             let num_total_parent = self.num_total_parent;
     
@@ -500,7 +511,6 @@ impl Learner {
     //                   bestTask.op, bestTask.fromId, bestTask.toId, bestTask.score);
     //            fflush(stdout);
     //#endif
-            }
         } /* while (tasks) */
     }
 
@@ -542,7 +552,7 @@ impl Learner {
     
         let parent_id_list = self.net.get_parent_id_list(to_id);
     
-        let max_num_edge_learned = global_max_num_edge_learned;
+        let max_num_edge_learned = self.global_max_num_edge_learned;
     
         if (max_num_edge_learned < 0) ||
             (parent_id_list.size() <= max_num_edge_learned)
@@ -566,7 +576,7 @@ impl Learner {
                     parent_queries.sort_by(|a,b| a.cmp(&b));
     
                     let new_local_log_likelihood =
-                        compute_local_log_ikelihood(to_id,
+                        compute_local_log_likelihood(to_id,
                                                   &self.adtree,
                                                   &self.net,
                                                   &queries,
@@ -600,7 +610,7 @@ impl Learner {
             let num_record = self.adtree.num_record;
             let num_parent = parent_id_list.size() + 1;
             let penalty =
-                (num_total_parent + num_parent * global_insert_penalty) * base_penalty;
+                (num_total_parent + num_parent * self.global_insert_penalty) * base_penalty;
             let log_likelihood = num_record * (base_log_likelihood
                                                + best_local_log_likelihood
                                                - old_local_log_likelihood);
@@ -608,7 +618,7 @@ impl Learner {
             best_task.score  = best_score;
         }
     
-        return best_task;
+        best_task
     }
 
 }
@@ -708,25 +718,25 @@ fn compute_specific_local_log_likelihood(
         0.0
     } else {
         let probability = count / ad_tree.num_record;
-        let parent_count = add_tree.get_count(parent_queries);
+        let parent_count = ad_tree.get_count(parent_queries);
 
-        assert(parent_count >= count);
-        assert(parent_count > 0);
+        assert!(parent_count >= count);
+        assert!(parent_count > 0);
 
-        probability * log(count/parent_count)
+        probability * (count/parent_count).log()
     }
 }
 
 fn create_partition (min:usize, max: usize, id: usize, n: usize) -> (usize, usize)
 {
-    long range = max - min;
-    long chunk = max(1, ((range + n/2) / n)); /* rounded */
-    long start = min + chunk * id;
-    long stop;
-    if (id == (n-1)) {
+    let range = max - min;
+    let chunk = max(1, (range + n/2) / n); /* rounded */
+    let start = min + chunk * id;
+    let stop;
+    if id == (n-1) {
         stop = max;
     } else {
-        stop = min(max, (start + chunk));
+        stop = min(max, start + chunk);
     }
 
     (start, stop)
@@ -747,7 +757,7 @@ fn compute_local_log_likelihood_helper (
 {
     match parent_queries.get(i) {
         None => compute_specific_local_log_likelihood(
-                    &adtree,
+                    &ad_tree,
                     &queries,
                     &parent_queries),
         Some(parent_query) => {
@@ -758,7 +768,7 @@ fn compute_local_log_likelihood_helper (
             }
             let local_log_likelihood = 
                 compute_local_log_likelihood_helper(
-                    (i + 1),
+                    i + 1,
                     parent_queries.len(), //numParent,
                     &ad_tree,
                     //queries,
@@ -772,14 +782,14 @@ fn compute_local_log_likelihood_helper (
             }
             local_log_likelihood += 
                 compute_local_log_likelihood_helper(
-                    (i + 1),
+                    i + 1,
                     parent_queries.len(), //numParent,
                     &ad_tree,
                     //queries,
                     &queries,
                     &parent_queries);
 
-            queries[parentIndex].value = QUERY_VALUE_WILDCARD;
+            queries[parentIndex].value = Val::WildCard;
 
             local_log_likelihood
         }
@@ -822,7 +832,7 @@ fn compute_local_log_likelihood (
         let mut q = queries.get_mut(id).expect("invariant broken");
         q.value = Val::One;
     }
-    localLogLikelihood += 
+    local_log_likelihood += 
         compute_local_log_likelihood_helper(
             0,
             //numParent,
@@ -833,7 +843,7 @@ fn compute_local_log_likelihood (
 
     // queries[id].value = QUERY_VALUE_WILDCARD;
     {
-        let mut q = queries.get_mut(parent_query.index).expect("invariant broken");
+        let mut q = queries.get_mut(id).expect("invariant broken");
         q.value = Val::WildCard;
     }
 
