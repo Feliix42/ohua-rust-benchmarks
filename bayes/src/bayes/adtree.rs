@@ -1,5 +1,7 @@
+use rand::RngCore;
+
 use crate::bayes::query::{Query,Val};
-use crate::bayes::data::DataT;
+use crate::bayes::data::{DataT,Data};
 
 struct Node {
     index: usize,
