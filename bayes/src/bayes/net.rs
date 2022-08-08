@@ -1,4 +1,5 @@
-use rand::RngCore;
+use rand::{RngCore,Rng};
+use std::collections::VecDeque;
 
 enum NodeMark {
     Init,
@@ -11,6 +12,7 @@ struct Node {
     // maybe these want to be HashSets
     parent_ids: Vec<usize>,
     child_ids: Vec<usize>,
+    mark: NodeMark
 }
 
 pub struct Net {
@@ -31,10 +33,10 @@ trait NetT {
         &self,
         from_id: usize,
         to_id: usize,
-        visited: &Vec<bool>,
-        work_queue: &Vec<usize>,
+        visited: &mut Vec<bool>,
+        work_queue: &mut VecDeque<usize>,
     ) -> bool;
-    fn is_cycle(&self) -> bool;
+    fn is_cycle(&mut self) -> bool;
     fn get_parent_id_list(&self, id: usize) -> &Vec<usize>;
     fn get_child_id_list(&self, id: usize) -> &Vec<usize>;
 
@@ -44,7 +46,7 @@ trait NetT {
      * -- Returns false if id is not root node (i.e., has cycle back id)
      * =============================================================================
      */
-    fn find_ancestors(&self, id: usize, ancestors: &Vec<bool>, work_queue: &Vec<usize>) -> bool;
+    fn find_ancestors(&self, id: usize, work_queue: &mut VecDeque<usize>) -> Option<Vec<bool>>;
 
     /* =============================================================================
      * net_findDescendants
@@ -52,14 +54,14 @@ trait NetT {
      * -- Returns false if id is not root node (i.e., has cycle back id)
      * =============================================================================
      */
-    fn find_descendants(&self, id: usize, descendant: &Vec<bool>, work_queue: &Vec<usize>) -> bool;
+    fn find_descendants(&self, id: usize, work_queue: &mut VecDeque<usize>) -> Option<Vec<bool>>;
 
     /* =============================================================================
      * net_generateRandomEdges
      * =============================================================================
      */
     fn generate_random_edges<T: RngCore>(
-        &mut self,
+        &self,
         max_num_parent: usize,
         percent_parent: usize,
         random: &T,
@@ -72,6 +74,7 @@ impl Node {
             id,
             parent_ids: Vec::new(),
             child_ids: Vec::new(),
+            mark: NodeMark::Init // uninitialized in original code 
         }
     }
 }
@@ -96,18 +99,10 @@ impl Net {
         self.insert_edge(to_id, from_id);
     }
 
-    fn apply_operation(&mut self, op: Operation, from_id: usize, to_id: usize) {
-        match op {
-            Operation::Insert => self.insert_edge(from_id, to_id),
-            Operation::Remove => self.remove_edge(from_id, to_id),
-            Operation::Reverse => self.reverse_edge(from_id, to_id),
-        }
-    }
-
     fn is_cycle0(&self, node: &Node) -> bool {
         match node.mark {
             NodeMark::Init => {
-                node.mark = NodeMark::TEST;
+                node.mark = NodeMark::Test;
                 let mut result = false;
                 for child_id in node.child_ids {
                     let child_node = self.nodes.get(child_id).expect("invariant broken");
@@ -125,7 +120,7 @@ impl Net {
                 }
                 result
             }
-            NodeMark::TEST => true,
+            NodeMark::Test => true,
             NodeMark::Done => false,
         }
     }
@@ -141,12 +136,20 @@ impl NetT for Net {
         Net { nodes }
     }
 
+    fn apply_operation(&mut self, op: Operation, from_id: usize, to_id: usize) {
+        match op {
+            Operation::Insert => self.insert_edge(from_id, to_id),
+            Operation::Remove => self.remove_edge(from_id, to_id),
+            Operation::Reverse => self.reverse_edge(from_id, to_id),
+        }
+    }
+
     fn has_edge(&self, from_id: usize, to_id: usize) -> bool {
         self.nodes
             .get(to_id)
             .expect("invariant broken")
             .parent_ids
-            .contains(from_id)
+            .contains(&from_id)
     }
 
     // I changed this function considerably because the STAMP version of it
@@ -156,19 +159,19 @@ impl NetT for Net {
         &self,
         from_id: usize,
         to_id: usize,
+        // FIXME are the below parameters only there for reuse/optimization?
         mut visited: &mut Vec<bool>,
-        mut work_queue: &mut Vec<usize>,
+        mut work_queue: &mut VecDeque<usize>,
     ) -> bool {
         assert!(visited.len() == self.nodes.len());
 
         work_queue.clear();
         visited.fill(false);
 
-        work_queue.push(from_id);
+        work_queue.push_back(from_id);
 
         let result = false;
-        while !work_queue.is_empty() {
-            let id = work_queue.pop();
+        while let Some(id) = work_queue.pop_front() {
             if id == to_id {
                 work_queue.clear();
                 result = true;
@@ -176,8 +179,8 @@ impl NetT for Net {
                 visited.insert(id, true);
                 let node = self.nodes.get(id).expect("invariant broken");
                 for child_id in node.child_ids {
-                    if !visited.get(child_id) {
-                        work_queue.push(child_id)
+                    if visited.get(child_id).is_none() {
+                        work_queue.push_back(child_id)
                     } else {
                         // already visited
                     }
@@ -196,7 +199,7 @@ impl NetT for Net {
     fn is_cycle(&mut self) -> bool {
         let num_node = self.nodes.len();
         for node in self.nodes {
-            node.mark = 0; //NET_NODE_MARK_INIT;
+            node.mark = NodeMark::Init; //NET_NODE_MARK_INIT;
         }
 
         let result = false;
@@ -218,12 +221,12 @@ impl NetT for Net {
         result
     }
 
-    fn get_parent_id_list(&self, id: usize) -> &Vec<usize> {
-        self.nodes.get(id).expect("invariant broken").parent_ids
+    fn get_parent_id_list(&self, id0: usize) -> &Vec<usize> {
+        &self.nodes.get(id0).expect("invariant broken").parent_ids
     }
 
-    fn get_child_id_list(&self, id: usize) -> &Vec<usize> {
-        self.nodes.get(id).expect("invariant broken").child_ids
+    fn get_child_id_list(&self, id0: usize) -> &Vec<usize> {
+        &self.nodes.get(id0).expect("invariant broken").child_ids
     }
 
     /* =============================================================================
@@ -234,24 +237,27 @@ impl NetT for Net {
      */
     fn find_ancestors(
         &self,
-        id: usize,
-        mut ancestor: &mut Vec<bool>,
-        mut work_queue: &mut Vec<usize>,
+        id0: usize,
+        // FIXME are these parameters here only for reuse/optimization?
+        //mut ancestor: &mut Vec<bool>,
+        mut work_queue: &mut VecDeque<usize>,
     ) -> Option<Vec<bool>> {
-        assert!(ancestor.len() == self.nodes.len());
+        //assert!(ancestor.len() == self.nodes.len());
 
+        // TODO if this reinitialization becomes a performance
+        // problem then tie this state to the struct!
+        let mut ancestor = Vec::with_capacity(self.nodes.len());
         ancestor.fill(false);
         work_queue.clear();
 
-        for parent_id in self.nodes.get(id).expect("invariant broken").parent_ids {
+        for parent_id in self.nodes.get(id0).expect("invariant broken").parent_ids {
             ancestor.insert(parent_id, true);
-            work_queue.push(parent_id);
+            work_queue.push_back(parent_id);
         }
 
         let result = true;
-        while !work_queue.is_empty() {
-            let parent_id = work_queue.pop();
-            if parent_id == id {
+        while let Some(parent_id) = work_queue.pop_front() {
+            if parent_id == id0 {
                 work_queue.clear();
                 result = false;
             } else {
@@ -263,13 +269,19 @@ impl NetT for Net {
                 {
                     if !ancestor.get(grand_parent_id).expect("invariant broken") {
                         ancestor.insert(grand_parent_id, true);
-                        work_queue.push(grand_parent_id);
+                        work_queue.push_back(grand_parent_id);
                     }
                 }
             }
         }
 
-        result
+        if result {
+            Some(ancestor)
+        } else {
+            None
+            // in the original implementation, the caller nevertheless gets the altered ancestor
+            // vector up to this point.
+        }
     }
 
     /* =============================================================================
@@ -280,23 +292,25 @@ impl NetT for Net {
      */
     fn find_descendants(
         &self,
-        id: usize,
-        mut descendant: &mut Vec<bool>,
-        mut work_queue: &mut Vec<usize>,
-    ) {
-        assert!(descendant.len() == self.nodes.len());
+        id0: usize,
+        //mut descendant: &mut Vec<bool>,
+        mut work_queue: &mut VecDeque<usize>,
+    ) -> Option<Vec<bool>>{
+        //assert!(descendant.len() == self.nodes.len());
+
+        // see comment in find_ancestors
+        let descendant = Vec::with_capacity(self.nodes.len());
         descendant.fill(false);
         work_queue.clear();
 
-        for child_id in self.nodes.get(id).expect("invariant broken").child_ids {
+        for child_id in self.nodes.get(id0).expect("invariant broken").child_ids {
             descendant.insert(child_id, true);
-            work_queue.push(child_id);
+            work_queue.push_back(child_id);
         }
 
         let result = true;
-        while !work_queue.is_empty() {
-            let child_id = work_queue.pop();
-            if child_id == id {
+        while let Some(child_id) = work_queue.pop_front() {
+            if child_id == id0 {
                 work_queue.clear();
                 result = false;
             } else {
@@ -308,26 +322,30 @@ impl NetT for Net {
                 {
                     if !descendant.get(grand_child_id).expect("invariant broken") {
                         descendant.insert(grand_child_id, true);
-                        work_queue.push(grand_child_id);
+                        work_queue.push_back(grand_child_id);
                     }
                 }
             }
         }
 
-        result
+        if result {
+            Some(descendant)
+        } else {
+            None // see comment in find_ancestors
+        }
     }
 
     fn generate_random_edges<T:RngCore>(&self, max_num_parent: usize, percent_parent: usize, random: &T) {
         let num_node = self.nodes.len();
-        let mut visited = Vec::with_capacitiy(num_node);
+        let mut visited = Vec::with_capacity(num_node);
         visited.fill(false);
-        let mut work_queue = Vec::new();
+        let mut work_queue = VecDeque::new();
 
         for n in 0..num_node {
             for p in 0..max_num_parent {
-                let value = random.generate() % 100;
+                let value = random.gen::<usize>() % 100;
                 if value < percent_parent {
-                    let parent = random.generate() % num_node;
+                    let parent = random.gen::<usize>() % num_node;
                     if (parent != n)
                         && !self.has_edge(parent, n)
                         && !self.is_path(n, parent, &mut visited, &mut work_queue)

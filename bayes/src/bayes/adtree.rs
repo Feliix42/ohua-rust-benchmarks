@@ -43,20 +43,24 @@ trait AdTreeT {
 
 impl Node {
     fn new(index: usize, value: u64, count: usize, vary: Vec<Vary>) -> Node {
-        Node{ index, value, count, vary }
+        Node{ 
+            index, 
+            value, 
+            count, 
+            vary }
     }
 
-    fn make<T:DataT>(
+    fn make<T:RngCore>(
         parent_index: usize,
         index: usize,
         start: usize,
         num_record: usize,
         value: u64,
-        data: &T) -> Node {
+        data: &mut Data<T>) -> Node {
         
         let vary = Vec::with_capacity(data.num_var - index + 1);
         for v in (index + 1)..data.num_var {
-            vary.put(Vary::make(parent_index, v, start, num_record, &data));
+            vary.push(Vary::make(parent_index, v, start, num_record, data));
         }
 
          Node::new(index, value, num_record, vary)
@@ -65,9 +69,9 @@ impl Node {
     fn get_count (&self,
           i: usize,
           q: usize,
-          queries: Vec<Query>,
+          queries: &Vec<Query>,
           last_query_index: usize,
-           adtree: &AdTree
+          adtree: &AdTree
           ) -> usize {
         
         if self.index >= last_query_index {
@@ -82,7 +86,7 @@ impl Node {
                             .get(query.index - self.index -1)
                             .expect("invariant: can find a vary");
         
-                    if query.value == vary.most_common_value {
+                    if query.val == vary.most_common_value {
                 
                         /*
                          * We do not explicitly store the counts for the most common value.
@@ -96,50 +100,50 @@ impl Node {
                 
                             for qq in 0..num_query {
                                 if qq != q {
-                                    super_queries.put(queries.get(qq).expect("invariant"));
+                                    super_queries.push(queries.get(qq).expect("invariant"));
                                 }
                             }
                             // FIXME this looks like an endless loop because it starts at the top
                             // again!
-                            adtree.get_count(&super_queries)
+                            adtree.get_count(super_queries)
                         };
                 
                         let invert_count =
-                            match query.value {
+                            match query.val {
                                 Val::Zero => {
                                     // FIXME this is no good. it changes the value just for the call below!
-                                    query.value = Val::One;
+                                    query.val = Val::One;
                                     self.get_count(i,
                                                q,
                                                &queries,
                                                last_query_index,
                                                &adtree);
-                                    query.value = Val::Zero;
+                                    query.val = Val::Zero;
                                 }, 
                                 Val::One => {
                                      // FIXME this is no good. it changes the value just for the call below!
-                                    query.value = Val::Zero;
+                                    query.val = Val::Zero;
                                     self.get_count(i,
                                                q,
                                                &queries,
                                                last_query_index,
                                                &adtree);
-                                    query.value = Val::One;
+                                    query.val = Val::One;
                                 }
                             };
 
                         super_count - invert_count
                     } else {
-                        match query.value {
+                        match query.val {
                             Val::Zero => 
-                                vary.zero_node.get_count(
+                                vary.zero.get_count(
                                       i + 1,
                                       q + 1,
                                       &queries,
                                       last_query_index,
                                       &adtree),
                             Val::One =>
-                                vary.one_node.getCount(
+                                vary.one.getCount(
                                       i + 1,
                                       q + 1,
                                       &queries,
@@ -155,17 +159,21 @@ impl Node {
 
 impl Vary {
     fn new(index: usize,
-        most_common_value: usize,
+        most_common_value: u64,
         zero: Option<Node>,
         one: Option<Node>) -> Vary {
-        Vary{ index, most_common_value, zero, one }
+        Vary{ 
+            index, 
+            most_common_value, 
+            zero, 
+            one }
     }
 
-    fn make<T:DataT>(parent_index: usize,
+    fn make<T:RngCore>(parent_index: usize,
           index: usize,
           start: usize,
           num_record: usize,
-          mut data: T) -> Vary {
+          mut data: &mut Data<T>) -> Vary {
         if (parent_index + 1 != index) && (num_record > 1) {
             data.sort(start, num_record, index);
         }

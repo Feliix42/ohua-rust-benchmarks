@@ -18,10 +18,10 @@ impl DataConfig {
 
 #[derive(Debug, Clone)]
 pub(crate) struct Data<T: RngCore> {
-    num_var: usize,
-    num_record: usize,
-    records: Vec<Vec<usize>>, /* concatenation of all records */
-    random: T,
+    pub(crate) num_var: usize,
+    pub(crate) num_record: usize,
+    pub(crate) records: Vec<Vec<usize>>, /* concatenation of all records */
+    pub(crate) random: T,
 }
 
 pub(crate) trait DataT {

@@ -7,8 +7,8 @@ pub(crate) enum Val {
 }
 
 pub(crate) struct Query {
-    index: usize,
-    val: Val
+    pub(crate) index: usize,
+    pub(crate) val: Val
 }
 
 impl Query {
