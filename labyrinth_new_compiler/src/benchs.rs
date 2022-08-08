@@ -1,5 +1,5 @@
 use crate::grid::*;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, LinkedList};
 use std::fmt;
 use std::sync::Arc;
 
@@ -75,7 +75,7 @@ pub fn path_available(grid: &Grid, path: &Path) -> bool {
     true
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 /// A point in the 3D maze
 pub struct Point {
     pub x: usize,
@@ -101,7 +101,7 @@ pub struct Path {
 }
 
 /// A single field. Can be either free or used or it may be a wall.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Field {
     Free,
     Used,
@@ -117,9 +117,13 @@ pub fn find_path(maze: Arc<Maze>, pair: Option<(Point, Point)>) -> Option<Path> 
         return None;
     }
 
-    let mut unseen_points = VecDeque::new();
-    unseen_points.push_back(start.clone());
-    let mut visited_points = HashSet::new();
+    let mut enqueued = vec![vec![vec![false; grid[0][0].len()]; grid[0].len()]; grid.len()];
+    let mut unseen_points = LinkedList::new();
+
+    // set the start point
+    enqueued[start.x][start.y][start.z] = true;
+    unseen_points.push_back(start);
+
     // the meta_info map contains the backtrack-information for the path
     let mut meta_info: BacktrackMetaData = HashMap::new();
     meta_info.insert(start, None);
@@ -141,17 +145,12 @@ pub fn find_path(maze: Arc<Maze>, pair: Option<(Point, Point)>) -> Option<Path> 
                 &Field::Free => (),
             }
 
-            if visited_points.contains(&child) {
-                continue;
-            }
-
-            if !unseen_points.contains(&child) {
-                meta_info.insert(child.clone(), Some(current.clone()));
+            if !enqueued[child.x][child.y][child.z] {
+                meta_info.insert(child, Some(current));
                 unseen_points.push_back(child);
+                enqueued[child.x][child.y][child.z] = true;
             }
         }
-
-        visited_points.insert(current);
     }
 
     // All points have been processed and no path was found

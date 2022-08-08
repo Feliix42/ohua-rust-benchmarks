@@ -6,7 +6,7 @@ pub use crate::grid::*;
 
 use std::fmt;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 /// A point in the 3D maze
 pub struct Point {
     pub x: usize,
@@ -114,7 +114,7 @@ pub struct Path {
 }
 
 /// A single field. Can be either free or used or it may be a wall.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Field {
     Free,
     Used,

@@ -1,12 +1,12 @@
 #[allow(unused_imports)]
 use crate::types::{at_grid_coordinates, Field, Grid, Maze, Path, Point};
-#[cfg(all(feature = "transactional", feature = "naive"))]
+#[cfg(feature = "transactional")]
 use crate::stm_grid::StmGrid;
 #[cfg(all(feature = "transactional", feature = "naive"))]
 use stm::{Transaction, StmResult};
 #[cfg(all(feature = "transactional", feature = "naive"))]
 use crate::types::at_stm_grid_coordinates;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, LinkedList};
 
 /// This HashMap contains the information on how to get back from the end point to the start.
 /// Each point is assigned the previous point in the path to allow easy backtracking.
@@ -14,53 +14,7 @@ type BacktrackMetaData = HashMap<Point, Option<Point>>;
 
 #[cfg(all(feature = "ohua", not(feature = "future")))]
 pub fn find_path(maze: Maze, points: (Point, Point)) -> Option<Path> {
-    // TODO: Add costs?
-    let (start, end) = points;
-
-    // check if the route is still available
-    if at_grid_coordinates(&maze.grid, &start) != &Field::Free {
-        return None;
-    }
-
-    let mut unseen_points = VecDeque::new();
-    unseen_points.push_back(start.clone());
-    let mut visited_points = HashSet::new();
-    // the meta_info map contains the backtrack-information for the path
-    let mut meta_info: BacktrackMetaData = HashMap::new();
-    meta_info.insert(start, None);
-
-    while !unseen_points.is_empty() {
-        let current = unseen_points.pop_front().unwrap();
-
-        // stop when reacing the end node
-        if current == end {
-            return Some(generate_path(current, meta_info));
-        }
-
-        // get a list of all possible successors
-        for child in get_successors(&current, &maze.grid) {
-            // sort out anything that has been seen or is blocked
-            match at_grid_coordinates(&maze.grid, &child) {
-                &Field::Used => continue,
-                &Field::Wall => continue,
-                &Field::Free => (),
-            }
-
-            if visited_points.contains(&child) {
-                continue;
-            }
-
-            if !unseen_points.contains(&child) {
-                meta_info.insert(child.clone(), Some(current.clone()));
-                unseen_points.push_back(child);
-            }
-        }
-
-        visited_points.insert(current);
-    }
-
-    // All points have been processed and no path was found
-    None
+    compile_error!("This feature set should no longer be used");
 }
 
 #[cfg(all(feature = "ohua", feature = "future"))]
@@ -73,9 +27,13 @@ pub fn find_path(maze: &Maze, points: (Point, Point)) -> Option<Path> {
         return None;
     }
 
-    let mut unseen_points = VecDeque::new();
-    unseen_points.push_back(start.clone());
-    let mut visited_points = HashSet::new();
+    let mut enqueued = vec![vec![vec![false; maze.grid[0][0].len()]; maze.grid[0].len()]; maze.grid.len()];
+    let mut unseen_points = LinkedList::new();
+
+    // set the start point
+    enqueued[start.x][start.y][start.z] = true;
+    unseen_points.push_back(start);
+
     // the meta_info map contains the backtrack-information for the path
     let mut meta_info: BacktrackMetaData = HashMap::new();
     meta_info.insert(start, None);
@@ -97,25 +55,23 @@ pub fn find_path(maze: &Maze, points: (Point, Point)) -> Option<Path> {
                 &Field::Free => (),
             }
 
-            if visited_points.contains(&child) {
-                continue;
-            }
-
-            if !unseen_points.contains(&child) {
-                meta_info.insert(child.clone(), Some(current.clone()));
+            if !enqueued[child.x][child.y][child.z] {
+                meta_info.insert(child, Some(current));
                 unseen_points.push_back(child);
+                enqueued[child.x][child.y][child.z] = true;
             }
         }
-
-        visited_points.insert(current);
     }
 
     // All points have been processed and no path was found
     None
 }
 
+
+
 #[cfg(all(feature = "transactional", feature = "naive"))]
 pub fn find_path(points: (Point, Point), grid: &StmGrid, transaction: &mut Transaction) -> StmResult<Option<Path>> {
+    compile_error!("Needs to be adjusted to the new `enqueued` Data Structure used in the other `find_path` implementations");
     // TODO: Add costs?
     let (start, end) = points;
 
@@ -176,9 +132,13 @@ pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
         return None;
     }
 
-    let mut unseen_points = VecDeque::new();
-    unseen_points.push_back(start.clone());
-    let mut visited_points = HashSet::new();
+    let mut enqueued = vec![vec![vec![false; grid[0][0].len()]; grid[0].len()]; grid.len()];
+    let mut unseen_points = LinkedList::new();
+
+    // set the start point
+    enqueued[start.x][start.y][start.z] = true;
+    unseen_points.push_back(start);
+
     // the meta_info map contains the backtrack-information for the path
     let mut meta_info: BacktrackMetaData = HashMap::new();
     meta_info.insert(start, None);
@@ -200,17 +160,12 @@ pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
                 &Field::Free => (),
             }
 
-            if visited_points.contains(&child) {
-                continue;
-            }
-
-            if !unseen_points.contains(&child) {
-                meta_info.insert(child.clone(), Some(current.clone()));
+            if !enqueued[child.x][child.y][child.z] {
+                meta_info.insert(child, Some(current));
                 unseen_points.push_back(child);
+                enqueued[child.x][child.y][child.z] = true;
             }
         }
-
-        visited_points.insert(current);
     }
 
     // All points have been processed and no path was found
