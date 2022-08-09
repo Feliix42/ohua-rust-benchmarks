@@ -10,7 +10,26 @@ use std::collections::{HashMap, LinkedList};
 
 /// This HashMap contains the information on how to get back from the end point to the start.
 /// Each point is assigned the previous point in the path to allow easy backtracking.
+#[cfg(feature = "naive")]
 type BacktrackMetaData = HashMap<Point, Option<Point>>;
+
+/// This data structure contains information on whether a point has been visited before and
+/// information on how to get back from the end point to the start.
+/// Each point is assigned the previous point in the path to allow easy backtracking.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum PointStatus {
+    #[default]
+    Unvisited,
+    BacktrackInfo(Option<Point>)
+}
+
+impl PointStatus {
+    #[inline]
+    pub fn unvisited(&self) -> bool {
+        *self == Self::Unvisited
+    }
+}
+
 
 #[cfg(all(feature = "ohua", not(feature = "future")))]
 pub fn find_path(maze: Maze, points: (Point, Point)) -> Option<Path> {
@@ -27,23 +46,19 @@ pub fn find_path(maze: &Maze, points: (Point, Point)) -> Option<Path> {
         return None;
     }
 
-    let mut enqueued = vec![vec![vec![false; maze.grid[0][0].len()]; maze.grid[0].len()]; maze.grid.len()];
+    let mut point_status = vec![vec![vec![PointStatus::Unvisited; maze.grid[0][0].len()]; maze.grid[0].len()]; maze.grid.len()];
     let mut unseen_points = LinkedList::new();
 
     // set the start point
-    enqueued[start.x][start.y][start.z] = true;
+    point_status[start.x][start.y][start.z] = PointStatus::BacktrackInfo(None);
     unseen_points.push_back(start);
-
-    // the meta_info map contains the backtrack-information for the path
-    let mut meta_info: BacktrackMetaData = HashMap::new();
-    meta_info.insert(start, None);
 
     while !unseen_points.is_empty() {
         let current = unseen_points.pop_front().unwrap();
 
         // stop when reacing the end node
         if current == end {
-            return Some(generate_path(current, meta_info));
+            return Some(generate_path(current, &point_status));
         }
 
         // get a list of all possible successors
@@ -55,10 +70,9 @@ pub fn find_path(maze: &Maze, points: (Point, Point)) -> Option<Path> {
                 &Field::Free => (),
             }
 
-            if !enqueued[child.x][child.y][child.z] {
-                meta_info.insert(child, Some(current));
+            if point_status[child.x][child.y][child.z].unvisited() {
+                point_status[child.x][child.y][child.z] = PointStatus::BacktrackInfo(Some(current));
                 unseen_points.push_back(child);
-                enqueued[child.x][child.y][child.z] = true;
             }
         }
     }
@@ -132,23 +146,19 @@ pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
         return None;
     }
 
-    let mut enqueued = vec![vec![vec![false; grid[0][0].len()]; grid[0].len()]; grid.len()];
+    let mut point_status = vec![vec![vec![PointStatus::Unvisited; grid[0][0].len()]; grid[0].len()]; grid.len()];
     let mut unseen_points = LinkedList::new();
 
     // set the start point
-    enqueued[start.x][start.y][start.z] = true;
+    point_status[start.x][start.y][start.z] = PointStatus::BacktrackInfo(None);
     unseen_points.push_back(start);
-
-    // the meta_info map contains the backtrack-information for the path
-    let mut meta_info: BacktrackMetaData = HashMap::new();
-    meta_info.insert(start, None);
 
     while !unseen_points.is_empty() {
         let current = unseen_points.pop_front().unwrap();
 
         // stop when reacing the end node
         if current == end {
-            return Some(generate_path(current, meta_info));
+            return Some(generate_path(current, &point_status));
         }
 
         // get a list of all possible successors
@@ -160,10 +170,9 @@ pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
                 &Field::Free => (),
             }
 
-            if !enqueued[child.x][child.y][child.z] {
-                meta_info.insert(child, Some(current));
+            if point_status[child.x][child.y][child.z].unvisited() {
+                point_status[child.x][child.y][child.z] = PointStatus::BacktrackInfo(Some(current));
                 unseen_points.push_back(child);
-                enqueued[child.x][child.y][child.z] = true;
             }
         }
     }
@@ -272,6 +281,27 @@ fn get_successors(cur: &Point, grid: &StmGrid) -> Vec<Point> {
     res
 }
 
+#[cfg(not(feature = "naive"))]
+fn generate_path(end_node: Point, meta_info: &Vec<Vec<Vec<PointStatus>>>) -> Path {
+    let mut path = vec![end_node];
+    let mut current = end_node;
+
+    while let PointStatus::BacktrackInfo(Some(next)) = meta_info[current.x][current.y][current.z] {
+        path.push(next);
+        current = next;
+    }
+
+    // important, we built the vec from end -> start
+    path.reverse();
+
+    Path {
+        start: current,
+        end: end_node,
+        path,
+    }
+}
+
+#[cfg(feature = "naive")]
 fn generate_path(end_node: Point, mut meta_info: BacktrackMetaData) -> Path {
     let mut path = vec![end_node.clone()];
     let mut current = end_node.clone();
