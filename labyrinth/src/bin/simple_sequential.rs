@@ -1,3 +1,6 @@
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 use clap::{App, Arg};
 use labyrinth::grid;
 use labyrinth::parser;
