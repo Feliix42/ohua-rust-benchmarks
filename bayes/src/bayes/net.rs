@@ -25,7 +25,7 @@ pub enum Operation {
     Reverse,
 }
 
-trait NetT {
+pub(crate) trait NetT {
     fn new(num_node: usize) -> Self;
     fn apply_operation(&mut self, op: Operation, from_id: usize, to_id: usize);
     fn has_edge(&self, from_id: usize, to_id: usize) -> bool;

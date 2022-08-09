@@ -1,6 +1,7 @@
 mod net;
-// FIXME commented out for debugging
+mod query;
+mod data;
 //mod adtree;
-//mod query;
+// FIXME commented out for debugging
 //mod data;
 // pub(crate) mod learner;
