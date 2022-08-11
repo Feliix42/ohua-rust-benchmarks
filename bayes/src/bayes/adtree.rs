@@ -3,10 +3,6 @@ use rand::RngCore;
 use crate::bayes::query::{Query,Val};
 use crate::bayes::data::Data;
 
-enum Node {
-    Root(RootNode),
-    Node(TreeNode)
-}
 
 struct RootNode{
     count: usize,
@@ -34,7 +30,7 @@ pub struct AdTree {
 }
 
 trait AdTreeT {
-    fn new(num_var: usize, num_record: usize, root: Node) -> Self;
+    fn new(num_var: usize, num_record: usize, root: RootNode) -> Self;
 
     /* =============================================================================
      * adtree_make
@@ -51,19 +47,13 @@ trait AdTreeT {
     fn get_count(&self, queries: &Vec<&Query>) -> usize;
 }
 
-trait Node {
-    fn vary(&self) -> &Vec<Vary>;
-    fn count(&self) -> usize;
-}
-
 impl RootNode {
     fn new(count: usize, vary: Vec<Vary>) -> RootNode {
-        RootNode{ vary }
+        RootNode{ count, vary }
     }
  
     fn make<T:RngCore>(
         num_record: usize,
-        value: u64,
         data: &mut Data<T>) -> RootNode {
         
         let vary = Vec::with_capacity(data.num_var);
@@ -71,11 +61,11 @@ impl RootNode {
             vary.push(Vary::make(v, 0, num_record, data));
         }
 
-        RootNode::new(numRecord, vary)
+        RootNode::new(num_record, vary)
     }
 
     fn get_count (&self,
-          i: usize,
+        //  i: usize,
           q: usize,
           queries: &Vec<&Query>,
           last_query_index: Option<usize>,
@@ -121,7 +111,7 @@ impl RootNode {
                                     Val::Zero => {
                                         // FIXME this is no good. it changes the value just for the call below!
                                         query.val = Val::One;
-                                        let c = self.get_count(i,
+                                        let c = self.get_count(
                                                    q,
                                                    &queries,
                                                    last_query_index,
@@ -132,7 +122,7 @@ impl RootNode {
                                     _  => {
                                          // FIXME this is no good. it changes the value just for the call below!
                                         query.val = Val::Zero;
-                                        let c = self.get_count(i,
+                                        let c = self.get_count(
                                                    q,
                                                    &queries,
                                                    last_query_index,
@@ -147,14 +137,14 @@ impl RootNode {
                             match query.val {
                                 Val::Zero => 
                                     vary0.zero.map_or(0, |n| n.get_count(
-                                          i + 1,
+                                          0,
                                           q + 1,
                                           &queries,
                                           last_query_index,
                                           &adtree)),
                                 Val::One =>
                                     vary0.one.map_or(0, |n| n.get_count(
-                                          i + 1,
+                                          0,
                                           q + 1,
                                           &queries,
                                           last_query_index,
@@ -351,7 +341,7 @@ impl AdTreeT for AdTree {
         let num_var = data.num_var;
 
         data.sort(0, num_record, 0);
-        let root = RootNode::make(data);
+        let root = RootNode::make(num_record, data);
         AdTree::new(num_var, num_record, root)
     }
 
