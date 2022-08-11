@@ -18,7 +18,7 @@ impl DataConfig {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Data<T: RngCore> {
+pub(crate) struct Data<T: RngCore + SeedableRng> {
     pub(crate) num_var: usize,
     pub(crate) num_record: usize,
     pub(crate) records: Vec<Vec<usize>>, /* concatenation of all records */
@@ -32,9 +32,9 @@ pub(crate) trait DataT<T:RngCore + SeedableRng> {
 
     fn get_record(&self, index: usize) -> Option<&Vec<usize>>;
 
-//    fn sort(&mut self, start: usize, num: usize, offset: usize);
+    fn sort(&mut self, start: usize, num: usize, offset: usize);
 
-//    fn find_split(&self, start: usize, num: usize, offset: usize) -> usize;
+    fn find_split(&self, start: usize, num: usize, offset: usize) -> usize;
 }
 
 impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
@@ -173,14 +173,34 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
         net
     }
 
-
-    /* =============================================================================
-     * data_getRecord
-     * -- Returns NULL if invalid index
-     * =============================================================================
-     */
     fn get_record (&self, index:usize) -> Option<&Vec<usize>> {
         self.records.get(index)
+    }
+
+    fn sort(&mut self, start: usize, num: usize, offset: usize) {
+        assert!(start <= self.num_record);
+        assert!(num <= self.num_record);
+        assert!(start + num <= self.num_record);
+        // just always sort all! this may have performance implications.
+        self.records.sort();
+    }
+
+    fn find_split(&self, start: usize, num: usize, offset: usize) -> usize {
+        assert!(offset < self.num_var);
+
+        let mut low = start;
+        let mut high = start + num - 1;
+
+        while low <= high {
+            let mid = (low + high) / 2;
+            if self.records[mid][offset] == 0 {
+                low = mid + 1;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        low - start
     }
 
 }

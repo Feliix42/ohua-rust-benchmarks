@@ -1,7 +1,7 @@
-use rand::RngCore;
+use rand::{RngCore, SeedableRng};
 
 use crate::bayes::query::{Query,Val};
-use crate::bayes::data::Data;
+use crate::bayes::data::{DataT,Data};
 
 
 struct RootNode{
@@ -37,7 +37,7 @@ trait AdTreeT {
      * -- Records in dataPtr will get rearranged
      * =============================================================================
      */
-    fn make<T:RngCore>(data: &mut Data<T>) -> Self;
+    fn make<T:RngCore + SeedableRng>(data: &mut Data<T>) -> Self;
 
     /* =============================================================================
      * adtree_getCount
@@ -52,7 +52,7 @@ impl RootNode {
         RootNode{ count, vary }
     }
  
-    fn make<T:RngCore>(
+    fn make<T:RngCore + SeedableRng>(
         num_record: usize,
         data: &mut Data<T>) -> RootNode {
         
@@ -168,7 +168,7 @@ impl TreeNode {
             vary }
     }
 
-    fn make<T:RngCore>(
+    fn make<T:RngCore + SeedableRng>(
        // parent_index: usize,
         index: usize,
         start: usize,
@@ -186,6 +186,7 @@ impl TreeNode {
          TreeNode::new(index, value, num_record, vary)
     }
 
+    // TODO abstract over the type of the Node
     fn get_count (&self,
           i: usize,
           q: usize,
@@ -298,7 +299,7 @@ impl Vary {
             one }
     }
 
-    fn make<T:RngCore>(// parent_index: usize, this turned out to be never updated!
+    fn make<T:RngCore + SeedableRng>(// parent_index: usize, this turned out to be never updated!
           index: usize,
           start: usize,
           num_record: usize,
@@ -336,7 +337,7 @@ impl AdTreeT for AdTree {
         AdTree{ num_var, num_record, root }
     }
 
-    fn make<T:RngCore>(mut data: &mut Data<T>) -> AdTree {
+    fn make<T:RngCore + SeedableRng>(mut data: &mut Data<T>) -> AdTree {
         let num_record = data.num_record;
         let num_var = data.num_var;
 
