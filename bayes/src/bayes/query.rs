@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+#[derive(PartialEq)]
 pub(crate) enum Val { 
     Zero, 
     One, 
