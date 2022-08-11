@@ -13,7 +13,7 @@ pub(crate) struct Query {
 }
 
 impl Query {
-    fn new(index: usize, val: Val) -> Query {
+    pub(crate) fn new(index: usize, val: Val) -> Query {
         Query {index, val}
     }
 }

@@ -360,22 +360,21 @@ impl AdTreeT for AdTree {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use rand::thread_rng;
 
-    fn count_data (data: &Data, queries: &Vec<Query>) -> usize {
+    fn count_data<T: RngCore + SeedableRng>(data: &Data<T>, queries: &Vec<Query>) -> usize {
+        assert!(data.num_record == data.records.len());
         let mut count = 0;
-        for r in 0..(data.num_record) {
-            let record = data.get_record(r);
+        for record in data.records {
             let mut is_match = true;
             for query in queries.iter() {
-                match query.value {
-                    Val::WildCard => true,
-                    _ => 
-                        if query.value != record[query.index] {
+                if query.val != Val::WildCard && 
+                    query.val as usize != record[query.index] {
                             is_match = false;
                             break            
-                        } else {
-                            //
-                        }
+                } else {
+                    // continue
                 }
             }
             count = if is_match { count + 1 } else { count };
@@ -383,52 +382,56 @@ mod test {
         count
     }
 
-    fn test_count(
+    fn test_count<T: RngCore + SeedableRng>(
         ad_tree: &AdTree,
-        data: &Data,
-        queries: &mut Vec<Query>,
+        data: &Data<T>,
+        queries: &Vec<Query>,
         index: usize,
         num_var: usize) {
 
-        if (index >= num_var) {
+        if index >= num_var {
             // just nothing
         } else {
-            let count1 = ad_tree.get_count(&queries);
-            let count2 = count_data(&data, &queries);
+            // well this is a bit annoying
+            let mut queries0 = Vec::new();
+            for q in queries { queries0.push(q) }
+
+            let count1 = ad_tree.get_count(&queries0);
+            let count2 = count_data(data, queries);
             assert!(count1 == count2);
 
             for i in 1..num_var {
-                queries.put(Query::new(index + i, 0));
+                queries.push(Query::new(index + i, Val::Zero));
                 test_count(&ad_tree, &data, &queries, index + i, num_var);
-                queries.pop();
+                queries.remove(queries.len() - 1);
 
-                queries.put(Query::new(index + i, 1));
+                queries.push(Query::new(index + i, Val::One));
                 test_count(&ad_tree, &data, &queries, index + i, num_var);
-                queries.pop();
+                queries.remove(queries.len() - 1);
             }
         }
     }
 
 
-    fn test_counts(ad_tree: &AdTree, data: &Data){
+    fn test_counts<T : RngCore + SeedableRng>(ad_tree: AdTree, data: Data<T>){
         let queries = Vec::with_capacity(data.num_var);
         //for (v = -1; v < numVar; v++) {
-        for v in 0..num_var {
-            test_count(&ad_tree, &data, &mut queries, v, data.num_var);
+        for v in 0..data.num_var {
+            test_count(&ad_tree, &data, &queries, v, data.num_var);
         }
     }
 
 
     fn test(num_var: usize, num_record: usize) {
-        let random = Random::new();
+        let random = rand::rngs::StdRng::seed_from_u64(0);
         let data = Data::new(num_var, num_record, &random);
         data.generate(0, 10, 10);
 
         let copy_data = data.clone();
 
-        let ad_tree = AdTree::make(&copy_data);
+        let adtree = AdTree::make(&mut copy_data);
 
-        test_counts(adtreePtr, dataPtr);
+        test_counts(adtree, data);
     }
 
     #[test]
