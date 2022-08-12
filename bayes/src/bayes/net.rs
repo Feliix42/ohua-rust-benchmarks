@@ -1,4 +1,4 @@
-use rand::{RngCore,Rng};
+use rand::{Rng, RngCore};
 use std::collections::VecDeque;
 
 enum NodeMark {
@@ -12,7 +12,7 @@ struct Node {
     // maybe these want to be HashSets
     parent_ids: Vec<usize>,
     child_ids: Vec<usize>,
-    mark: NodeMark
+    mark: NodeMark,
 }
 
 pub struct Net {
@@ -74,7 +74,7 @@ impl Node {
             id,
             parent_ids: Vec::new(),
             child_ids: Vec::new(),
-            mark: NodeMark::Init // uninitialized in original code 
+            mark: NodeMark::Init, // uninitialized in original code
         }
     }
 }
@@ -124,7 +124,6 @@ impl Net {
             NodeMark::Done => false,
         }
     }
-
 }
 
 impl NetT for Net {
@@ -190,7 +189,6 @@ impl NetT for Net {
 
         result
     }
-
 
     // This is yet another function that seems to answer a totally harmless
     // boolean question. Yet it alters the state of the nodes.
@@ -295,7 +293,7 @@ impl NetT for Net {
         id0: usize,
         //mut descendant: &mut Vec<bool>,
         mut work_queue: &mut VecDeque<usize>,
-    ) -> Option<Vec<bool>>{
+    ) -> Option<Vec<bool>> {
         //assert!(descendant.len() == self.nodes.len());
 
         // see comment in find_ancestors
@@ -335,7 +333,12 @@ impl NetT for Net {
         }
     }
 
-    fn generate_random_edges<T:RngCore>(&self, max_num_parent: usize, percent_parent: usize, random: &T) {
+    fn generate_random_edges<T: RngCore>(
+        &self,
+        max_num_parent: usize,
+        percent_parent: usize,
+        random: &T,
+    ) {
         let num_node = self.nodes.len();
         let mut visited = Vec::with_capacity(num_node);
         visited.fill(false);
@@ -362,6 +365,8 @@ impl NetT for Net {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use rand::SeedableRng;
 
     #[test]
     fn test1() {
@@ -370,55 +375,55 @@ mod tests {
             let mut net = Net::new(num_node);
             let mut visited = Vec::with_capacity(num_node);
             visited.fill(false);
-            let work_queue = Vec::new();
+            let work_queue = VecDeque::new();
 
             assert!(!net.is_cycle());
 
-            let aId = 31;
-            let bId = 14;
-            let cId = 5;
-            let dId = 92;
+            let a_id = 31;
+            let b_id = 14;
+            let c_id = 5;
+            let d_id = 92;
 
-            net.apply_operation(Operation::Insert, aId, bId);
-            assert!(net.is_path(aId, bId, &mut visited, &mut work_queue));
-            assert!(!net.is_path(bId, aId, visited, work_queue));
-            assert!(!net.is_path(aId, cId, visited, work_queue));
-            assert!(!net.is_path(aId, dId, visited, work_queue));
+            net.apply_operation(Operation::Insert, a_id, b_id);
+            assert!(net.is_path(a_id, b_id, &mut visited, &mut work_queue));
+            assert!(!net.is_path(b_id, a_id, &mut visited, &mut work_queue));
+            assert!(!net.is_path(a_id, c_id, &mut visited, &mut work_queue));
+            assert!(!net.is_path(a_id, d_id, &mut visited, &mut work_queue));
             assert!(!net.is_cycle());
 
-            net.apply_operation(Operation::Insert, bId, cId);
-            net.apply_operation(Operation::Insert, aId, cId);
-            net.apply_operation(Operation::Insert, dId, aId);
+            net.apply_operation(Operation::Insert, b_id, c_id);
+            net.apply_operation(Operation::Insert, a_id, c_id);
+            net.apply_operation(Operation::Insert, d_id, a_id);
             assert!(!net.is_cycle());
-            net.apply_operation(Operation::Insert, cId, dId);
+            net.apply_operation(Operation::Insert, c_id, d_id);
             assert!(net.is_cycle());
-            net.apply_operation(Operation::Reverse, cId, dId);
+            net.apply_operation(Operation::Reverse, c_id, d_id);
             assert!(!net.is_cycle());
-            net.apply_operation(Operation::Reverse, dId, cId);
+            net.apply_operation(Operation::Reverse, d_id, c_id);
             assert!(net.is_cycle());
-            assert!(net.is_path(aId, dId, &mut visited, &mut work_queue));
-            net.apply_operation(Operation::Removew, cId, dId);
-            assert!(!net.is_path(aId, dId, &mut visited, &mut work_queue));
+            assert!(net.is_path(a_id, d_id, &mut visited, &mut work_queue));
+            net.apply_operation(Operation::Remove, c_id, d_id);
+            assert!(!net.is_path(a_id, d_id, &mut visited, &mut work_queue));
 
-            let ancestor = Vec::with_capacity(num_node);
-            ancestor.fill(false);
-            let status = net.find_ancestors(cId, &mut ancestor, &mut work_queue);
-            assert!(status);
-            assert!(ancestor.get(aId).unwrap());
-            assert!(ancestor.get(bId).unwrap());
-            assert!(ancestor.get(dId).unwrap());
-            assert!(ancestor.filter(|x| x).len() == 3);
+            // let ancestor = Vec::with_capacity(num_node);
+            // ancestor.fill(false);
+            let ancestor = net.find_ancestors(c_id, /*&mut ancestor,*/ &mut work_queue);
+            assert!(ancestor.is_some());
+            assert!(ancestor.unwrap().get(a_id).unwrap());
+            assert!(ancestor.unwrap().get(b_id).unwrap());
+            assert!(ancestor.unwrap().get(d_id).unwrap());
+            assert!(ancestor.unwrap().len() == 3);
 
-            let descendant = Vec::with_capacity(num_node);
-            descendant.fill(false);
-            let status = net.find_descendants(aId, &mut descendant, &mut work_queue);
-            assert!(status);
-            assert!(descendant.get(bId).unwrap());
-            assert!(descendant.get(cId).unwrap());
-            assert!(descendant.filter(|x| x).len() == 2);
+            // let descendant = Vec::with_capacity(num_node);
+            // descendant.fill(false);
+            let descendant = net.find_descendants(a_id, /*&mut descendant,*/ &mut work_queue);
+            assert!(descendant.is_some());
+            assert!(descendant.unwrap().get(b_id).unwrap());
+            assert!(descendant.unwrap().get(c_id).unwrap());
+            assert!(descendant.unwrap().len() == 2);
         }
         {
-            let random = Random::new();
+            let random = rand::rngs::StdRng::seed_from_u64(0);
             let net = Net::new(num_node);
             net.generate_random_edges(10, 10, &random);
         }
