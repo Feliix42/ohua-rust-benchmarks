@@ -1,11 +1,12 @@
 use super::DecodedPacket;
 use crate::Packet;
-use stm::{StmResult, Transaction};
+use stm::{StmResult, Transaction, TVar};
 use stm_datastructures::THashMap;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct StmDecoderState {
-    pub fragments_map: THashMap<usize, Vec<Packet>>,
+    pub fragments_map: THashMap<usize, TVar<Vec<Packet>>>,
 }
 
 impl StmDecoderState {
@@ -27,34 +28,48 @@ pub fn decode_packet(
     if packet.packets_in_flow != 1 {
         // get the matching TVar (== bucket) and read it
         let bucket = state.fragments_map.get_bucket(&packet.flow_id);
-        let mut frags = bucket.read(transaction)?;
-        // this is part of a fragmented flow
-        let decoded = frags.entry(packet.flow_id).or_insert(Vec::new());
+        let frags = bucket.read_ref_atomic().downcast::<HashMap<usize, TVar<Vec<Packet>>>>().unwrap();
 
-        // insert the current element into the queue
-        let idx = decoded
-            .iter()
-            .position(|p| packet.fragment_id < p.fragment_id)
-            .unwrap_or(decoded.len());
-        decoded.insert(idx, packet.clone());
+        if let Some(decoded_tv) = frags.get(&packet.flow_id) {
+            // we already have some packets with that ID
 
-        // reassemble the flow if all fragments are present
-        if decoded.len() == decoded[0].packets_in_flow {
-            let flow_id = decoded[0].flow_id;
-            let reconstructed_data = decoded
-                .drain(..)
-                .fold(String::new(), |acc, p| acc + &p.data);
+            let mut decoded = decoded_tv.read(transaction)?;
+            // insert the current element into the queue
+            let idx = decoded
+                .iter()
+                .position(|p| packet.fragment_id < p.fragment_id)
+                .unwrap_or(decoded.len());
+            decoded.insert(idx, packet.to_owned());
 
-            // remove the flow from the hashmap & write that back
-            assert!(frags.remove(&flow_id).is_some());
-            bucket.write(transaction, frags)?;
+            // reassemble the flow if all fragments are present
+            if decoded.len() == decoded[0].packets_in_flow {
+                let flow_id = decoded[0].flow_id;
+                let reconstructed_data = decoded
+                    .into_iter()
+                    .fold(String::new(), |acc, p| acc + &p.data);
 
-            Ok(Some(DecodedPacket {
-                flow_id,
-                data: reconstructed_data,
-            }))
+                // remove the flow from the hashmap & write that back
+                bucket.modify(transaction, |mut hm| { let _ = hm.remove(&flow_id); hm })?;
+
+                Ok(Some(DecodedPacket {
+                    flow_id,
+                    data: reconstructed_data,
+                }))
+            } else {
+                decoded_tv.write(transaction, decoded)?;
+                Ok(None)
+            }
         } else {
-            bucket.write(transaction, frags)?;
+            // This is the first Item in the flow we see
+            let flow_id = packet.flow_id;
+            let mut v = Vec::with_capacity(packet.packets_in_flow);
+            v.push(packet.to_owned());
+            let state = TVar::new(v);
+
+            bucket.modify(transaction, |mut hm| { hm.insert(flow_id, state); hm })?;
+
+            // it can by definition never happen that this branch will complete a flow, so that's
+            // it for this one
             Ok(None)
         }
     } else {
