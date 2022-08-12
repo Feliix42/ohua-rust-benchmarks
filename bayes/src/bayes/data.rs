@@ -1,18 +1,18 @@
-use rand::{RngCore, Rng, SeedableRng};
-use std::collections::VecDeque;
 use crate::bayes::net::{Net, NetT};
+use rand::{Rng, RngCore, SeedableRng};
+use std::collections::VecDeque;
 
 #[derive(Copy, Debug, Clone)]
 enum DataConfig {
     Precision,
-    Init
+    Init,
 }
 
 impl DataConfig {
     fn val(self) -> usize {
         match self {
             DataConfig::Precision => 100,
-            DataConfig::Init => 2
+            DataConfig::Init => 2,
         }
     }
 }
@@ -25,7 +25,7 @@ pub(crate) struct Data<T: RngCore + SeedableRng> {
     pub(crate) random: T,
 }
 
-pub(crate) trait DataT<T:RngCore + SeedableRng> {
+pub(crate) trait DataT<T: RngCore + SeedableRng> {
     fn new(num_var: usize, num_record: usize, random: T) -> Self;
 
     fn generate(&mut self, seed: Option<u64>, max_num_parent: usize, percent_parent: usize) -> Net;
@@ -37,8 +37,7 @@ pub(crate) trait DataT<T:RngCore + SeedableRng> {
     fn find_split(&self, start: usize, num: usize, offset: usize) -> usize;
 }
 
-impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
-    
+impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
     fn new(num_var: usize, num_record: usize, random: T) -> Self {
         let mut records = Vec::with_capacity(num_record);
         for _ in 0..num_record {
@@ -48,10 +47,10 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
         }
 
         Data {
-            num_var, 
-            num_record, 
+            num_var,
+            num_record,
             records,
-            random
+            random,
         }
     }
 
@@ -66,8 +65,8 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
         match seed {
             Some(s) => {
                 self.random = <T as SeedableRng>::seed_from_u64(s);
-            },
-            None => ()
+            }
+            None => (),
         }
 
         /*
@@ -106,19 +105,22 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
         let mut dependency_vector = Vec::with_capacity(1);
 
         let mut ordered_bitmap = Vec::with_capacity(self.num_var);
-        for _ in 0..self.num_var { ordered_bitmap.push(false) }
+        for _ in 0..self.num_var {
+            ordered_bitmap.push(false)
+        }
 
         let mut done_bitmap = Vec::with_capacity(self.num_var);
-        for _ in 0..self.num_var { done_bitmap.push(false) }
-    
+        for _ in 0..self.num_var {
+            done_bitmap.push(false)
+        }
+
         while let Some(v) = done_bitmap.iter().position(|x| !x) {
             let child_id_list = net.get_child_id_list(v);
             if child_id_list.len() == 0 {
-    
                 /*
                  * Use breadth-first search to find net connected to this leaf
                  */
-    
+
                 work_queue.clear();
                 work_queue.push_back(v);
                 while let Some(id) = work_queue.pop_front() {
@@ -129,11 +131,11 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
                         work_queue.push_back(*parent_id);
                     }
                 }
-    
+
                 /*
                  * Create ordering
                  */
-    
+
                 for id in dependency_vector.drain(..).rev() {
                     if !ordered_bitmap[id] {
                         ordered_bitmap[id] = true;
@@ -141,7 +143,6 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
                         num_order = num_order + 1;
                     }
                 }
-    
             }
         }
         assert!(num_order == self.num_var);
@@ -149,7 +150,7 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
         /*
          * Create records
          */
-    
+
         for r in 0..self.num_record {
             for record in self.records {
                 for o in 0..num_order {
@@ -160,8 +161,8 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
                         let value = self.records[*parent_id];
                         // assert!(value != DataConfig::Init);
                         index = index << 1; // + value.val();
-                        // I (Sebastian) am not positive whether the 
-                        // above shifting code still works as expected.
+                                            // I (Sebastian) am not positive whether the
+                                            // above shifting code still works as expected.
                     }
                     let rnd = self.random.gen::<usize>() % DataConfig::Precision.val();
                     let threshold = thresholds_table[v][index];
@@ -173,7 +174,7 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
         net
     }
 
-    fn get_record (&self, index:usize) -> Option<&Vec<usize>> {
+    fn get_record(&self, index: usize) -> Option<&Vec<usize>> {
         self.records.get(index)
     }
 
@@ -202,7 +203,6 @@ impl <T:RngCore + SeedableRng> DataT<T> for Data<T> {
 
         low - start
     }
-
 }
 
 // TODO port the test cases
