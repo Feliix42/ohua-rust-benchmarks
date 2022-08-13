@@ -20,6 +20,9 @@ ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional
 ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
 tokio = { version = "0.2", features = ["full"], optional = true }
 
+itertools = "0.10"
+
+jemallocator = "0.5.0"
 
 [features]
 cli = ["time", "clap", "cpu-time"]
