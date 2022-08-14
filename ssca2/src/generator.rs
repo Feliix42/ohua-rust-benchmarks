@@ -13,6 +13,8 @@ pub struct GraphSDG {
 
     pub str_weight: Vec<u8>,
     pub num_edges_placed: usize,
+
+    pub max_cluster_size: usize,
 }
 
 impl GraphSDG {
@@ -108,7 +110,8 @@ impl GraphSDG {
         let mut end_v: Vec<usize> = vec![0; estimated_total_edges];
 
         // tmp array to keep track of the no. of parallel edges in each direction
-        let mut tmp_edge_counter: Vec<Vec<usize>> = vec![vec![0; parameters.max_clique_size]; parameters.max_clique_size];
+        let mut tmp_edge_counter: Vec<Vec<usize>> =
+            vec![vec![0; parameters.max_clique_size]; parameters.max_clique_size];
 
         // create edges
         let mut i_edge_ptr = 0;
@@ -150,7 +153,8 @@ impl GraphSDG {
 
             // add a random number of edges
             if i_clique_size != 1 {
-                let random_no_edges = rng.next_u32() as usize % (2 * i_clique_size * parameters.max_parallel_edges);
+                let random_no_edges =
+                    rng.next_u32() as usize % (2 * i_clique_size * parameters.max_parallel_edges);
 
                 for _ in 0..random_no_edges {
                     let i = rng.next_u32() as usize % i_clique_size;
@@ -184,8 +188,8 @@ impl GraphSDG {
         let mut end_vertex: Vec<usize>;
 
         if parameters.scale < 10 {
-            start_vertex = vec![0; 2*edge_number];
-            end_vertex = vec![0; 2*edge_number];
+            start_vertex = vec![0; 2 * edge_number];
+            end_vertex = vec![0; 2 * edge_number];
         } else {
             let count = edge_number + parameters.max_parallel_edges + parameters.total_vertices;
             start_vertex = vec![0; count];
@@ -285,7 +289,8 @@ impl GraphSDG {
                     let t2 = first_vs_in_cliques[t.unwrap()];
 
                     if t1 != t2 {
-                        let random_no_edges = rng.next_u32() as usize % parameters.max_parallel_edges + 1;
+                        let random_no_edges =
+                            rng.next_u32() as usize % parameters.max_parallel_edges + 1;
 
                         for _ in 0..random_no_edges {
                             start_v[i_edge_ptr] = tmp_vertex1;
@@ -299,7 +304,7 @@ impl GraphSDG {
 
                 let diff: isize = i as isize - d as isize;
                 if r0 <= p && diff >= 0 {
-                    let tmp_vertex2 = ((i-d) % parameters.total_vertices) as usize;
+                    let tmp_vertex2 = ((i - d) % parameters.total_vertices) as usize;
 
                     h = total_cliques;
                     l = 0;
@@ -335,7 +340,8 @@ impl GraphSDG {
                     let t2 = first_vs_in_cliques[t.unwrap()];
 
                     if t1 != t2 {
-                        let random_no_edges = rng.next_u32() as usize % parameters.max_parallel_edges + 1;
+                        let random_no_edges =
+                            rng.next_u32() as usize % parameters.max_parallel_edges + 1;
 
                         for _ in 0..random_no_edges {
                             start_v[i_edge_ptr] = tmp_vertex1;
@@ -344,7 +350,7 @@ impl GraphSDG {
                         }
                     }
                 } // r0 <= p && (i - d) > 0
-                
+
                 d *= 2;
                 p /= 2_f32;
             } // for d, p
@@ -357,15 +363,17 @@ impl GraphSDG {
         let num_edges_placed_outside = edge_number;
 
         for i in i_edge_start_counter..i_edge_end_counter {
-            start_vertex[i+num_edges_placed_in_cliques] = start_v[i - i_edge_start_counter];
+            start_vertex[i + num_edges_placed_in_cliques] = start_v[i - i_edge_start_counter];
             end_vertex[i + num_edges_placed_in_cliques] = end_v[i - i_edge_start_counter];
         }
 
         let num_edges_placed = num_edges_placed_in_cliques + num_edges_placed_outside;
-        // TODO: ASSIGN to num_edges_placed
 
         println!("Finished generating edges");
-        println!("No. of intra-clique edges - {}", num_edges_placed_in_cliques);
+        println!(
+            "No. of intra-clique edges - {}",
+            num_edges_placed_in_cliques
+        );
         println!("No. of inter-clique edges - {}", num_edges_placed_outside);
         println!("Total no. of edges        - {}", num_edges_placed);
 
@@ -381,29 +389,32 @@ impl GraphSDG {
         p = parameters.percent_int_weights;
         let mut num_str_wt_edges = 0;
 
-        let mut int_weight: Vec<i64> = (0..num_edges_placed).map(|_| {
-            let r = (rng.next_u32() % 1000) as f32 / 1000_f32;
-            if r <= p {
-                (1 + rng.next_u32() as usize % (parameters.max_int_weight - 1)) as i64
-            } else {
-                num_str_wt_edges += 1;
-                -1
-            }
-        }).collect();
+        let mut int_weight: Vec<i64> = (0..num_edges_placed)
+            .map(|_| {
+                let r = (rng.next_u32() % 1000) as f32 / 1000_f32;
+                if r <= p {
+                    (1 + rng.next_u32() as usize % (parameters.max_int_weight - 1)) as i64
+                } else {
+                    num_str_wt_edges += 1;
+                    -1
+                }
+            })
+            .collect();
 
         let mut t = 0;
         for item in int_weight.iter_mut() {
             if item.is_negative() {
                 *item = -t;
                 t += 1;
-            } 
+            }
         }
 
         let mut str_weight: Vec<u8> = vec![0; num_str_wt_edges * parameters.max_str_len];
         for wgt in &int_weight {
             if wgt.is_negative() {
                 for j in 0..parameters.max_str_len {
-                    str_weight[wgt.abs() as usize * parameters.max_str_len + j] = 1 + (rng.next_u32() % 127) as u8;
+                    str_weight[wgt.abs() as usize * parameters.max_str_len + j] =
+                        1 + (rng.next_u32() % 127) as u8;
                 }
             }
         }
@@ -417,12 +428,16 @@ impl GraphSDG {
             sought_string.reserve(parameters.max_str_len);
 
             let t = rng.next_u32() as usize % num_str_wt_edges;
-            sought_string.extend((0..parameters.max_str_len).map(|j| char::from(str_weight[t * parameters.max_str_len + j])).collect::<Vec<char>>());
+            sought_string.extend(
+                (0..parameters.max_str_len)
+                    .map(|j| char::from(str_weight[t * parameters.max_str_len + j]))
+                    .collect::<Vec<char>>(),
+            );
         }
 
         // STEP 5: Permute Vertices
         // --------------------------------------------------------------------
-        
+
         for i in 0..num_edges_placed {
             start_vertex[i] = perm_v[start_vertex[i]];
             end_vertex[i] = perm_v[end_vertex[i]];
@@ -433,8 +448,11 @@ impl GraphSDG {
 
         // radix sort with start vertex as primary key
         // NOTE(feliix42): I'm not 100% certain this is implemented correctly here
-        let mut zipped: Vec<(usize, usize)> = start_vertex.into_iter().zip(end_vertex.into_iter()).collect();
-        zipped.sort_unstable_by_key(|(x,_)| *x);
+        let mut zipped: Vec<(usize, usize)> = start_vertex
+            .into_iter()
+            .zip(end_vertex.into_iter())
+            .collect();
+        zipped.sort_unstable_by_key(|(x, _)| *x);
         let (start_vert, mut end_vert): (Vec<usize>, Vec<usize>) = zipped.into_iter().unzip();
 
         if parameters.scale < 12 {
@@ -454,7 +472,7 @@ impl GraphSDG {
                 }
 
                 for j in i0..i1 {
-                    for k in (j+1)..i1 {
+                    for k in (j + 1)..i1 {
                         if end_vert[k] < end_vert[j] {
                             end_vert.swap(j, k);
                         }
@@ -465,7 +483,7 @@ impl GraphSDG {
                     i0 = i1;
                 } else {
                     for j in i0..num_edges_placed {
-                        for k in (j+1)..num_edges_placed {
+                        for k in (j + 1)..num_edges_placed {
                             if end_vert[k] < end_vert[j] {
                                 end_vert.swap(j, k);
                             }
@@ -480,11 +498,11 @@ impl GraphSDG {
 
             let mut i0 = 0;
             for i in 0..parameters.total_vertices {
-                tmp_index[i+1] = tmp_index[i];
+                tmp_index[i + 1] = tmp_index[i];
                 for j in i0..num_edges_placed {
                     if start_vert[j] != start_vert[i0] {
                         if start_vert[i0] == i {
-                            tmp_index[i+1] = j;
+                            tmp_index[i + 1] = j;
                             i0 = j;
                             break;
                         }
@@ -494,8 +512,8 @@ impl GraphSDG {
 
             // original comment: "Insertion sort for now, replace with something better later on"
             for i in 0..parameters.total_vertices {
-                for j in tmp_index[i]..tmp_index[i+1] {
-                    for k in (j+1)..tmp_index[i+1] {
+                for j in tmp_index[i]..tmp_index[i + 1] {
+                    for k in (j + 1)..tmp_index[i + 1] {
                         if end_vert[k] < end_vert[j] {
                             end_vert.swap(j, k);
                         }
@@ -510,17 +528,9 @@ impl GraphSDG {
 
             int_weight,
             str_weight,
-            num_edges_placed: num_edges_placed,
+            num_edges_placed,
+
+            max_cluster_size: parameters.max_cluster_size,
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
