@@ -191,7 +191,7 @@ impl GraphSDG {
             start_vertex = vec![0; 2 * edge_number];
             end_vertex = vec![0; 2 * edge_number];
         } else {
-            let count = edge_number + parameters.max_parallel_edges + parameters.total_vertices;
+            let count = edge_number + parameters.max_parallel_edges * parameters.total_vertices;
             start_vertex = vec![0; count];
             end_vertex = vec![0; count];
         }
@@ -363,6 +363,11 @@ impl GraphSDG {
         let num_edges_placed_outside = edge_number;
 
         for i in i_edge_start_counter..i_edge_end_counter {
+            if (i+num_edges_placed_in_cliques) >= start_vertex.len() {
+                println!("[warn] reached the end of `start_vertex`!");
+                println!("    Still want to place {} more elements", i_edge_end_counter - i -1);
+                println!("    Size of `start_vertex`: {} elements", start_vertex.len());
+            }
             start_vertex[i + num_edges_placed_in_cliques] = start_v[i - i_edge_start_counter];
             end_vertex[i + num_edges_placed_in_cliques] = end_v[i - i_edge_start_counter];
         }
