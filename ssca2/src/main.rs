@@ -1,7 +1,11 @@
-use ssca2::parameters::Parameters;
+use crate::parameters::Parameters;
 use clap::Parser;
-use ssca2::generator::GraphSDG;
-use ssca2::graph::Graph;
+use crate::generator::GraphSDG;
+use crate::graph::Graph;
+
+mod graph;
+mod generator;
+mod parameters;
 
 fn main() {
     let mut params = Parameters::parse();

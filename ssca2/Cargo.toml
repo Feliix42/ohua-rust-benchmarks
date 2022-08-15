@@ -1,5 +1,5 @@
 [package]
-name = "ssca2"
+name = "ssca2-seq"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,6 +12,3 @@ clap = { version = "3.2", features = [ "derive" ] }
 rand_chacha = "0.3"
 rand_core = "0.6"
 
-[[bin]]
-name = "sequential"
-path = "src/bin/seq.rs"
