@@ -98,6 +98,8 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
+    \"application\": \"labyrinth\",
+    \"algorithm\": \"sequential\",
     \"configuration\": \"{conf}\",
     \"paths\": {paths},
     \"threads\": 1,
