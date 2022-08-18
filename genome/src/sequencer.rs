@@ -1,7 +1,7 @@
 use crate::segments::Segments;
 use crate::Nucleotide;
+use itertools::Itertools;
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
@@ -24,13 +24,12 @@ impl From<Vec<Nucleotide>> for SequencerItem {
     }
 }
 
-pub fn run_sequencer(mut segments: Segments) -> Vec<Nucleotide> {
+pub fn run_sequencer(segments: Segments) -> Vec<Nucleotide> {
     // Step 1: deduplicate all segments
-    let mut tmp: HashSet<Vec<Nucleotide>> = segments.contents.drain(..).collect();
-
-    // TODO: Isn't that super ineffective? :thinking:
-    let mut unique_segments: VecDeque<Rc<RefCell<SequencerItem>>> = tmp
-        .drain()
+    let mut unique_segments: VecDeque<Rc<RefCell<SequencerItem>>> = segments
+        .contents
+        .into_iter()
+        .unique() // itertools magic for deduplication: fast because of the enums representation in memory as u8
         .map(SequencerItem::from)
         .map(RefCell::new)
         .map(Rc::new)

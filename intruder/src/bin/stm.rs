@@ -210,7 +210,7 @@ fn analyze_stream(mut packets: VecDeque<Packet>, decoder_state: StmDecoderState)
     //         }
     //     });
 
-    for p in packets.drain(..) {
+    for p in packets {
         // if let Some(p) = packet {
         // do the algorithm
         let decoder_result = atomically(|trans2| decode_packet(&p, &decoder_state, trans2));

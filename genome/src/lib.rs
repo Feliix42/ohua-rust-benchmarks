@@ -13,7 +13,8 @@ pub mod stm_sequencer;
 #[cfg(feature = "ohua")]
 pub mod ohua_sequencer;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[repr(u8)]
 pub enum Nucleotide {
     Adenine,
     Cytosine,

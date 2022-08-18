@@ -1,3 +1,6 @@
+#[global_allocator]
+static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 use clap::{App, Arg};
 use genome::gene::Gene;
 use genome::segments::Segments;

@@ -9,8 +9,6 @@ pub struct Segments {
     pub orig_gene_length: usize,
     pub minimal_segmentcount: usize,
     pub contents: Vec<Vec<Nucleotide>>,
-    // TODO: Maybe eliminate `strings` altogether?
-    strings: Vec<Vec<Nucleotide>>,
 }
 
 impl Segments {
@@ -21,7 +19,6 @@ impl Segments {
         rng: &mut ChaCha12Rng,
     ) -> Self {
         let mut cont = Vec::with_capacity(minimal_count);
-        let mut strings = Vec::with_capacity(length);
 
         let start_number = gene.length - length + 1;
 
@@ -30,7 +27,6 @@ impl Segments {
             let j = rng.gen_range(0, start_number);
             gene.bitmap.set_bit(j);
             let slice = &gene.contents[j..(j + length)];
-            strings.push(slice.to_owned());
             cont.push(slice.to_owned());
         }
 
@@ -65,7 +61,6 @@ impl Segments {
             minimal_segmentcount: minimal_count,
             orig_gene_length: gene.length,
             contents: cont,
-            strings,
         }
     }
 }
