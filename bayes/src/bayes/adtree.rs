@@ -23,12 +23,12 @@ struct Vary {
 }
 
 pub struct AdTree {
-    num_var: usize,
-    num_record: usize,
+    pub(crate) num_var: usize,
+    pub(crate) num_record: usize,
     root: RootNode,
 }
 
-trait AdTreeT {
+pub(crate) trait AdTreeT {
     fn new(num_var: usize, num_record: usize, root: RootNode) -> Self;
 
     /* =============================================================================
