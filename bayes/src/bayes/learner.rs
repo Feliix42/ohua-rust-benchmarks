@@ -11,23 +11,25 @@ struct Task {
     op: Operation,
     from_id: usize,
     to_id: usize,
-    score: f32,
+    score: f64,
 }
 
 pub(crate) struct Learner {
     ad_tree: AdTree,
     net: Net,
-    local_base_log_likelihoods: Vec<f32>,
-    base_log_likelihood: f32,
+    local_base_log_likelihoods: Vec<f64>,
+    base_log_likelihood: f64,
     tasks: Vec<Task>,
     num_total_parent: u64,
+    global_insert_penalty: u64,
+    global_max_num_edge_learned: Option<u64>
 }
 
 trait LearnerT {
     fn new<T: RngCore + SeedableRng>(data: &Data<T>, ad_tree: AdTree, num_thread: usize)
         -> Learner;
     fn run(&mut self);
-    fn score(&self) -> f32;
+    fn score(&self) -> f64;
 }
 
 // enum Cmp { Eq(i64), Gt, Lt }
@@ -109,7 +111,7 @@ impl Learner {
          */
 
         for v in v_start..v_stop {
-            let mut local_base_log_likelihood = 0.0;
+            let mut local_base_log_likelihood:f64 = 0.0;
             queries.push(Query::new(v, Val::Zero));
             local_base_log_likelihood +=
                 compute_specific_local_log_likelihood(&self.ad_tree, &queries, &parent_queries);
@@ -264,7 +266,7 @@ impl Learner {
      * threads.
      * =============================================================================
      */
-    fn learn_structure(&mut self, global_operation_quality_factor: f32) {
+    fn learn_structure(&mut self, global_operation_quality_factor: f64) {
         // TM_THREAD_ENTER();
 
         //net_t* netPtr = learnerPtr->netPtr;
@@ -284,7 +286,7 @@ impl Learner {
             queries.push(Query::new(v, Val::WildCard));
         }
 
-        let base_penalty: f32 = -0.5 * (self.ad_tree.num_record as f32).ln();
+        let base_penalty: f64 = -0.5 * (self.ad_tree.num_record as f64).ln();
 
         // vector_t* queryVectorPtr = PVECTOR_ALLOC(1);
         // assert(queryVectorPtr);
@@ -364,7 +366,7 @@ impl Learner {
                             to_id,
                             &self.ad_tree,
                             &self.net,
-                            &queries0,
+                            &mut queries0,
                             &parent_queries,
                         );
                         let to_local_base_log_likelihood = self.local_base_log_likelihoods[to_id];
@@ -383,7 +385,7 @@ impl Learner {
                             from_id,
                             &self.ad_tree,
                             &self.net,
-                            &queries0,
+                            &mut queries0,
                             &parent_queries,
                         );
                         let from_local_base_log_likelihood =
@@ -403,7 +405,7 @@ impl Learner {
                             from_id,
                             &self.ad_tree,
                             &self.net,
-                            &queries0,
+                            &mut queries0,
                             &parent_queries,
                         );
                         let from_local_base_log_likelihood =
@@ -418,7 +420,7 @@ impl Learner {
                             to_id,
                             &self.ad_tree,
                             &self.net,
-                            &queries0,
+                            &mut queries0,
                             &parent_queries,
                         );
                         let to_local_base_log_likelihood = self.local_base_log_likelihoods[to_id];
@@ -445,19 +447,23 @@ impl Learner {
              */
 
             let base_score =
-                (num_total_parent * base_penalty) + (self.ad_tree.num_record * base_log_likelihood);
+                ((num_total_parent as f64) * base_penalty) 
+                + ((self.ad_tree.num_record as f64) * base_log_likelihood);
 
             let new_task = self.find_best_insert_task(
                 &queries,
                 &queries0,
-                &parent_queries,
-                &visited_bitmap,
+                //&parent_queries,
+                num_total_parent,
+                base_penalty,
+                base_log_likelihood,
+                &mut visited,
                 &work_queue,
-                &a_query_vector,
-                &b_query_vector,
+               // &a_query_vector,
+               // &b_query_vector,
             );
 
-            let best_task = if (new_task.from_id != new_task.toId)
+            let best_task = if (new_task.from_id != new_task.to_id)
                 && (new_task.score > (base_score / global_operation_quality_factor))
             {
                 Some(new_task)
@@ -507,10 +513,10 @@ impl Learner {
         mut queries0: &mut Vec<Query>,
         //    parent_queries : &Vec<Query>,
         num_total_parent: usize,
-        base_penalty: f32,
-        base_log_likelihood: f32,
+        base_penalty: f64,
+        base_log_likelihood: f64,
         mut invalid_bitmap: &mut Vec<bool>,
-        work_queue: &Vec<Task>,
+        work_queue: &mut VecDeque<Task>,
         //    base_parent_queries : &Vec<Query>,
         //    base_queries :  &Vec<Query>
     ) -> Task {
@@ -533,20 +539,24 @@ impl Learner {
         let old_local_log_likelihood = self.local_base_log_likelihoods[to_id];
         let best_local_log_likelihood = old_local_log_likelihood;
 
-        self.net.find_desendants(&to_id, invalid_bitmap, work_queue);
-        let mut from_id = -1;
+        self.net.find_descendants(to_id, work_queue);
 
         let parent_id_list = self.net.get_parent_id_list(to_id);
 
         let max_num_edge_learned = self.global_max_num_edge_learned;
 
-        if (max_num_edge_learned < 0) || (parent_id_list.size() <= max_num_edge_learned) {
+        let r = match max_num_edge_learned {
+                    Some(m) => (parent_id_list.len() as u64) <= m,
+                    None => true
+                };
+
+        if r {
             for parent_id in parent_id_list {
                 invalid_bitmap[parent_id] = true;
             }
 
-            let from_id = invalid_bitmap.first(|a| !a);
-            while from_id >= 0 {
+            // FIXME this is an endless loop because nobody changes `invalid_bitmap`!
+            while let Some(from_id) = invalid_bitmap.iter().position(|a| !a) {
                 //        while ((fromId = bitmap_findClear(invalidBitmapPtr, (fromId + 1))) >= 0) {
 
                 if from_id == to_id {
@@ -561,10 +571,10 @@ impl Learner {
 
                     let new_local_log_likelihood = compute_local_log_likelihood(
                         to_id,
-                        &self.adtree,
+                        &self.ad_tree,
                         &self.net,
-                        &queries,
-                        &queries0,
+                        //&queries,
+                        &mut queries0,
                         &parent_queries,
                     );
 
@@ -573,7 +583,6 @@ impl Learner {
                         best_from_id = from_id;
                     }
 
-                    from_id = invalid_bitmap.first(|a| !a);
                 }
             } /* foreach valid parent */
         } /* if have not exceeded max number of edges to learn */
@@ -590,10 +599,10 @@ impl Learner {
         };
 
         if best_from_id != to_id {
-            let num_record = self.ad_tree.num_record;
-            let num_parent = parent_id_list.size() + 1;
+            let num_record = self.ad_tree.num_record as f64;
+            let num_parent = (parent_id_list.len() + 1) as f64;
             let penalty =
-                (num_total_parent + num_parent * self.global_insert_penalty) * base_penalty;
+                ((num_total_parent as f64) + num_parent * (self.global_insert_penalty as f64)) * base_penalty;
             let log_likelihood = num_record
                 * (base_log_likelihood + best_local_log_likelihood - old_local_log_likelihood);
             let best_score = penalty + log_likelihood;
@@ -613,6 +622,8 @@ impl LearnerT for Learner {
             base_log_likelihood: 0.0,
             tasks: Vec::with_capacity(data.num_var),
             num_total_parent: 0,
+            global_insert_penalty: 1, // default
+            global_max_num_edge_learned: None // default: -1L
         }
     }
 
@@ -636,13 +647,13 @@ impl LearnerT for Learner {
      * -- Score entire network
      * =============================================================================
      */
-    fn score(&self) -> f32 {
+    fn score(&self) -> f64 {
         //vector_t* queryVectorPtr = vector_alloc(1);
         //assert(queryVectorPtr);
         //vector_t* parentQueryVectorPtr = vector_alloc(1);
         //assert(parentQueryVectorPtr);
         let mut queries = Vec::with_capacity(1);
-        let mut parent_queries = Vec::with_capacity(1);
+        //let mut parent_queries = Vec::with_capacity(1);
 
         //long numVar = adtreePtr->numVar;
         //query_t* queries = (query_t*)malloc(numVar * sizeof(query_t));
@@ -652,33 +663,32 @@ impl LearnerT for Learner {
             queries.push(Query::new(v, Val::WildCard));
         }
 
-        let mut num_total_parent = 0;
+        let mut num_total_parent = 0.0;
         let mut log_likelihood = 0.0;
 
         for v in 0..(self.ad_tree.num_var) {
             let parent_id_list = self.net.get_parent_id_list(v);
-            num_total_parent += parent_id_list.len();
+            num_total_parent += parent_id_list.len() as f64;
 
-            populate_query_vectors(
+            let parent_queries = populate_query_vectors(
                 &self.net,
                 v,
                 //queries,
                 &queries,
-                &parent_queries,
             );
             let local_log_likelihood = compute_local_log_likelihood(
                 v,
                 &self.ad_tree,
                 &self.net,
                 //queries,
-                &queries,
+                &mut queries,
                 &parent_queries,
             );
             log_likelihood += local_log_likelihood;
         }
 
-        let num_record = self.ad_tree.num_record;
-        let penalty = -0.5 * num_total_parent * (num_record as f64).ln(); //(float)(-0.5 * (double)numTotalParent * log((double)numRecord));
+        let num_record = self.ad_tree.num_record as f64;
+        let penalty = -0.5 * num_total_parent * num_record.ln(); //(float)(-0.5 * (double)numTotalParent * log((double)numRecord));
         let score = penalty + num_record * log_likelihood;
 
         score
@@ -689,30 +699,30 @@ fn compute_specific_local_log_likelihood(
     ad_tree: &AdTree,
     queries: &Vec<Query>,
     parent_queries: &Vec<Query>,
-) -> f32 {
+) -> f64 {
     let count = ad_tree.get_count(queries);
     if count == 0 {
         0.0
     } else {
-        let probability = count / ad_tree.num_record;
+        let probability = (count / ad_tree.num_record) as f64;
         let parent_count = ad_tree.get_count(parent_queries);
 
         assert!(parent_count >= count);
         assert!(parent_count > 0);
 
-        probability * (count / parent_count).ln()
+        probability * ((count / parent_count) as f64).ln()
     }
 }
 
 fn create_partition(min: usize, max: usize, id: usize, n: usize) -> (usize, usize) {
     let range = max - min;
-    let chunk = max(1, (range + n / 2) / n); /* rounded */
+    let chunk = 1.max((range + n / 2) / n); /* rounded */
     let start = min + chunk * id;
     let stop;
     if id == (n - 1) {
         stop = max;
     } else {
-        stop = min(max, start + chunk);
+        stop = max.min(start + chunk);
     }
 
     (start, stop)
@@ -730,7 +740,7 @@ fn compute_local_log_likelihood_helper(
     //query_t* queries,
     queries: &mut Vec<Query>,
     parent_queries: &Vec<Query>,
-) -> f32 {
+) -> f64 {
     match parent_queries.get(i) {
         None => compute_specific_local_log_likelihood(&ad_tree, &queries, &parent_queries),
         Some(parent_query) => {
@@ -739,15 +749,15 @@ fn compute_local_log_likelihood_helper(
                 let mut q = queries
                     .get_mut(parent_query.index)
                     .expect("invariant broken");
-                q.value = 0;
+                q.val = Val::Zero;
             }
             let local_log_likelihood = compute_local_log_likelihood_helper(
                 i + 1,
-                parent_queries.len(), //numParent,
-                &ad_tree,
+                //parent_queries.len(), //numParent,
+                ad_tree,
                 //queries,
-                &queries,
-                //&parent_queries,
+                queries,
+                parent_queries,
             );
 
             //queries[parentIndex].value = 1;
@@ -755,18 +765,18 @@ fn compute_local_log_likelihood_helper(
                 let mut q = queries
                     .get_mut(parent_query.index)
                     .expect("invariant broken");
-                q.value = 1;
+                q.val = Val::One;
             }
             local_log_likelihood += compute_local_log_likelihood_helper(
                 i + 1,
-                parent_queries.len(), //numParent,
-                &ad_tree,
+                //parent_queries.len(), //numParent,
+                ad_tree,
                 //queries,
-                &queries,
-                //&parent_queries,
+                queries,
+                parent_queries,
             );
 
-            queries[parent_query.index].value = Val::WildCard;
+            queries[parent_query.index].val = Val::WildCard;
 
             local_log_likelihood
         }
@@ -783,9 +793,9 @@ fn compute_local_log_likelihood(
     ad_tree: &AdTree,
     net: &Net,
     // query_t* queries,
-    queries: &Vec<Query>,
+    queries: &mut Vec<Query>,
     parent_queries: &Vec<Query>,
-) -> f32 {
+) -> f64 {
     //long numParent = vector_getSize(parentQueryVectorPtr);
     //float localLogLikelihood = 0.0;
 
@@ -797,10 +807,10 @@ fn compute_local_log_likelihood(
     let local_log_likelihood = compute_local_log_likelihood_helper(
         0,
         //numParent,
-        &ad_tree,
+        ad_tree,
         //queries,
-        &queries,
-        &parent_queries,
+        queries,
+        parent_queries,
     );
 
     // queries[id].value = 1;
@@ -811,10 +821,10 @@ fn compute_local_log_likelihood(
     local_log_likelihood += compute_local_log_likelihood_helper(
         0,
         //numParent,
-        &ad_tree,
+        ad_tree,
         //queries,
-        &queries,
-        &parent_queries,
+        queries,
+        parent_queries,
     );
 
     // queries[id].value = QUERY_VALUE_WILDCARD;
@@ -836,7 +846,7 @@ fn populate_parent_query_vector(net: &Net, id: usize, queries: &Vec<Query>) -> V
 
     let parent_ids = net.get_parent_id_list(id);
     for parent_id in parent_ids {
-        parent_queries.push(&queries[parent_id]);
+        parent_queries.push(queries[parent_id]);
     }
 
     parent_queries
@@ -849,8 +859,8 @@ fn populate_parent_query_vector(net: &Net, id: usize, queries: &Vec<Query>) -> V
 fn populate_query_vectors(net: &Net, id: usize, queries: &Vec<Query>) -> (Vec<Query>, Vec<Query>) {
     let parent_queries = populate_parent_query_vector(net, id, queries);
     let mut queries0 = parent_queries.clone();
-    queries0.push(&queries[id]);
-    queries0.sort_by(|a, b| a.compare(&b));
+    queries0.push(queries[id]);
+    queries0.sort();
 
     (queries0, parent_queries)
 }
