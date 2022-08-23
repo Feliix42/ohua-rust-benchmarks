@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
 
+use std::borrow::{Borrow, BorrowMut};
+
 #[derive(Clone, PartialEq)]
 pub(crate) enum Val { 
     Zero, 
@@ -42,3 +44,32 @@ impl Ord for Query {
         }
     }
 }
+
+// FIXME I believe these trait dependencies are not needed.
+// Remove them once the learner compiles successfully.
+pub(crate) trait QueryT: Borrow<Self> + BorrowMut<Self> + Ord {
+    fn index(&self) -> usize;
+    fn val(&self) -> Val;
+    fn update_val(&mut self, new_val:Val);
+}
+
+impl QueryT for Query {
+    fn index(&self) -> usize { self.index }
+    fn val(&self) -> Val { self.val }
+    fn update_val(&mut self, new_val:Val) { self.val = new_val;  }
+}
+
+impl QueryT for &mut Query {
+    fn index(&self) -> usize { self.index }
+    fn val(&self) -> Val { self.val }
+    fn update_val(&mut self, new_val:Val) { self.val = new_val;  }
+}
+/*
+impl Deref for Query {
+    type Target = Query;
+
+    fn deref(&self) -> &Query {
+        self
+    }
+}
+*/

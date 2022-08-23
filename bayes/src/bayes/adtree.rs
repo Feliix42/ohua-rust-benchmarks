@@ -1,7 +1,8 @@
 use rand::{RngCore, SeedableRng};
 
 use crate::bayes::data::{Data, DataT};
-use crate::bayes::query::{Query, Val};
+use crate::bayes::query::{Query, QueryT, Val};
+
 
 struct RootNode {
     count: usize,
@@ -43,7 +44,7 @@ pub(crate) trait AdTreeT {
      * -- queryVector must consist of queries sorted by id
      * =============================================================================
      */
-    fn get_count(&self, queries: &Vec<&Query>) -> usize;
+    fn get_count<T: QueryT>(&self, queries: &Vec<T>) -> usize;
 }
 
 impl RootNode {
@@ -60,26 +61,27 @@ impl RootNode {
         RootNode::new(num_record, vary)
     }
 
-    fn get_count(
+    fn get_count<T: QueryT>(
         &self,
         //  i: usize,
         q: usize,
-        queries: &Vec<&Query>,
+        queries: &Vec<T>,
         last_query_index: Option<usize>,
         adtree: &AdTree,
-    ) -> usize {
+    ) -> usize 
+    {
         match last_query_index {
             None => 0,
-            Some(last_query_index0) => match queries.get(q) {
+            Some(last_query_index0) => match queries.get_mut(q) {
                 None => self.count,
-                Some(query) => {
-                    assert!(query.index <= last_query_index0);
+                Some(mut query) => {
+                    assert!(query.borrow().index() <= last_query_index0);
                     let vary0 = self
                         .vary
-                        .get(query.index)
+                        .get(query.borrow().index())
                         .expect("invariant: can find a vary");
 
-                    if query.val == vary0.most_common_value {
+                    if query.val() == vary0.most_common_value {
                         /*
                          * We do not explicitly store the counts for the most common value.
                          * We can calculate it by finding the count of the query without
@@ -88,7 +90,7 @@ impl RootNode {
                          */
                         let num_query = queries.len();
                         let super_count = {
-                            let super_queries = Vec::with_capacity(num_query - 1);
+                            let mut super_queries = Vec::with_capacity(num_query - 1);
 
                             for qq in 0..num_query {
                                 if qq != q {
@@ -101,31 +103,31 @@ impl RootNode {
                             adtree.get_count(&super_queries)
                         };
 
-                        let invert_count = match query.val {
+                        let invert_count = match query.borrow().val() {
                             Val::Zero => {
                                 // FIXME this is no good. it changes the value just for the call below!
-                                query.val = Val::One;
-                                let c = self.get_count(q, &queries, last_query_index, &adtree);
-                                query.val = Val::Zero;
+                                query.update_val(Val::One);
+                                let c = self.get_count(q, queries, last_query_index, adtree);
+                                query.update_val(Val::Zero);
                                 c
                             }
                             _ => {
                                 // FIXME this is no good. it changes the value just for the call below!
-                                query.val = Val::Zero;
-                                let c = self.get_count(q, &queries, last_query_index, &adtree);
-                                query.val = Val::One;
+                                query.update_val(Val::Zero);
+                                let c = self.get_count(q, queries, last_query_index, adtree);
+                                query.update_val(Val::One);
                                 c
                             }
                         };
 
                         super_count - invert_count
                     } else {
-                        match query.val {
+                        match query.borrow().val() {
                             Val::Zero => vary0.zero.map_or(0, |n| {
-                                n.get_count(0, q + 1, &queries, last_query_index, &adtree)
+                                n.get_count(0, q + 1, queries, last_query_index, adtree)
                             }),
                             Val::One => vary0.one.map_or(0, |n| {
-                                n.get_count(0, q + 1, &queries, last_query_index, &adtree)
+                                n.get_count(0, q + 1, queries, last_query_index, adtree)
                             }),
                             Val::WildCard => panic!("Hit WildCard. Not supported."),
                         }
@@ -166,30 +168,31 @@ impl TreeNode {
     }
 
     // TODO abstract over the type of the Node
-    fn get_count(
+    fn get_count<T: QueryT>(
         &self,
         i: usize,
         q: usize,
-        queries: &Vec<&Query>,
+        queries: &Vec<T>,
         last_query_index: Option<usize>,
         adtree: &AdTree,
-    ) -> usize {
+    ) -> usize
+    {
         match last_query_index {
             None => self.count,
             Some(last_query_index0) => {
                 if self.index > last_query_index0 {
                     self.count
                 } else {
-                    match queries.get(q) {
+                    match queries.get_mut(q) {
                         None => self.count,
-                        Some(query) => {
-                            assert!(query.index <= last_query_index0);
+                        Some(mut query) => {
+                            assert!(query.index() <= last_query_index0);
                             let vary0 = self
                                 .vary
-                                .get(query.index - self.index - 1)
+                                .get(query.index() - self.index - 1)
                                 .expect("invariant: cannot find a vary");
 
-                            if query.val == vary0.most_common_value {
+                            if query.val() == vary0.most_common_value {
                                 /*
                                  * We do not explicitly store the counts for the most common value.
                                  * We can calculate it by finding the count of the query without
@@ -198,7 +201,7 @@ impl TreeNode {
                                  */
                                 let num_query = queries.len();
                                 let super_count = {
-                                    let super_queries = Vec::with_capacity(num_query - 1);
+                                    let mut super_queries:Vec<T> = Vec::with_capacity(num_query - 1);
 
                                     for qq in 0..num_query {
                                         if qq != q {
@@ -211,54 +214,59 @@ impl TreeNode {
                                     adtree.get_count(&super_queries)
                                 };
 
-                                let invert_count = match query.val {
+                                let invert_count = match query.val() {
                                     Val::Zero => {
                                         // FIXME this is no good. it changes the value just for the call below!
-                                        query.val = Val::One;
+                                        // due to these mutable operations we have to always
+                                        // clone because the population in the learner would borrow
+                                        // the queries to queries0 and parent_queries. sadly,
+                                        // the code wants to run *this* function on both of the 
+                                        // query vectors!
+                                        query.update_val(Val::One);
                                         let c = self.get_count(
                                             i,
                                             q,
-                                            &queries,
+                                            queries,
                                             last_query_index,
-                                            &adtree,
+                                            adtree,
                                         );
-                                        query.val = Val::Zero;
+                                        query.update_val(Val::Zero);
                                         c
                                     }
                                     _ => {
                                         // FIXME this is no good. it changes the value just for the call below!
-                                        query.val = Val::Zero;
+                                        query.update_val(Val::Zero);
                                         let c = self.get_count(
                                             i,
                                             q,
-                                            &queries,
+                                            queries,
                                             last_query_index,
-                                            &adtree,
+                                            adtree,
                                         );
-                                        query.val = Val::One;
+                                        query.update_val(Val::One);
                                         c
                                     }
                                 };
 
                                 super_count - invert_count
                             } else {
-                                match query.val {
+                                match query.borrow().val() {
                                     Val::Zero => vary0.zero.map_or(0, |n| {
                                         n.get_count(
                                             i + 1,
                                             q + 1,
-                                            &queries,
+                                            queries,
                                             last_query_index,
-                                            &adtree,
+                                            adtree,
                                         )
                                     }),
                                     Val::One => vary0.one.map_or(0, |n| {
                                         n.get_count(
                                             i + 1,
                                             q + 1,
-                                            &queries,
+                                            queries,
                                             last_query_index,
-                                            &adtree,
+                                            adtree,
                                         )
                                     }),
                                     Val::WildCard => panic!("Hit WildCard. Not supported."),
@@ -337,11 +345,11 @@ impl AdTreeT for AdTree {
         AdTree::new(num_var, num_record, root)
     }
 
-    fn get_count(&self, queries: &Vec<&Query>) -> usize {
+    fn get_count<T: QueryT>(&self, queries: &Vec<T>) -> usize {
         let num_query = queries.len();
         let last_query_index = match queries.last() {
             None => None, // -1 in original code
-            Some(last_query) => Some(last_query.index),
+            Some(last_query) => Some(last_query.borrow().index()),
         };
         self.root.get_count(0, queries, last_query_index, &self)
     }
@@ -379,13 +387,7 @@ mod test {
         if index >= num_var {
             // just nothing
         } else {
-            // well this is a bit annoying
-            let mut queries0 = Vec::new();
-            for q in queries {
-                queries0.push(q)
-            }
-
-            let count1 = ad_tree.get_count(&queries0);
+            let count1 = ad_tree.get_count(&queries);
             let count2 = count_data(data, queries);
             assert!(count1 == count2);
 
@@ -402,7 +404,7 @@ mod test {
     }
 
     fn test_counts<T: RngCore + SeedableRng>(ad_tree: AdTree, data: Data<T>) {
-        let queries = Vec::with_capacity(data.num_var);
+        let queries:Vec<Query> = Vec::with_capacity(data.num_var);
         //for (v = -1; v < numVar; v++) {
         for v in 0..data.num_var {
             test_count(&ad_tree, &mut data, &queries, v, data.num_var);
