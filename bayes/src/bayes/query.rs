@@ -45,9 +45,7 @@ impl Ord for Query {
     }
 }
 
-// FIXME I believe these trait dependencies are not needed.
-// Remove them once the learner compiles successfully.
-pub(crate) trait QueryT: Borrow<Self> + BorrowMut<Self> + Ord {
+pub(crate) trait QueryT: Ord {
     fn index(&self) -> usize;
     fn val(&self) -> Val;
     fn update_val(&mut self, new_val:Val);

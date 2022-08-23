@@ -75,10 +75,10 @@ impl RootNode {
             Some(last_query_index0) => match queries.get_mut(q) {
                 None => self.count,
                 Some(mut query) => {
-                    assert!(query.borrow().index() <= last_query_index0);
+                    assert!(query.index() <= last_query_index0);
                     let vary0 = self
                         .vary
-                        .get(query.borrow().index())
+                        .get(query.index())
                         .expect("invariant: can find a vary");
 
                     if query.val() == vary0.most_common_value {
@@ -103,7 +103,7 @@ impl RootNode {
                             adtree.get_count(&super_queries)
                         };
 
-                        let invert_count = match query.borrow().val() {
+                        let invert_count = match query.val() {
                             Val::Zero => {
                                 // FIXME this is no good. it changes the value just for the call below!
                                 query.update_val(Val::One);
@@ -122,7 +122,7 @@ impl RootNode {
 
                         super_count - invert_count
                     } else {
-                        match query.borrow().val() {
+                        match query.val() {
                             Val::Zero => vary0.zero.map_or(0, |n| {
                                 n.get_count(0, q + 1, queries, last_query_index, adtree)
                             }),
@@ -250,7 +250,7 @@ impl TreeNode {
 
                                 super_count - invert_count
                             } else {
-                                match query.borrow().val() {
+                                match query.val() {
                                     Val::Zero => vary0.zero.map_or(0, |n| {
                                         n.get_count(
                                             i + 1,
@@ -349,7 +349,7 @@ impl AdTreeT for AdTree {
         let num_query = queries.len();
         let last_query_index = match queries.last() {
             None => None, // -1 in original code
-            Some(last_query) => Some(last_query.borrow().index()),
+            Some(last_query) => Some(last_query.index()),
         };
         self.root.get_count(0, queries, last_query_index, &self)
     }
