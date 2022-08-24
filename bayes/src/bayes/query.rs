@@ -1,7 +1,5 @@
 use std::cmp::Ordering;
 
-use std::borrow::{Borrow, BorrowMut};
-
 #[derive(Clone, PartialEq)]
 pub(crate) enum Val { 
     Zero, 
@@ -62,6 +60,7 @@ impl QueryT for &mut Query {
     fn val(&self) -> Val { self.val }
     fn update_val(&mut self, new_val:Val) { self.val = new_val;  }
 }
+
 /*
 impl Deref for Query {
     type Target = Query;

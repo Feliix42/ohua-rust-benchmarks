@@ -365,7 +365,7 @@ impl Learner {
                     Operation::Insert => {
                         let (queries0, parent_queries) =
                             populate_query_vectors(&self.net, to_id, &queries);
-                        let new_base_log_likelihood = compute_local_log_likelihood(
+                        let new_base_log_likelihood = compute_local_log_likelihood::<&mut Query>(
                             to_id,
                             &self.ad_tree,
                             &self.net,
@@ -384,7 +384,7 @@ impl Learner {
                     Operation::Remove => {
                         let (queries0, parent_queries) =
                             populate_query_vectors(&self.net, from_id, &queries);
-                        let new_base_log_likelihood = compute_local_log_likelihood(
+                        let new_base_log_likelihood = compute_local_log_likelihood::<&mut Query>(
                             from_id,
                             &self.ad_tree,
                             &self.net,
@@ -404,7 +404,7 @@ impl Learner {
                     Operation::Reverse => {
                         let (queries0, parent_queries) =
                             populate_query_vectors(&self.net, from_id, &queries);
-                        let new_base_log_likelihood = compute_local_log_likelihood(
+                        let new_base_log_likelihood = compute_local_log_likelihood::<&mut Query>(
                             from_id,
                             &self.ad_tree,
                             &self.net,
@@ -418,7 +418,7 @@ impl Learner {
                         self.local_base_log_likelihoods[from_id] = new_base_log_likelihood;
                         let (queries0, parent_queries) =
                             populate_query_vectors(&self.net, to_id, &queries);
-                        let new_base_log_likelihood = compute_local_log_likelihood(
+                        let new_base_log_likelihood = compute_local_log_likelihood::<&mut Query>(
                             to_id,
                             &self.ad_tree,
                             &self.net,
@@ -511,11 +511,11 @@ impl Learner {
         } /* while (tasks) */
     }
 
-    fn find_best_insert_task<'a, T: QueryT>(
+    fn find_best_insert_task<'a>(
         &self,
         to_id: usize,
         queries: &'a Vec<Query>,
-        mut queries0: &'a mut Vec<T>,
+        mut queries0: &'a mut Vec<&'a mut Query>,
         //    parent_queries : &Vec<Query>,
         num_total_parent: u64,
         base_penalty: f64,
