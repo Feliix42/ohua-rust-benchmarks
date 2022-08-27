@@ -19,6 +19,7 @@ pub struct Net {
     nodes: Vec<Node>,
 }
 
+#[derive(Clone)]
 pub enum Operation {
     Insert,
     Remove,

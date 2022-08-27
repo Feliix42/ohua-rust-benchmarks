@@ -66,7 +66,7 @@ impl Ord for Task {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.score - other.score {
             x if x > 0.0 => Ordering::Greater,
-            0.0 => Ordering::Equal,
+            x if x == 0.0 => Ordering::Equal,
             _ => Ordering::Less,
         }
     }
@@ -113,14 +113,20 @@ impl Learner {
         for v in v_start..v_stop {
             let mut local_base_log_likelihood: f64 = 0.0;
             queries.push(Query::new(v, Val::Zero));
-            local_base_log_likelihood +=
-                compute_specific_local_log_likelihood(&self.ad_tree, &queries, &parent_queries);
+            local_base_log_likelihood += compute_specific_local_log_likelihood(
+                &self.ad_tree,
+                &mut queries,
+                &mut parent_queries,
+            );
             {
                 let mut q = queries.get_mut(0).expect("Invariant broken");
                 q.val = Val::One;
             }
-            local_base_log_likelihood +=
-                compute_specific_local_log_likelihood(&self.ad_tree, &queries, &parent_queries);
+            local_base_log_likelihood += compute_specific_local_log_likelihood(
+                &self.ad_tree,
+                &mut queries,
+                &mut parent_queries,
+            );
             base_log_likelihood += local_base_log_likelihood;
             self.local_base_log_likelihoods[v] = local_base_log_likelihood;
         } /* foreach variable */
@@ -147,8 +153,8 @@ impl Learner {
              */
 
             //queries[0].index = v;
-            let best_local_index = v;
-            let best_local_log_likelihood = self.local_base_log_likelihoods[v];
+            let mut best_local_index = v;
+            let mut best_local_log_likelihood = self.local_base_log_likelihoods[v];
 
             //status = PVECTOR_PUSHBACK(queryVectorPtr, (void*)&queries[1]);
             //assert(status);
@@ -164,10 +170,10 @@ impl Learner {
                     queries.push(Query::new(qi0, Val::Zero));
                     queries.push(Query::new(qi1, Val::Zero));
                     parent_queries.push(Query::new(vv, Val::Zero));
-                    let new_local_log_likelihood = compute_specific_local_log_likelihood(
+                    let mut new_local_log_likelihood = compute_specific_local_log_likelihood(
                         &self.ad_tree,
-                        &queries,
-                        &parent_queries,
+                        &mut queries,
+                        &mut parent_queries,
                     );
                     queries.pop();
                     queries.pop();
@@ -178,8 +184,8 @@ impl Learner {
                     parent_queries.push(Query::new(vv, if vv < v { Val::Zero } else { Val::One }));
                     new_local_log_likelihood += compute_specific_local_log_likelihood(
                         &self.ad_tree,
-                        &queries,
-                        &parent_queries,
+                        &mut queries,
+                        &mut parent_queries,
                     );
                     queries.pop();
                     queries.pop();
@@ -190,8 +196,8 @@ impl Learner {
                     parent_queries.push(Query::new(vv, if vv < v { Val::One } else { Val::Zero }));
                     new_local_log_likelihood += compute_specific_local_log_likelihood(
                         &self.ad_tree,
-                        &queries,
-                        &parent_queries,
+                        &mut queries,
+                        &mut parent_queries,
                     );
                     queries.pop();
                     queries.pop();
@@ -202,8 +208,8 @@ impl Learner {
                     parent_queries.push(Query::new(vv, Val::One));
                     new_local_log_likelihood += compute_specific_local_log_likelihood(
                         &self.ad_tree,
-                        &queries,
-                        &parent_queries,
+                        &mut queries,
+                        &mut parent_queries,
                     );
 
                     if new_local_log_likelihood > best_local_log_likelihood {
@@ -278,7 +284,7 @@ impl Learner {
 
         let mut visited = Vec::with_capacity(self.ad_tree.num_var);
         visited.fill(false);
-        let work_queue = VecDeque::new();
+        let mut work_queue = VecDeque::new();
 
         //long numVar = adtreePtr->numVar;
         let mut queries = Vec::with_capacity(self.ad_tree.num_var);
@@ -311,15 +317,15 @@ impl Learner {
         //arg.bQueryVectorPtr      = bQueryVectorPtr;
 
         while let Some(task) = self.tasks.pop() {
-            let op = task.op;
+            //let op = task.op;
             let from_id = task.from_id;
             let to_id = task.to_id;
 
             /*
              * Check if task is still valid
              */
-            let is_task_valid = true;
-            match op {
+            let mut is_task_valid = true;
+            match task.op {
                 Operation::Insert => {
                     if self.net.has_edge(from_id, to_id)
                         || self
@@ -355,22 +361,22 @@ impl Learner {
              */
 
             if is_task_valid {
-                self.net.apply_operation(op, from_id, to_id);
+                self.net.apply_operation(task.op.clone(), from_id, to_id);
             }
 
             let mut delta_log_likelihood = 0.0;
 
-            let queries0 = if is_task_valid {
-                match op {
+            let mut queries0 = if is_task_valid {
+                match task.op {
                     Operation::Insert => {
-                        let (queries0, parent_queries) =
+                        let (mut queries0, mut parent_queries) =
                             populate_query_vectors(&self.net, to_id, &queries);
                         let new_base_log_likelihood = compute_local_log_likelihood::<&mut Query>(
                             to_id,
                             &self.ad_tree,
                             &self.net,
-                            &queries0,
-                            &parent_queries,
+                            &mut queries0,
+                            &mut parent_queries,
                         );
                         let to_local_base_log_likelihood = self.local_base_log_likelihoods[to_id];
                         delta_log_likelihood +=
@@ -382,14 +388,14 @@ impl Learner {
                         queries0
                     }
                     Operation::Remove => {
-                        let (queries0, parent_queries) =
-                            populate_query_vectors(&self.net, from_id, &queries);
+                        let (mut queries0, mut parent_queries) =
+                            populate_query_vectors(&self.net, from_id, &mut queries);
                         let new_base_log_likelihood = compute_local_log_likelihood::<&mut Query>(
                             from_id,
                             &self.ad_tree,
                             &self.net,
                             &mut queries0,
-                            &parent_queries,
+                            &mut parent_queries,
                         );
                         let from_local_base_log_likelihood =
                             self.local_base_log_likelihoods[from_id];
@@ -402,28 +408,28 @@ impl Learner {
                         queries0
                     }
                     Operation::Reverse => {
-                        let (queries0, parent_queries) =
+                        let (mut queries0, mut parent_queries) =
                             populate_query_vectors(&self.net, from_id, &queries);
                         let new_base_log_likelihood = compute_local_log_likelihood::<&mut Query>(
                             from_id,
                             &self.ad_tree,
                             &self.net,
                             &mut queries0,
-                            &parent_queries,
+                            &mut parent_queries,
                         );
                         let from_local_base_log_likelihood =
                             self.local_base_log_likelihoods[from_id];
                         delta_log_likelihood +=
                             from_local_base_log_likelihood - new_base_log_likelihood;
                         self.local_base_log_likelihoods[from_id] = new_base_log_likelihood;
-                        let (queries0, parent_queries) =
+                        let (mut queries0, mut parent_queries) =
                             populate_query_vectors(&self.net, to_id, &queries);
                         let new_base_log_likelihood = compute_local_log_likelihood::<&mut Query>(
                             to_id,
                             &self.ad_tree,
                             &self.net,
-                            &queries0,
-                            &parent_queries,
+                            &mut queries0,
+                            &mut parent_queries,
                         );
                         let to_local_base_log_likelihood = self.local_base_log_likelihoods[to_id];
                         delta_log_likelihood +=
@@ -546,7 +552,7 @@ impl Learner {
          * Search all possible valid operations for better local log likelihood
          */
 
-        let best_from_id = to_id; /* flag for not found */
+        let mut best_from_id = to_id; /* flag for not found */
         let old_local_log_likelihood = self.local_base_log_likelihoods[to_id];
         let best_local_log_likelihood = old_local_log_likelihood;
 
@@ -586,7 +592,7 @@ impl Learner {
                         &self.net,
                         //&queries,
                         queries0,
-                        &parent_queries,
+                        &mut parent_queries,
                     );
 
                     if new_local_log_likelihood > best_local_log_likelihood {
@@ -625,7 +631,7 @@ impl Learner {
 }
 
 impl LearnerT for Learner {
-    fn new<T: RngCore + SeedableRng>(data: &Data<T>, ad_tree: AdTree, num_thread: usize) -> Self {
+    fn new<T: RngCore + SeedableRng>(data: &Data<T>, ad_tree: AdTree, _num_thread: usize) -> Self {
         Learner {
             ad_tree,
             net: Net::new(data.num_var),
@@ -681,7 +687,7 @@ impl LearnerT for Learner {
             let parent_id_list = self.net.get_parent_id_list(v);
             num_total_parent += parent_id_list.len() as f64;
 
-            let (queries0, parent_queries) = populate_query_vectors(
+            let (mut queries0, mut parent_queries) = populate_query_vectors(
                 &self.net, v, //queries,
                 &queries,
             );
@@ -690,8 +696,8 @@ impl LearnerT for Learner {
                 &self.ad_tree,
                 &self.net,
                 //queries,
-                &queries0,
-                &parent_queries,
+                &mut queries0,
+                &mut parent_queries,
             );
             log_likelihood += local_log_likelihood;
         }
@@ -706,8 +712,8 @@ impl LearnerT for Learner {
 
 fn compute_specific_local_log_likelihood<T: QueryT>(
     ad_tree: &AdTree,
-    queries: &Vec<T>,
-    parent_queries: &Vec<T>,
+    queries: &mut Vec<T>,
+    parent_queries: &mut Vec<T>,
 ) -> f64 {
     let count = ad_tree.get_count(queries);
     if count == 0 {
@@ -747,14 +753,14 @@ fn compute_local_log_likelihood_helper<T: QueryT>(
     //num_parent: usize,
     ad_tree: &AdTree,
     //query_t* queries,
-    queries: &Vec<T>,
-    parent_queries: &Vec<T>,
+    queries: &mut Vec<T>,
+    parent_queries: &mut Vec<T>,
 ) -> f64 {
     match parent_queries.get(i) {
         None => compute_specific_local_log_likelihood(ad_tree, queries, parent_queries),
         Some(parent_query) => {
             queries[parent_query.index()].update_val(Val::Zero);
-            let local_log_likelihood = compute_local_log_likelihood_helper(
+            let mut local_log_likelihood = compute_local_log_likelihood_helper(
                 i + 1,
                 //parent_queries.len(), //numParent,
                 ad_tree,
@@ -790,14 +796,14 @@ fn compute_local_log_likelihood<T: QueryT>(
     ad_tree: &AdTree,
     net: &Net,
     // query_t* queries,
-    queries: &Vec<T>,
-    parent_queries: &Vec<T>,
+    queries: &mut Vec<T>,
+    parent_queries: &mut Vec<T>,
 ) -> f64 {
     //long numParent = vector_getSize(parentQueryVectorPtr);
     //float localLogLikelihood = 0.0;
 
     queries[id].update_val(Val::Zero);
-    
+
     let mut local_log_likelihood = compute_local_log_likelihood_helper(
         0,
         //numParent,
@@ -808,7 +814,7 @@ fn compute_local_log_likelihood<T: QueryT>(
     );
 
     queries[id].update_val(Val::One);
-    
+
     local_log_likelihood += compute_local_log_likelihood_helper(
         0,
         //numParent,
