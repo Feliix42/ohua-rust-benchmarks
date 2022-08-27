@@ -45,19 +45,19 @@ impl Ord for Query {
 
 pub(crate) trait QueryT: Ord {
     fn index(&self) -> usize;
-    fn val(&self) -> Val;
+    fn val(&self) -> &Val;
     fn update_val(&mut self, new_val:Val);
 }
 
 impl QueryT for Query {
     fn index(&self) -> usize { self.index }
-    fn val(&self) -> Val { self.val }
+    fn val(&self) -> &Val { &self.val }
     fn update_val(&mut self, new_val:Val) { self.val = new_val;  }
 }
 
 impl QueryT for &mut Query {
     fn index(&self) -> usize { self.index }
-    fn val(&self) -> Val { self.val }
+    fn val(&self) -> &Val { &self.val }
     fn update_val(&mut self, new_val:Val) { self.val = new_val;  }
 }
 

@@ -53,7 +53,7 @@ impl RootNode {
     }
 
     fn make<T: RngCore + SeedableRng>(num_record: usize, data: &mut Data<T>) -> RootNode {
-        let vary = Vec::with_capacity(data.num_var);
+        let mut vary = Vec::with_capacity(data.num_var);
         for v in 0..data.num_var {
             vary.push(Vary::make(v, 0, num_record, data));
         }
@@ -81,7 +81,7 @@ impl RootNode {
                         .get(query.index())
                         .expect("invariant: can find a vary");
 
-                    if query.val() == vary0.most_common_value {
+                    if *query.val() == vary0.most_common_value {
                         /*
                          * We do not explicitly store the counts for the most common value.
                          * We can calculate it by finding the count of the query without
@@ -156,7 +156,7 @@ impl TreeNode {
         value: u64,
         data: &mut Data<T>,
     ) -> TreeNode {
-        let vary = Vec::with_capacity(data.num_var - index + 1);
+        let mut vary = Vec::with_capacity(data.num_var - index + 1);
         for v in (index + 1)..data.num_var {
             vary.push(Vary::make(
                 //parent_index,
@@ -192,7 +192,7 @@ impl TreeNode {
                                 .get(query.index() - self.index - 1)
                                 .expect("invariant: cannot find a vary");
 
-                            if query.val() == vary0.most_common_value {
+                            if *query.val() == vary0.most_common_value {
                                 /*
                                  * We do not explicitly store the counts for the most common value.
                                  * We can calculate it by finding the count of the query without
@@ -300,9 +300,9 @@ impl Vary {
         index: usize,
         start: usize,
         num_record: usize,
-        mut data: &mut Data<T>,
+        data: &mut Data<T>,
     ) -> Vary {
-        let parent_index = -1; // this was set AdTree::make
+        //let parent_index = -1; // this was set AdTree::make
         if
         //(parent_index + 1 != index)
         0 != index && (num_record > 1) {
@@ -319,8 +319,8 @@ impl Vary {
             false => Some(TreeNode::make(index, start, num0, 0, data)),
         };
         let one = match num1 == 0 || most_common_value == Val::One {
-            True => None,
-            False => Some(TreeNode::make(index, start + num0, num1, 1, data)),
+            true => None,
+            false => Some(TreeNode::make(index, start + num0, num1, 1, data)),
         };
 
         Vary::new(index, most_common_value, zero, one)
@@ -336,7 +336,7 @@ impl AdTreeT for AdTree {
         }
     }
 
-    fn make<T: RngCore + SeedableRng>(mut data: &mut Data<T>) -> AdTree {
+    fn make<T: RngCore + SeedableRng>(data: &mut Data<T>) -> AdTree {
         let num_record = data.num_record;
         let num_var = data.num_var;
 
@@ -346,7 +346,7 @@ impl AdTreeT for AdTree {
     }
 
     fn get_count<T: QueryT>(&self, queries: &Vec<T>) -> usize {
-        let num_query = queries.len();
+        //let num_query = queries.len();
         let last_query_index = match queries.last() {
             None => None, // -1 in original code
             Some(last_query) => Some(last_query.index()),
@@ -362,9 +362,9 @@ mod test {
     fn count_data<T: RngCore + SeedableRng>(data: &mut Data<T>, queries: &Vec<Query>) -> usize {
         assert!(data.num_record == data.records.len());
         let mut count = 0;
-        for record in data.records {
+        for record in data.records.iter() {
             let mut is_match = true;
-            for query in queries.iter() {
+            for query in queries {
                 if query.val != Val::WildCard && query.val as usize != record[query.index] {
                     is_match = false;
                     break;
@@ -379,8 +379,8 @@ mod test {
 
     fn test_count<T: RngCore + SeedableRng>(
         ad_tree: &AdTree,
-        data: &mut Data<T>,
-        queries: &Vec<Query>,
+        mut data: &mut Data<T>,
+        queries: &mut Vec<Query>,
         index: usize,
         num_var: usize,
     ) {
@@ -393,27 +393,28 @@ mod test {
 
             for i in 1..num_var {
                 queries.push(Query::new(index + i, Val::Zero));
-                test_count(&ad_tree, &mut data, &queries, index + i, num_var);
+                test_count(&ad_tree, &mut data, queries, index + i, num_var);
                 queries.remove(queries.len() - 1);
 
                 queries.push(Query::new(index + i, Val::One));
-                test_count(&ad_tree, &mut data, &queries, index + i, num_var);
+                test_count(&ad_tree, &mut data, queries, index + i, num_var);
                 queries.remove(queries.len() - 1);
             }
         }
     }
 
-    fn test_counts<T: RngCore + SeedableRng>(ad_tree: AdTree, data: Data<T>) {
-        let queries:Vec<Query> = Vec::with_capacity(data.num_var);
+    fn test_counts<T: RngCore + SeedableRng>(ad_tree: AdTree, mut data: Data<T>) {
+        let mut queries:Vec<Query> = Vec::with_capacity(data.num_var);
         //for (v = -1; v < numVar; v++) {
-        for v in 0..data.num_var {
-            test_count(&ad_tree, &mut data, &queries, v, data.num_var);
+        let num_var = data.num_var;
+        for v in 0..num_var {
+            test_count(&ad_tree, &mut data, &mut queries, v, data.num_var);
         }
     }
 
     fn test(num_var: usize, num_record: usize) {
         let random = rand::rngs::StdRng::seed_from_u64(0);
-        let data = Data::new(num_var, num_record, random);
+        let mut data = Data::new(num_var, num_record, random);
         data.generate(Some(0), 10, 10);
 
         let copy_data = data.clone();
