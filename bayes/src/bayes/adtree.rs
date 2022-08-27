@@ -1,7 +1,7 @@
 use rand::{RngCore, SeedableRng};
 
 use crate::bayes::data::{Data, DataT};
-use crate::bayes::query::{Query, QueryT, Val};
+use crate::bayes::query::{QueryT, Val};
 
 
 struct RootNode {
@@ -44,7 +44,7 @@ pub(crate) trait AdTreeT {
      * -- queryVector must consist of queries sorted by id
      * =============================================================================
      */
-    fn get_count<T: QueryT>(&self, queries: &Vec<T>) -> usize;
+    fn get_count<T: QueryT>(&self, queries: &mut Vec<T>) -> usize;
 }
 
 impl RootNode {
@@ -65,7 +65,9 @@ impl RootNode {
         &self,
         //  i: usize,
         q: usize,
-        queries: &Vec<T>,
+        // it is a pity that I have to make `queries` mutable because all
+        // I actually want to change are the elements but not the vector itself.
+        queries: &mut Vec<T>,
         last_query_index: Option<usize>,
         adtree: &AdTree,
     ) -> usize 
@@ -74,7 +76,7 @@ impl RootNode {
             None => 0,
             Some(last_query_index0) => match queries.get_mut(q) {
                 None => self.count,
-                Some(mut query) => {
+                Some(query) => {
                     assert!(query.index() <= last_query_index0);
                     let vary0 = self
                         .vary
@@ -100,7 +102,7 @@ impl RootNode {
                             // FIXME this looks like an endless loop because it starts at the top
                             // again!
                             // (but it has a different set of queries this time.)
-                            adtree.get_count(&super_queries)
+                            adtree.get_count(&mut super_queries)
                         };
 
                         let invert_count = match query.val() {
@@ -211,7 +213,7 @@ impl TreeNode {
                                     }
                                     // FIXME this looks like an endless loop because it starts at the top
                                     // again!
-                                    adtree.get_count(&super_queries)
+                                    adtree.get_count(&mut super_queries)
                                 };
 
                                 let invert_count = match query.val() {
@@ -345,7 +347,7 @@ impl AdTreeT for AdTree {
         AdTree::new(num_var, num_record, root)
     }
 
-    fn get_count<T: QueryT>(&self, queries: &Vec<T>) -> usize {
+    fn get_count<T: QueryT>(&self, queries: &mut Vec<T>) -> usize {
         //let num_query = queries.len();
         let last_query_index = match queries.last() {
             None => None, // -1 in original code
@@ -358,6 +360,7 @@ impl AdTreeT for AdTree {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::bayes::query::Query;
 
     fn count_data<T: RngCore + SeedableRng>(data: &mut Data<T>, queries: &Vec<Query>) -> usize {
         assert!(data.num_record == data.records.len());
@@ -387,7 +390,7 @@ mod test {
         if index >= num_var {
             // just nothing
         } else {
-            let count1 = ad_tree.get_count(&queries);
+            let count1 = ad_tree.get_count(queries);
             let count2 = count_data(data, queries);
             assert!(count1 == count2);
 
