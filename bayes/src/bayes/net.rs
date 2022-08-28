@@ -62,10 +62,10 @@ pub(crate) trait NetT {
      * =============================================================================
      */
     fn generate_random_edges<T: RngCore>(
-        &self,
+        &mut self,
         max_num_parent: usize,
         percent_parent: usize,
-        random: &T,
+        random: &mut T,
     );
 }
 
@@ -82,16 +82,16 @@ impl Node {
 
 impl Net {
     fn insert_edge(&mut self, from_id: usize, to_id: usize) {
-        let mut child_node = self.nodes.get_mut(to_id).expect("invariant broken");
+        let child_node = self.nodes.get_mut(to_id).expect("invariant broken");
         child_node.parent_ids.push(from_id);
-        let mut parent_node = self.nodes.get(from_id).expect("invariant broken");
+        let parent_node = self.nodes.get_mut(from_id).expect("invariant broken");
         parent_node.child_ids.push(to_id);
     }
 
     fn remove_edge(&mut self, from_id: usize, to_id: usize) {
-        let mut child_node = self.nodes.get_mut(to_id).expect("invariant broken");
+        let child_node = self.nodes.get_mut(to_id).expect("invariant broken");
         child_node.parent_ids.remove(from_id);
-        let mut parent_node = self.nodes.get(from_id).expect("invariant broken");
+        let parent_node = self.nodes.get_mut(from_id).expect("invariant broken");
         parent_node.child_ids.remove(to_id);
     }
 
@@ -100,14 +100,14 @@ impl Net {
         self.insert_edge(to_id, from_id);
     }
 
-    fn is_cycle0(&self, node: &Node) -> bool {
+    fn is_cycle0(&mut self, node: &mut Node) -> bool {
         match node.mark {
             NodeMark::Init => {
                 node.mark = NodeMark::Test;
                 let mut result = false;
-                for child_id in node.child_ids {
-                    let child_node = self.nodes.get(child_id).expect("invariant broken");
-                    if self.is_cycle0(&child_node) {
+                for child_id in &node.child_ids {
+                    let child_node = self.nodes.get_mut(*child_id).expect("invariant broken");
+                    if self.is_cycle0(child_node) {
                         result = true;
                         break;
                     } else {
@@ -160,8 +160,8 @@ impl NetT for Net {
         from_id: usize,
         to_id: usize,
         // FIXME are the below parameters only there for reuse/optimization?
-        mut visited: &mut Vec<bool>,
-        mut work_queue: &mut VecDeque<usize>,
+        visited: &mut Vec<bool>,
+        work_queue: &mut VecDeque<usize>,
     ) -> bool {
         assert!(visited.len() == self.nodes.len());
 
@@ -170,7 +170,7 @@ impl NetT for Net {
 
         work_queue.push_back(from_id);
 
-        let result = false;
+        let mut result = false;
         while let Some(id) = work_queue.pop_front() {
             if id == to_id {
                 work_queue.clear();
@@ -178,9 +178,9 @@ impl NetT for Net {
             } else {
                 visited.insert(id, true);
                 let node = self.nodes.get(id).expect("invariant broken");
-                for child_id in node.child_ids {
-                    if visited.get(child_id).is_none() {
-                        work_queue.push_back(child_id)
+                for child_id in &node.child_ids {
+                    if visited.get(*child_id).is_none() {
+                        work_queue.push_back(*child_id)
                     } else {
                         // already visited
                     }
@@ -196,16 +196,16 @@ impl NetT for Net {
     // It seems like the author keeps state that is directly tied to a particular
     // function, probably to avoid re-allocations.
     fn is_cycle(&mut self) -> bool {
-        let num_node = self.nodes.len();
-        for node in self.nodes {
+        let _num_node = self.nodes.len();
+        for mut node in self.nodes.iter_mut() {
             node.mark = NodeMark::Init; //NET_NODE_MARK_INIT;
         }
 
-        let result = false;
-        for node in self.nodes {
+        let mut result = false;
+        for node in self.nodes.iter_mut(){
             match node.mark {
                 NodeMark::Init => {
-                    if self.is_cycle0(&node) {
+                    if self.is_cycle0(node) {
                         result = true;
                         break;
                     } else {
@@ -239,7 +239,7 @@ impl NetT for Net {
         id0: usize,
         // FIXME are these parameters here only for reuse/optimization?
         //mut ancestor: &mut Vec<bool>,
-        mut work_queue: &mut VecDeque<usize>,
+        work_queue: &mut VecDeque<usize>,
     ) -> Option<Vec<bool>> {
         //assert!(ancestor.len() == self.nodes.len());
 
@@ -249,26 +249,26 @@ impl NetT for Net {
         ancestor.fill(false);
         work_queue.clear();
 
-        for parent_id in self.nodes.get(id0).expect("invariant broken").parent_ids {
-            ancestor.insert(parent_id, true);
-            work_queue.push_back(parent_id);
+        for parent_id in &self.nodes.get(id0).expect("invariant broken").parent_ids {
+            ancestor.insert(*parent_id, true);
+            work_queue.push_back(*parent_id);
         }
 
-        let result = true;
+        let mut result = true;
         while let Some(parent_id) = work_queue.pop_front() {
             if parent_id == id0 {
                 work_queue.clear();
                 result = false;
             } else {
-                for grand_parent_id in self
+                for grand_parent_id in &self
                     .nodes
                     .get(parent_id)
                     .expect("invariant broken")
                     .parent_ids
                 {
-                    if !ancestor.get(grand_parent_id).expect("invariant broken") {
-                        ancestor.insert(grand_parent_id, true);
-                        work_queue.push_back(grand_parent_id);
+                    if !ancestor.get(*grand_parent_id).expect("invariant broken") {
+                        ancestor.insert(*grand_parent_id, true);
+                        work_queue.push_back(*grand_parent_id);
                     }
                 }
             }
@@ -293,35 +293,35 @@ impl NetT for Net {
         &self,
         id0: usize,
         //mut descendant: &mut Vec<bool>,
-        mut work_queue: &mut VecDeque<usize>,
+        work_queue: &mut VecDeque<usize>,
     ) -> Option<Vec<bool>> {
         //assert!(descendant.len() == self.nodes.len());
 
         // see comment in find_ancestors
-        let descendant = Vec::with_capacity(self.nodes.len());
+        let mut descendant = Vec::with_capacity(self.nodes.len());
         descendant.fill(false);
         work_queue.clear();
 
-        for child_id in self.nodes.get(id0).expect("invariant broken").child_ids {
-            descendant.insert(child_id, true);
-            work_queue.push_back(child_id);
+        for child_id in &self.nodes.get(id0).expect("invariant broken").child_ids {
+            descendant.insert(*child_id, true);
+            work_queue.push_back(*child_id);
         }
 
-        let result = true;
+        let mut result = true;
         while let Some(child_id) = work_queue.pop_front() {
             if child_id == id0 {
                 work_queue.clear();
                 result = false;
             } else {
-                for grand_child_id in self
+                for grand_child_id in &self
                     .nodes
                     .get(child_id)
                     .expect("invariant broken")
                     .child_ids
                 {
-                    if !descendant.get(grand_child_id).expect("invariant broken") {
-                        descendant.insert(grand_child_id, true);
-                        work_queue.push_back(grand_child_id);
+                    if !descendant.get(*grand_child_id).expect("invariant broken") {
+                        descendant.insert(*grand_child_id, true);
+                        work_queue.push_back(*grand_child_id);
                     }
                 }
             }
@@ -335,10 +335,10 @@ impl NetT for Net {
     }
 
     fn generate_random_edges<T: RngCore>(
-        &self,
+        &mut self,
         max_num_parent: usize,
         percent_parent: usize,
-        random: &T,
+        random: &mut T,
     ) {
         let num_node = self.nodes.len();
         let mut visited = Vec::with_capacity(num_node);

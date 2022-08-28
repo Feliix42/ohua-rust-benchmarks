@@ -73,8 +73,8 @@ impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
          * Generate random Bayesian network
          */
 
-        let net = Net::new(self.num_var);
-        net.generate_random_edges(max_num_parent, percent_parent, &self.random);
+        let mut net = Net::new(self.num_var);
+        net.generate_random_edges(max_num_parent, percent_parent, &mut self.random);
 
         /*
          * Create a threshold for each of the possible permutation of variable
