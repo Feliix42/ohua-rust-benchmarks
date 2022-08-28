@@ -1,6 +1,7 @@
 use rand::{Rng, RngCore};
 use std::collections::VecDeque;
 
+#[derive(Clone)]
 enum NodeMark {
     Init,
     Done,
@@ -100,30 +101,54 @@ impl Net {
         self.insert_edge(to_id, from_id);
     }
 
-    fn is_cycle0(&mut self, node: &mut Node) -> bool {
-        match node.mark {
+    fn is_cycle0(&mut self, id: usize) -> bool {
+        let m = {
+            let node = self.nodes.get_mut(id).expect("invariant broken");
+            match node.mark {
+                NodeMark::Init => {
+                    node.mark = NodeMark::Test;
+                }
+                _ => (),
+            }
+            node.mark.clone()
+        }; // release mutable borrow on `node`
+
+        let result = match m {
             NodeMark::Init => {
-                node.mark = NodeMark::Test;
+                let l = {
+                    let node = self.nodes.get(id).expect("invariant broken");
+                    node.child_ids.len()
+                };
                 let mut result = false;
-                for child_id in &node.child_ids {
-                    let child_node = self.nodes.get_mut(*child_id).expect("invariant broken");
-                    if self.is_cycle0(child_node) {
+                for i in 0..l {
+                    let node = self.nodes.get(id).expect("invariant broken");
+                    let child_id = node.child_ids[i];
+                    if self.is_cycle0(child_id) {
                         result = true;
                         break;
                     } else {
                         // continue
                     }
                 }
-                if !result {
-                    node.mark = NodeMark::Done;
-                } else {
-                    // the original code only sets this when `false`
-                }
                 result
             }
             NodeMark::Test => true,
             NodeMark::Done => false,
+        }; // release the immutable borrow on `node`
+
+        match m {
+            NodeMark::Init => {
+                if !result {
+                    let node = self.nodes.get_mut(id).expect("invariant broken");
+                    node.mark = NodeMark::Done;
+                } else {
+                    // the original code only sets this when `false`
+                } // release mutable borrow on `node`
+            }
+            _ => (),
         }
+
+        result
     }
 }
 
@@ -202,10 +227,10 @@ impl NetT for Net {
         }
 
         let mut result = false;
-        for node in self.nodes.iter_mut(){
-            match node.mark {
+        for n_id in 0..self.nodes.len() {
+            match self.nodes[n_id].mark {
                 NodeMark::Init => {
-                    if self.is_cycle0(node) {
+                    if self.is_cycle0(n_id) {
                         result = true;
                         break;
                     } else {
@@ -376,7 +401,7 @@ mod tests {
             let mut net = Net::new(num_node);
             let mut visited = Vec::with_capacity(num_node);
             visited.fill(false);
-            let work_queue = VecDeque::new();
+            let mut work_queue = VecDeque::new();
 
             assert!(!net.is_cycle());
 
@@ -410,23 +435,23 @@ mod tests {
             // ancestor.fill(false);
             let ancestor = net.find_ancestors(c_id, /*&mut ancestor,*/ &mut work_queue);
             assert!(ancestor.is_some());
-            assert!(ancestor.unwrap().get(a_id).unwrap());
-            assert!(ancestor.unwrap().get(b_id).unwrap());
-            assert!(ancestor.unwrap().get(d_id).unwrap());
-            assert!(ancestor.unwrap().len() == 3);
+            assert!(ancestor.as_ref().unwrap().get(a_id).unwrap());
+            assert!(ancestor.as_ref().unwrap().get(b_id).unwrap());
+            assert!(ancestor.as_ref().unwrap().get(d_id).unwrap());
+            assert!(ancestor.as_ref().unwrap().len() == 3);
 
             // let descendant = Vec::with_capacity(num_node);
             // descendant.fill(false);
             let descendant = net.find_descendants(a_id, /*&mut descendant,*/ &mut work_queue);
             assert!(descendant.is_some());
-            assert!(descendant.unwrap().get(b_id).unwrap());
-            assert!(descendant.unwrap().get(c_id).unwrap());
-            assert!(descendant.unwrap().len() == 2);
+            assert!(descendant.as_ref().unwrap().get(b_id).unwrap());
+            assert!(descendant.as_ref().unwrap().get(c_id).unwrap());
+            assert!(descendant.as_ref().unwrap().len() == 2);
         }
         {
-            let random = rand::rngs::StdRng::seed_from_u64(0);
-            let net = Net::new(num_node);
-            net.generate_random_edges(10, 10, &random);
+            let mut random = rand::rngs::StdRng::seed_from_u64(0);
+            let mut net = Net::new(num_node);
+            net.generate_random_edges(10, 10, &mut random);
         }
     }
 }
