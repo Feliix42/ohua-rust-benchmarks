@@ -47,18 +47,21 @@ pub(crate) trait QueryT: Ord {
     fn index(&self) -> usize;
     fn val(&self) -> &Val;
     fn update_val(&mut self, new_val:Val);
+    fn clon(&self) -> Query;
 }
 
 impl QueryT for Query {
     fn index(&self) -> usize { self.index }
     fn val(&self) -> &Val { &self.val }
     fn update_val(&mut self, new_val:Val) { self.val = new_val;  }
+    fn clon(&self) -> Query { self.clone() }
 }
 
 impl QueryT for &mut Query {
     fn index(&self) -> usize { self.index }
     fn val(&self) -> &Val { &self.val }
     fn update_val(&mut self, new_val:Val) { self.val = new_val;  }
+    fn clon(&self) -> Query { Query::new(self.index, self.val.clone()) }
 }
 
 /*

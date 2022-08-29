@@ -3,7 +3,6 @@ use rand::{RngCore, SeedableRng};
 use crate::bayes::data::{Data, DataT};
 use crate::bayes::query::{QueryT, Val};
 
-
 struct RootNode {
     count: usize,
     vary: Vec<Vary>,
@@ -70,33 +69,33 @@ impl RootNode {
         queries: &mut Vec<T>,
         last_query_index: Option<usize>,
         adtree: &AdTree,
-    ) -> usize 
-    {
+    ) -> usize {
         match last_query_index {
             None => 0,
-            Some(last_query_index0) => match queries.get_mut(q) {
-                None => self.count,
-                Some(query) => {
-                    assert!(query.index() <= last_query_index0);
-                    let vary0 = self
-                        .vary
-                        .get(query.index())
-                        .expect("invariant: can find a vary");
+            Some(last_query_index0) => {
+                if queries.get(q).is_none() {
+                    self.count
+                } else {
+                    let (index, val, num_query) = {
+                        let query = queries.get(q).expect("impossible");
+                        (query.index(), query.val().clone(), queries.len())
+                    };
+                    assert!(index <= last_query_index0);
+                    let vary0 = self.vary.get(index).expect("invariant: can find a vary");
 
-                    if *query.val() == vary0.most_common_value {
+                    if val == vary0.most_common_value {
                         /*
                          * We do not explicitly store the counts for the most common value.
                          * We can calculate it by finding the count of the query without
                          * the current (superCount) and subtracting the count for the
                          * query with the current toggled (invertCount).
                          */
-                        let num_query = queries.len();
                         let super_count = {
                             let mut super_queries = Vec::with_capacity(num_query - 1);
 
                             for qq in 0..num_query {
                                 if qq != q {
-                                    super_queries.push(*queries.get(qq).expect("invariant"));
+                                    super_queries.push(queries.get(qq).expect("invariant").clon());
                                 }
                             }
                             // FIXME this looks like an endless loop because it starts at the top
@@ -105,37 +104,49 @@ impl RootNode {
                             adtree.get_count(&mut super_queries)
                         };
 
-                        let invert_count = match query.val() {
+                        let invert_count = match val {
                             Val::Zero => {
-                                // FIXME this is no good. it changes the value just for the call below!
-                                query.update_val(Val::One);
+                                {
+                                    let query = queries.get_mut(q).expect("impossible");
+                                    // FIXME this is no good. it changes the value just for the call below!
+                                    query.update_val(Val::One);
+                                }
                                 let c = self.get_count(q, queries, last_query_index, adtree);
-                                query.update_val(Val::Zero);
+                                {
+                                    let query = queries.get_mut(q).expect("impossible");
+                                    query.update_val(Val::Zero);
+                                }
                                 c
                             }
                             _ => {
-                                // FIXME this is no good. it changes the value just for the call below!
-                                query.update_val(Val::Zero);
+                                {
+                                    let query = queries.get_mut(q).expect("impossible");
+                                    // FIXME this is no good. it changes the value just for the call below!
+                                    query.update_val(Val::Zero);
+                                }
                                 let c = self.get_count(q, queries, last_query_index, adtree);
-                                query.update_val(Val::One);
+                                {
+                                    let query = queries.get_mut(q).expect("impossible");
+                                    query.update_val(Val::One);
+                                }
                                 c
                             }
                         };
 
                         super_count - invert_count
                     } else {
-                        match query.val() {
-                            Val::Zero => vary0.zero.map_or(0, |n| {
+                        match val {
+                            Val::Zero => vary0.zero.as_ref().map_or(0, |n| {
                                 n.get_count(0, q + 1, queries, last_query_index, adtree)
                             }),
-                            Val::One => vary0.one.map_or(0, |n| {
+                            Val::One => vary0.one.as_ref().map_or(0, |n| {
                                 n.get_count(0, q + 1, queries, last_query_index, adtree)
                             }),
                             Val::WildCard => panic!("Hit WildCard. Not supported."),
                         }
                     }
                 }
-            },
+            }
         }
     }
 }
@@ -174,41 +185,44 @@ impl TreeNode {
         &self,
         i: usize,
         q: usize,
-        queries: &Vec<T>,
+        queries: &mut Vec<T>,
         last_query_index: Option<usize>,
         adtree: &AdTree,
-    ) -> usize
-    {
+    ) -> usize {
         match last_query_index {
             None => self.count,
             Some(last_query_index0) => {
                 if self.index > last_query_index0 {
                     self.count
                 } else {
-                    match queries.get_mut(q) {
-                        None => self.count,
-                        Some(mut query) => {
-                            assert!(query.index() <= last_query_index0);
+                    if queries.get(q).is_none() {
+                        self.count
+                    } else {
+                    let (index, val, num_query) = {
+                        let query = queries.get(q).expect("impossible");
+                        (query.index(), query.val().clone(), queries.len())
+                    };
+                           assert!(index <= last_query_index0);
                             let vary0 = self
                                 .vary
-                                .get(query.index() - self.index - 1)
+                                .get(index - self.index - 1)
                                 .expect("invariant: cannot find a vary");
 
-                            if *query.val() == vary0.most_common_value {
+                            if val == vary0.most_common_value {
                                 /*
                                  * We do not explicitly store the counts for the most common value.
                                  * We can calculate it by finding the count of the query without
                                  * the current (superCount) and subtracting the count for the
                                  * query with the current toggled (invertCount).
                                  */
-                                let num_query = queries.len();
                                 let super_count = {
-                                    let mut super_queries:Vec<T> = Vec::with_capacity(num_query - 1);
+                                    let mut super_queries =
+                                        Vec::with_capacity(num_query - 1);
 
                                     for qq in 0..num_query {
                                         if qq != q {
                                             super_queries
-                                                .push(*queries.get(qq).expect("invariant"));
+                                                .push(queries.get(qq).expect("invariant").clon());
                                         }
                                     }
                                     // FIXME this looks like an endless loop because it starts at the top
@@ -216,66 +230,55 @@ impl TreeNode {
                                     adtree.get_count(&mut super_queries)
                                 };
 
-                                let invert_count = match query.val() {
+                                let invert_count = match val {
                                     Val::Zero => {
                                         // FIXME this is no good. it changes the value just for the call below!
                                         // due to these mutable operations we have to always
                                         // clone because the population in the learner would borrow
                                         // the queries to queries0 and parent_queries. sadly,
-                                        // the code wants to run *this* function on both of the 
+                                        // the code wants to run *this* function on both of the
                                         // query vectors!
-                                        query.update_val(Val::One);
-                                        let c = self.get_count(
-                                            i,
-                                            q,
-                                            queries,
-                                            last_query_index,
-                                            adtree,
-                                        );
-                                        query.update_val(Val::Zero);
+                                        {
+                                            let query = queries.get_mut(q).expect("impossible");
+                                            query.update_val(Val::One);
+                                        }
+                                        let c =
+                                            self.get_count(i, q, queries, last_query_index, adtree);
+                                        {
+                                            let query = queries.get_mut(q).expect("impossible");
+                                            query.update_val(Val::Zero);
+                                        }
                                         c
                                     }
                                     _ => {
                                         // FIXME this is no good. it changes the value just for the call below!
-                                        query.update_val(Val::Zero);
-                                        let c = self.get_count(
-                                            i,
-                                            q,
-                                            queries,
-                                            last_query_index,
-                                            adtree,
-                                        );
-                                        query.update_val(Val::One);
+                                        {
+                                            let query = queries.get_mut(q).expect("impossible");
+                                            query.update_val(Val::Zero);
+                                        }
+                                        let c =
+                                            self.get_count(i, q, queries, last_query_index, adtree);
+                                        {
+                                            let query = queries.get_mut(q).expect("impossible");
+                                            query.update_val(Val::One);
+                                        }
                                         c
                                     }
                                 };
 
                                 super_count - invert_count
                             } else {
-                                match query.val() {
-                                    Val::Zero => vary0.zero.map_or(0, |n| {
-                                        n.get_count(
-                                            i + 1,
-                                            q + 1,
-                                            queries,
-                                            last_query_index,
-                                            adtree,
-                                        )
+                                match val {
+                                    Val::Zero => vary0.zero.as_ref().map_or(0, |n| {
+                                        n.get_count(i + 1, q + 1, queries, last_query_index, adtree)
                                     }),
-                                    Val::One => vary0.one.map_or(0, |n| {
-                                        n.get_count(
-                                            i + 1,
-                                            q + 1,
-                                            queries,
-                                            last_query_index,
-                                            adtree,
-                                        )
+                                    Val::One => vary0.one.as_ref().map_or(0, |n| {
+                                        n.get_count(i + 1, q + 1, queries, last_query_index, adtree)
                                     }),
                                     Val::WildCard => panic!("Hit WildCard. Not supported."),
                                 }
                             }
                         }
-                    }
                 }
             }
         }
@@ -368,7 +371,7 @@ mod test {
         for record in data.records.iter() {
             let mut is_match = true;
             for query in queries {
-                if query.val != Val::WildCard && query.val as usize != record[query.index] {
+                if query.val != Val::WildCard && query.val.clone() as usize != record[query.index] {
                     is_match = false;
                     break;
                 } else {
@@ -407,11 +410,12 @@ mod test {
     }
 
     fn test_counts<T: RngCore + SeedableRng>(ad_tree: AdTree, mut data: Data<T>) {
-        let mut queries:Vec<Query> = Vec::with_capacity(data.num_var);
+        let mut queries: Vec<Query> = Vec::with_capacity(data.num_var);
         //for (v = -1; v < numVar; v++) {
-        let num_var = data.num_var;
+        let mut num_var = data.num_var;
         for v in 0..num_var {
-            test_count(&ad_tree, &mut data, &mut queries, v, data.num_var);
+            num_var = data.num_var;
+            test_count(&ad_tree, &mut data, &mut queries, v, num_var);
         }
     }
 
@@ -420,7 +424,7 @@ mod test {
         let mut data = Data::new(num_var, num_record, random);
         data.generate(Some(0), 10, 10);
 
-        let copy_data = data.clone();
+        let mut copy_data = data.clone();
 
         let adtree = AdTree::make(&mut copy_data);
 
