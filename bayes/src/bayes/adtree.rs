@@ -3,7 +3,7 @@ use rand::{RngCore, SeedableRng};
 use crate::bayes::data::{Data, DataT};
 use crate::bayes::query::{QueryT, Val};
 
-struct RootNode {
+pub(crate) struct RootNode {
     count: usize,
     vary: Vec<Vary>,
 }
@@ -221,6 +221,13 @@ impl TreeNode {
 
                                     for qq in 0..num_query {
                                         if qq != q {
+                                            /*
+                                             * Note on cloning:
+                                             * This is totally ok because the recursion never
+                                             * changes the structure for good. It just alters it
+                                             * for the recursive call and then resets it to the
+                                             * initial value.
+                                             */
                                             super_queries
                                                 .push(queries.get(qq).expect("invariant").clon());
                                         }
