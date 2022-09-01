@@ -1,7 +1,7 @@
 #![feature(drain_filter)]
 mod cavity;
 mod element;
-pub mod mesh;
+mod mesh;
 mod point;
 
 use crate::mesh::Mesh;

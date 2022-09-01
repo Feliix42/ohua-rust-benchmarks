@@ -115,8 +115,8 @@ impl Mesh {
             assert!(coords[1] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0]];
-            let c_1 = coordinates[coords[1]];
+            let c_0 = coordinates[coords[0] -1];
+            let c_1 = coordinates[coords[1] -1];
             edge_set.insert(Edge::new(c_0, c_1));
         }
 
@@ -153,9 +153,9 @@ impl Mesh {
             assert!(coords[2] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0]];
-            let c_1 = coordinates[coords[1]];
-            let c_2 = coordinates[coords[2]];
+            let c_0 = coordinates[coords[0] -1];
+            let c_1 = coordinates[coords[1] -1];
+            let c_2 = coordinates[coords[2] -1];
             elem_vec.push(Triangle::new(c_0, c_1, c_2));
         }
 
@@ -219,6 +219,7 @@ impl Mesh {
     }
 
     /// Tests whether `node` is contained in the graph.
+    #[allow(dead_code)]
     pub fn contains(&self, node: &Element) -> bool {
         match node {
             Element::E(ref e) => self.boundary_set.contains_key(e),
@@ -231,34 +232,34 @@ impl Mesh {
         self.elements.contains_key(node)
     }
 
-    /// Find the node that is opposite to the obtuse angle of the element.
-    pub fn get_opposite(&self, node: &Triangle) -> Element {
-        let opposite_edge = node.get_opposite_edge();
+    // /// Find the node that is opposite to the obtuse angle of the element.
+    // pub fn get_opposite(&self, node: &Triangle) -> Element {
+    //     let opposite_edge = node.get_opposite_edge();
 
-        for neighbor in self.elements.get(node).unwrap() {
-            match neighbor {
-                Element::T(ref t) => {
-                    // get related edge
-                    if let Some(related_edge) = node.get_related_edge(t) {
-                        // if points of the edge don't match obtuse point, return neighbor
-                        if related_edge == opposite_edge {
-                            return *neighbor;
-                        }
-                        // if !related_edge.contains(obtuse_pt) {
-                        //     return *neighbor;
-                        // }
-                    }
-                }
-                Element::E(ref e) => {
-                    if *e == opposite_edge {
-                        return *neighbor;
-                    }
-                }
-            }
-        }
+    //     for neighbor in self.elements.get(node).unwrap() {
+    //         match neighbor {
+    //             Element::T(ref t) => {
+    //                 // get related edge
+    //                 if let Some(related_edge) = node.get_related_edge(t) {
+    //                     // if points of the edge don't match obtuse point, return neighbor
+    //                     if related_edge == opposite_edge {
+    //                         return *neighbor;
+    //                     }
+    //                     // if !related_edge.contains(obtuse_pt) {
+    //                     //     return *neighbor;
+    //                     // }
+    //                 }
+    //             }
+    //             Element::E(ref e) => {
+    //                 if *e == opposite_edge {
+    //                     return *neighbor;
+    //                 }
+    //             }
+    //         }
+    //     }
 
-        unreachable!()
-    }
+    //     unreachable!()
+    // }
 
     // NOTE(feliix42): So this one is fun: It can happen that a cavity is started
     // from an edge (only happens when the cavity is initialized and overwrites
@@ -384,18 +385,19 @@ impl Mesh {
     pub fn refine(&mut self, mut bad: VecDeque<Triangle>) -> usize {
         let mut i = 0;
         while !bad.is_empty() {
-            if (i % 10000) == 0 {
-                let mut hs = HashSet::new();
-                for b in &bad {
-                    hs.insert(*b);
-                }
-                println!(
-                    "Iteration: {}, bad elements: {} (deduped: {})",
-                    i,
-                    bad.len(),
-                    hs.len()
-                );
-            }
+            //if (i % 10000) == 0 {
+            //if true {
+                //let mut hs = HashSet::new();
+                //for b in &bad {
+                    //hs.insert(*b);
+                //}
+                //println!(
+                    //"Iteration: {}, bad elements: {} (deduped: {})",
+                    //i,
+                    //bad.len(),
+                    //hs.len()
+                //);
+            //}
             //if i >= 100 {
             //    println!("Current number of bad elements: {}", bad.len());
             //    i = 0;

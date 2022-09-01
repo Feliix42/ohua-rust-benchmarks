@@ -41,6 +41,7 @@ impl Point {
     }
 
     /// Angle formed by b, self, c
+    #[allow(dead_code)]
     pub fn angle(&self, b: &Self, c: &Self) -> Option<R64> {
         let delta_b = *b - *self;
         let delta_c = *c - *self;
@@ -83,6 +84,7 @@ impl Point {
     }
 
     // Seen in Tuple.h
+    #[allow(dead_code)]
     pub fn angle_check() {
         unimplemented!()
     }
