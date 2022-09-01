@@ -8,9 +8,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::thread;
 use stm::{atomically, StmError, StmResult, TVar, Transaction};
 
+#[derive(Clone)]
 pub struct Mesh {
     /// Triangles in the mesh with links to neighboring elements.
     /// The vector will **always** have 3 elements.
@@ -385,7 +386,10 @@ impl Mesh {
             match src {
                 Element::T(ref t) => {
                     if let Some(neighborhood) = elements.get(t) {
-                        neighborhood.modify(trans, |mut v| { v.push(dst); v})?;
+                        neighborhood.modify(trans, |mut v| {
+                            v.push(dst);
+                            v
+                        })?;
                     } else {
                         return Err(StmError::Failure);
                     }
@@ -398,7 +402,10 @@ impl Mesh {
             match dst {
                 Element::T(ref t) => {
                     if let Some(neighborhood) = elements.get(t) {
-                        neighborhood.modify(trans, |mut v| { v.push(src); v })?;
+                        neighborhood.modify(trans, |mut v| {
+                            v.push(src);
+                            v
+                        })?;
                     } else {
                         return Err(StmError::Failure);
                     }
@@ -431,60 +438,99 @@ impl Mesh {
 
         Ok(new_bad)
     }
+}
 
-    pub fn refine(&mut self, mut bad: VecDeque<Triangle>) -> usize {
-        let mut i = 0;
-        while !bad.is_empty() {
-            //if (i % 10000) == 0 {
-            //if true {
-            //let mut hs = HashSet::new();
-            //for b in &bad {
-            //hs.insert(*b);
-            //}
-            //println!(
-            //"Iteration: {}, bad elements: {} (deduped: {})",
-            //i,
-            //bad.len(),
-            //hs.len()
-            //);
-            //}
-            //if i >= 100 {
-            //    println!("Current number of bad elements: {}", bad.len());
-            //    i = 0;
-            //}
+pub fn refine(mesh_var: Mesh, bad: VecDeque<Triangle>, threadcount: usize) -> usize {
+    let bad_list = splitup(bad, threadcount);
 
-            i += 1;
-            let item = bad.pop_front().unwrap();
-            // this happens atomically
-            if !self.contains_triangle(&item) {
-                // println!("skip!");
-                continue;
-            }
+    let mut handles = Vec::with_capacity(threadcount);
+    for mut bad in bad_list {
+        let mesh = mesh_var.clone();
+        handles.push(thread::spawn(move || {
+            let mut i = 0;
+            while !bad.is_empty() {
+                i += 1;
 
-            let result = atomically(|trans| {
-                if let Some(mut cav) = Cavity::new(self, item.into()) {
-                    cav.build(self, trans)?;
-                    cav.compute();
-                    //println!("Created {} new elements", cav.new_nodes.len());
-                    let result = self.update(cav, item, trans)?;
-                    //println!("Got {} new bad items", result.len());
-                    // bad.append(&mut result);
+                let item = bad.pop_front().unwrap();
 
-                    // TODO(feliix42): Build this as shared thingy
-                    //for i in result {
-                    //bad.push_back(i);
-                    //}
-                    return Ok(result);
+                // TODO(feliix42): Count retries
+                let result = atomically(|trans| {
+                    // this happens atomically
+                    if !mesh.contains_triangle(&item) {
+                        // println!("skip!");
+                        return Ok(VecDeque::with_capacity(0));
+                    }
+
+                    if let Some(mut cav) = Cavity::new(&mesh, item.into()) {
+                        cav.build(&mesh, trans)?;
+                        cav.compute();
+                        //println!("Created {} new elements", cav.new_nodes.len());
+                        let result = mesh.update(cav, item, trans)?;
+                        //println!("Got {} new bad items", result.len());
+                        // bad.append(&mut result);
+
+                        // TODO(feliix42): Build this as shared thingy
+                        //for i in result {
+                        //bad.push_back(i);
+                        //}
+                        return Ok(result);
+                    }
+                    Ok(VecDeque::with_capacity(0))
+                });
+
+                for i in result {
+                    bad.push_back(i);
                 }
-                Ok(VecDeque::with_capacity(0))
-            });
-
-            for i in result {
-                bad.push_back(i);
             }
-        }
 
-        println!("Did {} iterations", i);
-        i
+            println!("Did {} iterations", i);
+            i
+        }));
     }
+
+    handles
+        .into_iter()
+        .map(thread::JoinHandle::join)
+        .map(Result::unwrap)
+        .sum()
+}
+
+fn splitup<T>(vec: VecDeque<T>, split_size: usize) -> Vec<VecDeque<T>>
+where
+    T: Clone,
+{
+    // TODO(feliix42): boost perf on this
+    let vec = vec.into_iter().collect::<Vec<_>>();
+
+    let element_count = vec.len();
+    let mut rest = element_count % split_size;
+    let window_len: usize = element_count / split_size;
+    let per_vec = if rest != 0 {
+        window_len + 1
+    } else {
+        window_len
+    };
+
+    let mut res = vec![Vec::with_capacity(per_vec); split_size];
+
+    let mut start = 0;
+    for i in 0..split_size {
+        // calculate the length of the window (for even distribution of the `rest` elements)
+        let len = if rest > 0 {
+            rest -= 1;
+            window_len + 1
+        } else {
+            window_len
+        };
+
+        let dst = start + len;
+
+        res[i].extend_from_slice(&vec[start..dst]);
+
+        start = dst;
+    }
+
+    res.into_iter()
+        .map(|v| v.into_iter().collect::<VecDeque<_>>())
+        .collect()
 }

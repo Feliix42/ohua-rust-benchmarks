@@ -2,7 +2,7 @@ use crate::element::{Edge, Element, Triangle};
 use crate::mesh::Mesh;
 use crate::point::Point;
 use std::collections::VecDeque;
-use stm::{StmResult, Transaction};
+use stm::{StmError, StmResult, Transaction};
 
 /// Connection between two elements. Format: (src, edge, dest)
 type Connection = (Element, Edge, Element);
@@ -119,24 +119,26 @@ impl Cavity {
 
             match curr {
                 Element::T(ref t) => {
-                    let neighbors = elements
-                        .get(t)
-                        .expect("Triangle is no longer in elements set");
-
-                    for neighbor in neighbors.read(trans)? {
-                        if let Err(other) = self.expand(curr, neighbor) {
-                            // println!("won't use the original, though");
-                            *self = Self::new(mesh, other).unwrap();
+                    if let Some(neighbors) = elements.get(t) {
+                        for neighbor in neighbors.read(trans)? {
+                            if let Err(other) = self.expand(curr, neighbor) {
+                                // println!("won't use the original, though");
+                                *self = Self::new(mesh, other).unwrap();
+                            }
                         }
+                    } else {
+                        println!("Element is no longer in triangle set");
+                        return Err(StmError::Failure);
                     }
                 }
                 Element::E(ref e) => {
-                    let neighbor = boundary_set
-                        .get(e)
-                        .expect("Edge is no longer in boundary set");
-
-                    if let Err(other) = self.expand(curr, *neighbor) {
-                        *self = Self::new(mesh, other).unwrap();
+                    if let Some(neighbor) = boundary_set.get(e) {
+                        if let Err(other) = self.expand(curr, *neighbor) {
+                            *self = Self::new(mesh, other).unwrap();
+                        }
+                    } else {
+                        println!("Element is no longer in boundary set");
+                        return Err(StmError::Failure);
                     }
                 }
             }

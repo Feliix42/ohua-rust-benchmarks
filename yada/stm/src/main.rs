@@ -101,7 +101,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let comp = run_refining(&mut mesh, threadcount);
+        let comp = run_refining(mesh.clone(), threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -165,8 +165,8 @@ fn main() {
     }
 }
 
-fn run_refining(mesh: &mut Mesh, threadcount: usize) -> usize {
+fn run_refining(mesh: Mesh, threadcount: usize) -> usize {
     let bad_queue = mesh.find_bad();
 
-    mesh.refine(bad_queue)
+    mesh::refine(mesh, bad_queue, threadcount)
 }
