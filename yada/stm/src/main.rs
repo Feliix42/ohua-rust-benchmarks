@@ -11,9 +11,13 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use std::time::Instant;
+use std::sync::Arc;
+use std::collections::HashMap;
+use crate::element::{Element, Triangle};
+use stm::TVar;
 
 fn main() {
-    let matches = App::new("STM yada benchmark")
+    let matches = App::new("Transactional yada benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
         .about("A Rust port of the yada benchmark from the Galois collection, implemented using STM.")
@@ -36,7 +40,7 @@ fn main() {
                 .long("threads")
                 .short("t")
                 .takes_value(true)
-                .help("The number of threads to use.")
+                .help("Number of threads to use for execution.")
                 .default_value("4")
         )
         .arg(
@@ -63,17 +67,19 @@ fn main() {
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
-    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap())
-        .expect("Could not parse threadcount");
+    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap()).expect("Could not parse number of runs");
 
     // read and parse input data
     let input_data = Mesh::load_from_file(&input_file)
         .expect("Loading of input data failed. Ensure that all necessary files are present.");
 
+    let mesh_elements = input_data.elements.read_ref_atomic().downcast::<HashMap<Triangle, TVar<Vec<Element>>>>().unwrap().len();
+
     if !json_dump {
         println!(
             "[info] Loaded {} mesh elements.",
-            input_data.elements.read_atomic().len() + input_data.boundary_set.read_atomic().len()
+            mesh_elements
+            //input_data.elements.len() + input_data.boundary_set.len()
         );
     }
 
@@ -88,14 +94,14 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let mesh = Mesh::load_from_file(&input_file).expect("Failed to parse input file");
+        let mut mesh = Mesh::load_from_file(&input_file).expect("Failed to parse input file");
 
         // start the clock
         let cpu_start = ProcessTime::now();
         let start = Instant::now();
 
         // run the algorithm
-        let comps = run_refining(mesh.clone(), threadcount);
+        let comp = run_refining(&mut mesh, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -112,17 +118,17 @@ fn main() {
 
         results.push(runtime_ms);
         cpu_time.push(cpu_runtime_ms);
-        computations.push(comps);
+        computations.push(comp);
     }
 
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/stm-t{}-{}ele-r{}_log.json",
-            threadcount,
+            "{}/stm-{}ele-t{}-r{}_log.json",
             out_dir,
-            input_data.elements.read_atomic().len(),
+            mesh_elements,
+            threadcount,
             runs
         );
         let mut f = File::create(&filename).unwrap();
@@ -130,14 +136,14 @@ fn main() {
             "{{
     \"algorithm\": \"sequential\",
     \"elements\": {ele},
-    \"threadcount\": {tc},
+    \"threadcount\": {threads},
     \"runs\": {runs},
     \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
-            ele = input_data.elements.read_atomic().len(),
-            tc = threadcount,
+            ele = mesh_elements,
+            threads = threadcount,
             runs = runs,
             comps = computations,
             cpu = cpu_time,
@@ -149,24 +155,18 @@ fn main() {
 
         println!("[info] All runs completed.");
         println!("\nStatistics:");
-        println!(
-            "    Number of Mesh elements: {}",
-            input_data.elements.read_atomic().len()
-        );
-        println!("    Input file used: {}", input_file);
-        println!("    Runs: {}", runs);
-        println!("    Threads: {}", threadcount);
-        println!("    Computations: {:?}", computations);
+        println!("    Number of Mesh elements: {}", mesh_elements);
+        println!("    Input file used:         {}", input_file);
+        println!("    Runs:                    {}", runs);
+        println!("    Threads:                 {}", threadcount);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
+        println!("Computations: {:?}", computations);
         println!("Runtime (ms): {:?}", results);
     }
 }
 
-fn run_refining(mesh: Mesh, threadcount: usize) -> usize {
+fn run_refining(mesh: &mut Mesh, threadcount: usize) -> usize {
     let bad_queue = mesh.find_bad();
-    let comps = bad_queue.len();
 
-    let c = mesh::refine(mesh, bad_queue, threadcount);
-
-    comps + c
+    mesh.refine(bad_queue)
 }

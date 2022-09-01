@@ -7,7 +7,7 @@ use num_traits::real::Real;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-const MIN_ANGLE: f64 = 30.0;
+const MIN_ANGLE: f64 = 20.0;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Element {

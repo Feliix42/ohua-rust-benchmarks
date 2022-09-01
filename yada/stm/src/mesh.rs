@@ -8,10 +8,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::str::FromStr;
-use std::thread::{self, JoinHandle};
-use stm::{StmError, StmResult, TVar, Transaction};
+use std::sync::Arc;
+use stm::{atomically, StmError, StmResult, TVar, Transaction};
 
-#[derive(Clone)]
 pub struct Mesh {
     /// Triangles in the mesh with links to neighboring elements.
     /// The vector will **always** have 3 elements.
@@ -118,8 +117,8 @@ impl Mesh {
             assert!(coords[1] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0]];
-            let c_1 = coordinates[coords[1]];
+            let c_0 = coordinates[coords[0] - 1];
+            let c_1 = coordinates[coords[1] - 1];
             edge_set.insert(Edge::new(c_0, c_1));
         }
 
@@ -156,9 +155,9 @@ impl Mesh {
             assert!(coords[2] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0]];
-            let c_1 = coordinates[coords[1]];
-            let c_2 = coordinates[coords[2]];
+            let c_0 = coordinates[coords[0] - 1];
+            let c_1 = coordinates[coords[1] - 1];
+            let c_2 = coordinates[coords[2] - 1];
             elem_vec.push(Triangle::new(c_0, c_1, c_2));
         }
 
@@ -209,17 +208,17 @@ impl Mesh {
         })
     }
 
-    /// Reads the data structure atomically
+    /// NOTE: Reads atomically
     pub fn find_bad(&self) -> VecDeque<Triangle> {
         let mut r = VecDeque::new();
 
-        for elem in self
+        let elems = self
             .elements
             .read_ref_atomic()
-            .downcast_ref::<HashMap<Triangle, TVar<Vec<Element>>>>()
-            .unwrap()
-            .keys()
-        {
+            .downcast::<HashMap<Triangle, TVar<Vec<Element>>>>()
+            .unwrap();
+
+        for elem in elems.keys() {
             if elem.is_bad() {
                 r.push_back(elem.to_owned());
             }
@@ -228,21 +227,20 @@ impl Mesh {
         r
     }
 
-    /// Tests whether `node` is contained in the graph.
-    pub fn contains(&self, node: &Element, trans: &mut Transaction) -> StmResult<bool> {
-        match node {
-            Element::E(ref e) => Ok(self.boundary_set.read(trans)?.contains_key(e)),
-            Element::T(ref t) => Ok(self.elements.read(trans)?.contains_key(t)),
-        }
-    }
+    ///// Tests whether `node` is contained in the graph.
+    //#[allow(dead_code)]
+    //pub fn contains(&self, node: &Element) -> bool {
+    //match node {
+    //Element::E(ref e) => self.boundary_set.contains_key(e),
+    //Element::T(ref t) => self.elements.contains_key(t),
+    //}
+    //}
 
     /// Tests whether `node` is contained in the graphs triangle set.
-    ///
-    /// Reads atomically
     pub fn contains_triangle(&self, node: &Triangle) -> bool {
         self.elements
             .read_ref_atomic()
-            .downcast_ref::<HashMap<Triangle, TVar<Vec<Element>>>>()
+            .downcast::<HashMap<Triangle, TVar<Vec<Element>>>>()
             .unwrap()
             .contains_key(node)
     }
@@ -290,6 +288,14 @@ impl Mesh {
         original_bad: Triangle,
         trans: &mut Transaction,
     ) -> StmResult<VecDeque<Triangle>> {
+        // NOTE(feliix42): we're essentially doing a double read here, after already doing a read
+        // while building the cavity. Depending on the semantic model of the transactional memory
+        // implementation it may be fine (to the model) to expose a different state here than in
+        // the previous read without warning. It's maybe a safe idea to fail further down when
+        // pruning old connections if one of the connections is not there anymore.
+        let mut elements = self.elements.read(trans)?;
+        let mut boundary_set = self.boundary_set.read(trans)?;
+
         // println!("Update: Replacing {} elements with {} elements.\nOld set:\n{:#?}\n--------------\nNew set:\n{:#?}", cav.previous_nodes.len(), cav.new_nodes.len(), cav.previous_nodes, cav.new_nodes);
         // std::thread::sleep_ms(1_000);
 
@@ -303,17 +309,20 @@ impl Mesh {
         //     "Is original bad in prev nodes? {}",
         //     cav.previous_nodes.contains(&Element::T(original_bad))
         // );
-        let mut elements = self.elements.read(trans)?;
-        let mut boundary_set = self.boundary_set.read(trans)?;
-
         for old in cav.previous_nodes {
             // print!("Searching {:?}", old.borrow().coordinates);
             match old {
                 Element::T(ref t) => {
-                    elements.remove(t);
+                    // NOTE(feliix42): Picking up from the previous note, we'll (for now)
+                    // explicitly fail here if the element is not in the set anymore.
+                    if elements.remove(t).is_none() {
+                        return Err(StmError::Failure);
+                    }
                 }
                 Element::E(ref e) => {
-                    boundary_set.remove(e);
+                    if boundary_set.remove(e).is_none() {
+                        return Err(StmError::Failure);
+                    }
                 }
             }
         }
@@ -329,10 +338,20 @@ impl Mesh {
         for (old, _, outer) in cav.connections {
             match outer {
                 Element::T(ref t) => {
-                    if let Some(neighborhood) = elements.get(t) {
-                        let _ = neighborhood.modify(trans, |v| {
-                            v.into_iter().filter(|x| x != &old).collect::<Vec<_>>()
-                        })?;
+                    if let Some(neighborhood_var) = elements.get(t) {
+                        let mut neighborhood = neighborhood_var.read(trans)?;
+                        let len_before = neighborhood.len();
+                        let _ = neighborhood
+                            .drain_filter(|&mut x| x == old)
+                            .collect::<Vec<_>>();
+                        let len_after = neighborhood.len();
+                        if len_before != len_after + 1 {
+                            return Err(StmError::Failure);
+                        }
+
+                        neighborhood_var.write(trans, neighborhood)?;
+                    } else {
+                        return Err(StmError::Failure);
                     }
                 }
                 Element::E(ref e) => {
@@ -366,12 +385,9 @@ impl Mesh {
             match src {
                 Element::T(ref t) => {
                     if let Some(neighborhood) = elements.get(t) {
-                        neighborhood.modify(trans, |mut v| {
-                            v.push(dst);
-                            v
-                        })?;
+                        neighborhood.modify(trans, |mut v| { v.push(dst); v})?;
                     } else {
-                        return Err(StmError::Retry);
+                        return Err(StmError::Failure);
                     }
                 }
                 Element::E(e) => {
@@ -382,12 +398,9 @@ impl Mesh {
             match dst {
                 Element::T(ref t) => {
                     if let Some(neighborhood) = elements.get(t) {
-                        neighborhood.modify(trans, |mut v| {
-                            v.push(src);
-                            v
-                        })?;
+                        neighborhood.modify(trans, |mut v| { v.push(src); v })?;
                     } else {
-                        return Err(StmError::Retry);
+                        return Err(StmError::Failure);
                     }
                 }
                 Element::E(e) => {
@@ -413,90 +426,65 @@ impl Mesh {
         }
 
         // println!("-- Done");
-
         self.elements.write(trans, elements)?;
         self.boundary_set.write(trans, boundary_set)?;
 
         Ok(new_bad)
     }
-}
 
-pub fn refine(mesh: Mesh, bad: VecDeque<Triangle>, threadcount: usize) -> usize {
-    let vs = splitup(bad, threadcount);
+    pub fn refine(&mut self, mut bad: VecDeque<Triangle>) -> usize {
+        let mut i = 0;
+        while !bad.is_empty() {
+            //if (i % 10000) == 0 {
+            //if true {
+            //let mut hs = HashSet::new();
+            //for b in &bad {
+            //hs.insert(*b);
+            //}
+            //println!(
+            //"Iteration: {}, bad elements: {} (deduped: {})",
+            //i,
+            //bad.len(),
+            //hs.len()
+            //);
+            //}
+            //if i >= 100 {
+            //    println!("Current number of bad elements: {}", bad.len());
+            //    i = 0;
+            //}
 
-    let mut handles = Vec::new();
-    for mut v in vs {
-        let m = mesh.clone();
-        handles.push(thread::spawn(move || {
-            let mut computations = 0;
-            while !v.is_empty() {
-                let item = v.pop_front().unwrap();
-                if !m.contains_triangle(&item) {
-                    continue;
-                }
-
-                let (result, xtra) = stm::atomically(|trans| {
-                    if let Some(mut cav) = Cavity::new(&m, item.into()) {
-                        cav.build(&m, trans)?;
-                        cav.compute();
-                        m.update(cav, item, trans)
-                    } else {
-                        Ok(VecDeque::with_capacity(0))
-                    }
-                });
-
-                computations += xtra + result.len();
-                for i in result {
-                    v.push_back(i);
-                }
+            i += 1;
+            let item = bad.pop_front().unwrap();
+            // this happens atomically
+            if !self.contains_triangle(&item) {
+                // println!("skip!");
+                continue;
             }
-            computations
-        }));
+
+            let result = atomically(|trans| {
+                if let Some(mut cav) = Cavity::new(self, item.into()) {
+                    cav.build(self, trans)?;
+                    cav.compute();
+                    //println!("Created {} new elements", cav.new_nodes.len());
+                    let result = self.update(cav, item, trans)?;
+                    //println!("Got {} new bad items", result.len());
+                    // bad.append(&mut result);
+
+                    // TODO(feliix42): Build this as shared thingy
+                    //for i in result {
+                    //bad.push_back(i);
+                    //}
+                    return Ok(result);
+                }
+                Ok(VecDeque::with_capacity(0))
+            });
+
+            for i in result {
+                bad.push_back(i);
+            }
+        }
+
+        println!("Did {} iterations", i);
+        i
     }
-
-    handles
-        .into_iter()
-        .map(JoinHandle::join)
-        .map(Result::unwrap)
-        .sum::<usize>()
-}
-
-fn splitup<T>(vec: VecDeque<T>, split_size: usize) -> Vec<VecDeque<T>>
-where
-    T: Clone,
-{
-    let vec = vec.into_iter().collect::<Vec<_>>();
-    let size = split_size * 2;
-    let element_count = vec.len();
-    let mut rest = element_count % size;
-    let window_len: usize = element_count / size;
-    let per_vec = if rest != 0 {
-        window_len + 1
-    } else {
-        window_len
-    };
-
-    let mut res = vec![Vec::with_capacity(per_vec); size];
-
-    let mut start = 0;
-    for i in 0..size {
-        // calculate the length of the window (for even distribution of the `rest` elements)
-        let len = if rest > 0 {
-            rest -= 1;
-            window_len + 1
-        } else {
-            window_len
-        };
-
-        let dst = start + len;
-
-        res[i].extend_from_slice(&vec[start..dst]);
-
-        start = dst;
-    }
-
-    return res
-        .into_iter()
-        .map(|v| v.into_iter().collect::<VecDeque<_>>())
-        .collect();
 }
