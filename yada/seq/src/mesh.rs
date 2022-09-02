@@ -22,10 +22,12 @@ pub struct Mesh {
     pub elements: HashMap<Triangle, Vec<Element>>,
     // pub elements: HashMap<Triangle, [Element; 3]>,
     pub boundary_set: HashMap<Edge, Element>,
+    /// Minimum angle to be achieved for all elements.
+    pub min_angle: f64,
 }
 
 impl Mesh {
-    pub fn load_from_file(filename_prefix: &str) -> std::io::Result<Self> {
+    pub fn load_from_file(filename_prefix: &str, min_angle: f64) -> std::io::Result<Self> {
         // load *.node file
         let node_file = File::open(format!("{}.node", filename_prefix))?;
         let mut node_reader = BufReader::new(node_file);
@@ -115,8 +117,8 @@ impl Mesh {
             assert!(coords[1] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0] -1];
-            let c_1 = coordinates[coords[1] -1];
+            let c_0 = coordinates[coords[0] - 1];
+            let c_1 = coordinates[coords[1] - 1];
             edge_set.insert(Edge::new(c_0, c_1));
         }
 
@@ -153,9 +155,9 @@ impl Mesh {
             assert!(coords[2] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0] -1];
-            let c_1 = coordinates[coords[1] -1];
-            let c_2 = coordinates[coords[2] -1];
+            let c_0 = coordinates[coords[0] - 1];
+            let c_1 = coordinates[coords[1] - 1];
+            let c_2 = coordinates[coords[2] - 1];
             elem_vec.push(Triangle::new(c_0, c_1, c_2));
         }
 
@@ -203,6 +205,7 @@ impl Mesh {
         Ok(Mesh {
             elements: elems,
             boundary_set: edges,
+            min_angle,
         })
     }
 
@@ -210,7 +213,7 @@ impl Mesh {
         let mut r = VecDeque::new();
 
         for elem in self.elements.keys() {
-            if elem.is_bad() {
+            if elem.is_bad(self.min_angle) {
                 r.push_back(elem.to_owned());
             }
         }
@@ -218,48 +221,10 @@ impl Mesh {
         r
     }
 
-    /// Tests whether `node` is contained in the graph.
-    #[allow(dead_code)]
-    pub fn contains(&self, node: &Element) -> bool {
-        match node {
-            Element::E(ref e) => self.boundary_set.contains_key(e),
-            Element::T(ref t) => self.elements.contains_key(t),
-        }
-    }
-
     /// Tests whether `node` is contained in the graphs triangle set.
     pub fn contains_triangle(&self, node: &Triangle) -> bool {
         self.elements.contains_key(node)
     }
-
-    // /// Find the node that is opposite to the obtuse angle of the element.
-    // pub fn get_opposite(&self, node: &Triangle) -> Element {
-    //     let opposite_edge = node.get_opposite_edge();
-
-    //     for neighbor in self.elements.get(node).unwrap() {
-    //         match neighbor {
-    //             Element::T(ref t) => {
-    //                 // get related edge
-    //                 if let Some(related_edge) = node.get_related_edge(t) {
-    //                     // if points of the edge don't match obtuse point, return neighbor
-    //                     if related_edge == opposite_edge {
-    //                         return *neighbor;
-    //                     }
-    //                     // if !related_edge.contains(obtuse_pt) {
-    //                     //     return *neighbor;
-    //                     // }
-    //                 }
-    //             }
-    //             Element::E(ref e) => {
-    //                 if *e == opposite_edge {
-    //                     return *neighbor;
-    //                 }
-    //             }
-    //         }
-    //     }
-
-    //     unreachable!()
-    // }
 
     // NOTE(feliix42): So this one is fun: It can happen that a cavity is started
     // from an edge (only happens when the cavity is initialized and overwrites
@@ -270,21 +235,11 @@ impl Mesh {
     ///
     /// Returns a list of new bad elements
     pub fn update(&mut self, cav: Cavity, original_bad: Triangle) -> VecDeque<Triangle> {
-        // println!("Update: Replacing {} elements with {} elements.\nOld set:\n{:#?}\n--------------\nNew set:\n{:#?}", cav.previous_nodes.len(), cav.new_nodes.len(), cav.previous_nodes, cav.new_nodes);
-        // std::thread::sleep_ms(1_000);
-
         // here we'd probably have to check if all elements of the `previous_nodes`
         // are still in the mesh before updating when doing this in parallel.
-        // println!("Previous nodes: {}", cav.previous_nodes.len(),);
 
         // remove old elements
-        // let mut failed = 0;
-        // println!(
-        //     "Is original bad in prev nodes? {}",
-        //     cav.previous_nodes.contains(&Element::T(original_bad))
-        // );
         for old in cav.previous_nodes {
-            // print!("Searching {:?}", old.borrow().coordinates);
             match old {
                 Element::T(ref t) => {
                     self.elements.remove(t);
@@ -294,22 +249,18 @@ impl Mesh {
                 }
             }
         }
-        // assert!(failed == 0, "Failed in removing {} elements", failed);
-
-        //println!(
-        //    "old connections: {}, new connections: {}",
-        //    cav.connections.len(),
-        //    cav.new_connections.len()
-        //);
 
         // prune old connections!
         for (old, _, outer) in cav.connections {
             match outer {
                 Element::T(ref t) => {
                     if let Some(neighborhood) = self.elements.get_mut(t) {
+                        let len_before = neighborhood.len();
                         let _ = neighborhood
                             .drain_filter(|&mut x| x == old)
                             .collect::<Vec<_>>();
+                        let len_after = neighborhood.len();
+                        assert_eq!(len_before, len_after + 1);
                     }
                 }
                 Element::E(ref e) => {
@@ -325,8 +276,7 @@ impl Mesh {
             match new_node {
                 Element::T(t) => {
                     self.elements.insert(t, Vec::with_capacity(3));
-                    if t.is_bad() {
-                        // println!("Appending triangle with area: {}", t.area());
+                    if t.is_bad(self.min_angle) {
                         new_bad.push_back(t);
                     }
                 }
@@ -363,7 +313,6 @@ impl Mesh {
 
         // if the original "bad element" is still in the mesh that's still a todo
         if self.elements.contains_key(&original_bad) {
-            // println!("Ah shit here we go again");
             new_bad.push_back(original_bad);
         }
 
@@ -377,53 +326,29 @@ impl Mesh {
                 .collect::<()>();
         }
 
-        // println!("-- Done");
-
         new_bad
     }
 
     pub fn refine(&mut self, mut bad: VecDeque<Triangle>) -> usize {
         let mut i = 0;
         while !bad.is_empty() {
-            //if (i % 10000) == 0 {
-            //if true {
-                //let mut hs = HashSet::new();
-                //for b in &bad {
-                    //hs.insert(*b);
-                //}
-                //println!(
-                    //"Iteration: {}, bad elements: {} (deduped: {})",
-                    //i,
-                    //bad.len(),
-                    //hs.len()
-                //);
-            //}
-            //if i >= 100 {
-            //    println!("Current number of bad elements: {}", bad.len());
-            //    i = 0;
-            //}
-
             i += 1;
+
             let item = bad.pop_front().unwrap();
             if !self.contains_triangle(&item) {
-                // println!("skip!");
                 continue;
             }
 
             if let Some(mut cav) = Cavity::new(self, item.into()) {
                 cav.build(self);
                 cav.compute();
-                //println!("Created {} new elements", cav.new_nodes.len());
                 let result = self.update(cav, item);
-                //println!("Got {} new bad items", result.len());
-                // bad.append(&mut result);
                 for i in result {
                     bad.push_back(i);
                 }
             }
         }
 
-        println!("Did {} iterations", i);
         i
     }
 }

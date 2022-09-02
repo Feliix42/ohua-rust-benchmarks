@@ -1,14 +1,8 @@
-[package]
-name = "ssca2-seq"
-version = "0.1.0"
-edition = "2021"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+members = [
+    "seq",
+    "stm",
+]
 
-[dependencies]
-clap = { version = "3.2", features = [ "derive" ] } 
-
-# seedable RNG
-rand_chacha = "0.3"
-rand_core = "0.6"
-
+resolver = "2"

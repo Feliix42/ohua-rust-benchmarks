@@ -24,6 +24,14 @@ fn main() {
                 .index(1),
         )
         .arg(
+            Arg::with_name("minangle")
+                .long("angle")
+                .short("a")
+                .takes_value(true)
+                .help("Minimum angle")
+                .default_value("20")
+        )
+        .arg(
             Arg::with_name("runs")
                 .long("runs")
                 .short("r")
@@ -49,6 +57,8 @@ fn main() {
 
     // parse parameters
     let input_file = matches.value_of("INPUT").unwrap();
+    let minimum_angle = f64::from_str(matches.value_of("minangle").unwrap())
+        .expect("Could not parse minimum angle as f64");
 
     // parse runtime parameters
     let runs =
@@ -57,7 +67,7 @@ fn main() {
     let out_dir = matches.value_of("outdir").unwrap();
 
     // read and parse input data
-    let input_data = Mesh::load_from_file(&input_file)
+    let input_data = Mesh::load_from_file(input_file, minimum_angle)
         .expect("Loading of input data failed. Ensure that all necessary files are present.");
 
     if !json_dump {
@@ -78,7 +88,8 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let mut mesh = Mesh::load_from_file(&input_file).expect("Failed to parse input file");
+        let mut mesh =
+            Mesh::load_from_file(input_file, minimum_angle).expect("Failed to parse input file");
 
         // start the clock
         let cpu_start = ProcessTime::now();
@@ -117,6 +128,7 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
+    \"application\": \"yada\",
     \"algorithm\": \"sequential\",
     \"elements\": {ele},
     \"runs\": {runs},
