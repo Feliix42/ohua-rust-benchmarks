@@ -13,21 +13,6 @@ pub struct Point {
     pub y: R64,
 }
 
-// impl PartialEq for Point {
-//     fn eq(&self, other: &Self) -> bool {
-//         (self.x - other.x).abs() < 1e-6 && (self.y - other.y).abs() < 1e-6
-//     }
-// }
-
-// impl Hash for Point {
-//     fn hash<H: Hasher>(&self, state: &mut H) {
-//         let a = (self.x * 1_000_000_f64).round() / 1_000_000_f64;
-//         a.hash(state);
-//         let b = (self.y * 1_000_000_f64).round() / 1_000_000_f64;
-//         b.hash(state);
-//     }
-// }
-
 impl Point {
     pub fn distance_to(&self, other: &Self) -> R64 {
         R64::sqrt(self.squared_distance_to(other))
@@ -81,12 +66,6 @@ impl Point {
         let vc = *c - *self;
 
         (vb * vc) < 0f64
-    }
-
-    // Seen in Tuple.h
-    #[allow(dead_code)]
-    pub fn angle_check() {
-        unimplemented!()
     }
 }
 
@@ -144,17 +123,6 @@ impl Mul for Point {
         self.x * rhs.x + self.y * rhs.y
     }
 }
-
-/*
-impl Hash for Point {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        // This seems like absolute gore and I agree, but we're only feeding the mesh with ints and
-        // using this function on those numbers so it's ok.
-        (self.x as u64).hash(state);
-        (self.y as u64).hash(state);
-    }
-}
-*/
 
 #[cfg(test)]
 mod tests {

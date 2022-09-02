@@ -4,23 +4,24 @@ mod element;
 mod mesh;
 mod point;
 
+use crate::element::{Element, Triangle};
 use crate::mesh::Mesh;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
+use std::collections::HashMap;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use std::time::Instant;
-use std::sync::Arc;
-use std::collections::HashMap;
-use crate::element::{Element, Triangle};
 use stm::TVar;
 
 fn main() {
     let matches = App::new("Transactional yada benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
-        .about("A Rust port of the yada benchmark from the Galois collection, implemented using STM.")
+        .about(
+            "A Rust port of the yada benchmark from the Galois collection, implemented using STM.",
+        )
         .arg(
             Arg::with_name("INPUT")
                 .help("Input file name stem.")
@@ -28,12 +29,20 @@ fn main() {
                 .index(1),
         )
         .arg(
+            Arg::with_name("minangle")
+                .long("angle")
+                .short("a")
+                .takes_value(true)
+                .help("Minimum angle")
+                .default_value("20")
+        )
+        .arg(
             Arg::with_name("runs")
                 .long("runs")
                 .short("r")
                 .takes_value(true)
                 .help("The number of runs to conduct.")
-                .default_value("1")
+                .default_value("1"),
         )
         .arg(
             Arg::with_name("threadcount")
@@ -41,13 +50,13 @@ fn main() {
                 .short("t")
                 .takes_value(true)
                 .help("Number of threads to use for execution.")
-                .default_value("4")
+                .default_value("4"),
         )
         .arg(
             Arg::with_name("json")
                 .long("json")
                 .short("j")
-                .help("Dump results as JSON file.")
+                .help("Dump results as JSON file."),
         )
         .arg(
             Arg::with_name("outdir")
@@ -55,31 +64,38 @@ fn main() {
                 .short("o")
                 .help("Sets the output directory for JSON dumps")
                 .takes_value(true)
-                .default_value("results")
+                .default_value("results"),
         )
         .get_matches();
 
     // parse parameters
     let input_file = matches.value_of("INPUT").unwrap();
+    let minimum_angle = f64::from_str(matches.value_of("minangle").unwrap())
+        .expect("Could not parse minimum angle as f64");
 
     // parse runtime parameters
     let runs =
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
-    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap()).expect("Could not parse number of runs");
+    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap())
+        .expect("Could not parse number of runs");
 
     // read and parse input data
-    let input_data = Mesh::load_from_file(&input_file)
+    let input_data = Mesh::load_from_file(input_file, minimum_angle)
         .expect("Loading of input data failed. Ensure that all necessary files are present.");
 
-    let mesh_elements = input_data.elements.read_ref_atomic().downcast::<HashMap<Triangle, TVar<Vec<Element>>>>().unwrap().len();
+    let mesh_elements = input_data
+        .elements
+        .read_ref_atomic()
+        .downcast::<HashMap<Triangle, TVar<Vec<Element>>>>()
+        .unwrap()
+        .len();
 
     if !json_dump {
         println!(
             "[info] Loaded {} mesh elements.",
-            mesh_elements
-            //input_data.elements.len() + input_data.boundary_set.len()
+            mesh_elements //input_data.elements.len() + input_data.boundary_set.len()
         );
     }
 
@@ -94,7 +110,8 @@ fn main() {
 
     for _ in 0..runs {
         // clone the necessary data
-        let mut mesh = Mesh::load_from_file(&input_file).expect("Failed to parse input file");
+        let mesh =
+            Mesh::load_from_file(input_file, minimum_angle).expect("Failed to parse input file");
 
         // start the clock
         let cpu_start = ProcessTime::now();
@@ -126,14 +143,12 @@ fn main() {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
             "{}/stm-{}ele-t{}-r{}_log.json",
-            out_dir,
-            mesh_elements,
-            threadcount,
-            runs
+            out_dir, mesh_elements, threadcount, runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
+    \"application\": \"yada\",
     \"algorithm\": \"sequential\",
     \"elements\": {ele},
     \"threadcount\": {threads},

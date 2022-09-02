@@ -73,7 +73,7 @@ fn main() {
     if !json_dump {
         println!(
             "[info] Loaded {} mesh elements.",
-            input_data.elements.len() + input_data.boundary_set.len()
+            input_data.elements.len() // + input_data.boundary_set.len()
         );
     }
 

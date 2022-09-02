@@ -29,7 +29,6 @@ impl Cavity {
         let mut previous_nodes = Vec::new();
         let new_nodes = Vec::new();
 
-        // println!("Starting with: {}", node);
         let center_element = node;
 
         // TODO(feliix42): What if mesh.contains(node) fails?
@@ -49,11 +48,7 @@ impl Cavity {
         //     }
         // }
 
-        // println!("Using center element:\n{}", center_element);
         let center = center_element.get_center()?;
-        // println!("Center: {:?}", center);
-        // println!("Center: {:?}", center);
-        // println!("Coordinates: {:?}", center_element.borrow().coordinates);
         let dimension = match center_element {
             Element::T(_) => 3,
             Element::E(_) => 2,
@@ -74,8 +69,6 @@ impl Cavity {
     }
 
     fn expand(&mut self, curr: Element, next: Element) -> Result<(), Element> {
-        // let next_inner = next.borrow();
-
         if !(self.dimension == 2 && next.is_edge() && next != self.center_element)
             && next.in_circle(self.center)
         {
@@ -84,7 +77,6 @@ impl Cavity {
                 // is segment and we're encroaching
                 return Err(next);
             } else if !self.previous_nodes.contains(&next) {
-                // println!("  will delete: {}", next);
                 self.previous_nodes.push(next);
                 self.frontier.push_back(next);
             }
@@ -93,12 +85,9 @@ impl Cavity {
             let edge = next.get_related_edge(&curr).unwrap();
 
             let connection = (curr, edge, next);
-            // print!("  connecting to {}?", next);
             if !self.connections.contains(&connection) {
                 self.connections.push(connection);
-                // println!(" - yes");
             } else {
-                // println!(" - no");
             }
         }
 
@@ -107,7 +96,6 @@ impl Cavity {
 
     /// Expand the cavity to cover all related elements.
     pub fn build(&mut self, mesh: &Mesh, trans: &mut Transaction) -> StmResult<()> {
-        println!("Building cavity around {}", self.frontier[0]);
         let elements = mesh.elements.read(trans)?;
         let boundary_set = mesh.boundary_set.read(trans)?;
 
@@ -122,12 +110,11 @@ impl Cavity {
                     if let Some(neighbors) = elements.get(t) {
                         for neighbor in neighbors.read(trans)? {
                             if let Err(other) = self.expand(curr, neighbor) {
-                                // println!("won't use the original, though");
                                 *self = Self::new(mesh, other).unwrap();
                             }
                         }
                     } else {
-                        println!("Element is no longer in triangle set");
+                        //println!("Element is no longer in triangle set");
                         return Err(StmError::Failure);
                     }
                 }
@@ -137,7 +124,7 @@ impl Cavity {
                             *self = Self::new(mesh, other).unwrap();
                         }
                     } else {
-                        println!("Element is no longer in boundary set");
+                        //println!("Element is no longer in boundary set");
                         return Err(StmError::Failure);
                     }
                 }
@@ -145,13 +132,11 @@ impl Cavity {
         }
 
         Ok(())
-        // println!("Cavity contains {} elements.", self.previous_nodes.len());
     }
 
     /// Compute a corrected cavity
     pub fn compute(&mut self) {
         // TODO: IS THIS FUNCTION CORRECT??
-        // Also: Check clippy warnings!
         if self.dimension == 2 {
             // we've actually built around a segment (or an edge)
             let c = self.center_element.get_points();
@@ -162,17 +147,16 @@ impl Cavity {
             self.new_nodes.push(n2.into());
         }
 
-        let mut circtest = Vec::new();
+        //let mut circtest = Vec::new();
         for conn in &self.connections {
             // cycle detection (temporary)
-            if circtest.contains(conn) {
-                panic!("ALARM");
-            }
-            circtest.push(*conn);
+            //if circtest.contains(conn) {
+            //panic!("ALARM");
+            //}
+            //circtest.push(*conn);
             assert_ne!(conn.1 .0, conn.1 .1);
 
             let ele = Element::T(Triangle::new(self.center, (conn.1).0, (conn.1).1));
-            // println!("  new: {}", ele);
             let other = if self.previous_nodes.contains(&conn.2) {
                 // if the destination is contained in previous nodes, go for the source
                 conn.0
@@ -195,8 +179,6 @@ impl Cavity {
             self.new_connections.push((ele, other_edge, other));
 
             for element in &self.new_nodes {
-                // let el = element;
-                // let ele = ele_wrapped.borrow();
                 if element.is_related_to(&ele) {
                     let additional_edge = ele.get_related_edge(element).unwrap();
                     self.new_connections.push((ele, additional_edge, *element));
