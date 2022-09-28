@@ -325,4 +325,3 @@ pub fn create_partition(min: usize, max: usize, id: usize, n: usize) -> (usize, 
     (start, stop)
 }
 
-// TODO(feliix42): remove `Graph` from the function signature and return it instead.
