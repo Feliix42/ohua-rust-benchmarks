@@ -9,21 +9,17 @@ edition = "2018"
 [dependencies]
 rand_chacha = "0.2"
 clap = { version = "2.32", optional = true }
-ohua_codegen = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
-ohua_runtime = { git = "https://github.com/ohua-dev/ohua-rust-runtime", optional = true }
+
 # use patched version of rust-stm
 stm = { git = "https://github.com/feliix42/rust-stm", optional = true } #, branch = "retry-count" }
 stm-datastructures = { git = "https://github.com/feliix42/stm-datastructures", optional = true }
-# stm = { git = "https://github.com/feliix42/rust-stm", optional = true, branch = "original_version" }
+
 time = { version = "0.1", optional = true }
 cpu-time = { version = "1.0", optional = true }
-tokio = { version = "0.2", features = ["full"], optional = true }
 
 [features]
 cli = ["time", "clap", "cpu-time"]
-ohua = ["ohua_codegen", "ohua_runtime"]
 transactional = ["stm", "stm-datastructures"]
-future = ["ohua", "tokio"]
 
 [[bin]]
 name = "sequential"
@@ -35,17 +31,3 @@ name = "stm"
 path = "src/bin/stm.rs"
 required-features = ["transactional", "cli"]
 
-[[bin]]
-name = "ohua"
-path = "src/bin/ohua.rs"
-required-features = ["ohua", "cli"]
-
-[[bin]]
-name = "split2"
-path = "src/bin/ohua_split.rs"
-required-features = ["ohua", "cli"]
-
-[[bin]]
-name = "ohua_futures"
-path = "src/bin/ohua_futures.rs"
-required-features = ["ohua", "cli", "future"]
