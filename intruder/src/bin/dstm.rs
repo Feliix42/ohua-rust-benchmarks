@@ -8,7 +8,7 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use std::thread;
-use stm::atomically; //, TVar};
+use stm::{atomically, det_atomically, dtm, freeze, DTMHandle, DTM};
 use time::PreciseTime;
 
 fn main() {
@@ -192,7 +192,7 @@ fn main() {
 /// Everything inside this function is being timed.
 ///
 /// Returns a Vec of flow IDs that contained an attack for later check
-fn analyze_stream(mut packets: VecDeque<Packet>, decoder_state: StmDecoderState) -> Vec<usize> {
+fn analyze_stream(packets: VecDeque<(Packet, DTMHandle)>, decoder_state: StmDecoderState) -> Vec<usize> {
     let mut found_attacks = Vec::new();
 
     // NOTE: This is a deviation from the original code where packets where
@@ -210,10 +210,11 @@ fn analyze_stream(mut packets: VecDeque<Packet>, decoder_state: StmDecoderState)
     //         }
     //     });
 
-    for p in packets {
+    for (p, h) in packets {
         // if let Some(p) = packet {
         // do the algorithm
-        let decoder_result = atomically(|trans2| decode_packet(&p, &decoder_state, trans2));
+        let decoder_result = det_atomically(h, |trans2| decode_packet(&p, &decoder_state, trans2));
+        //println!("Comitted!");
         if let Some(decoded_flow) = decoder_result {
             // process the output -> run the detector
             if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
@@ -228,11 +229,20 @@ fn analyze_stream(mut packets: VecDeque<Packet>, decoder_state: StmDecoderState)
     found_attacks
 }
 
-fn partition_input_vec(mut packets: VecDeque<Packet>, threadcount: usize) -> Vec<VecDeque<Packet>> {
-    let l = packets.len() / threadcount;
+//fn partition_input_vec(mut packets: VecDeque<Packet>, threadcount: usize, dtm: &mut DTM) -> (Vec<VecDeque<Packet>>, Vec<VecDeque<DTMHandle>>) {
+fn partition_input_vec(
+    mut packets: VecDeque<Packet>,
+    threadcount: usize,
+    dtm: &mut DTM,
+) -> Vec<VecDeque<(Packet, DTMHandle)>> {
+    let total_packets = packets.len();
+    let l = total_packets / threadcount;
     let mut rest = packets.len() % threadcount;
 
-    let mut partitioned = vec![VecDeque::with_capacity(l); threadcount];
+    let mut partitioned = vec![VecDeque::with_capacity(0); threadcount];
+    let mut handles: Vec<VecDeque<DTMHandle>> = (0..threadcount)
+        .map(|_| VecDeque::with_capacity(l + 1))
+        .collect();
 
     for t_num in 0..threadcount {
         if rest > 0 {
@@ -247,15 +257,39 @@ fn partition_input_vec(mut packets: VecDeque<Packet>, threadcount: usize) -> Vec
         }
     }
 
+    for i in 0..total_packets {
+        handles[i % threadcount].push_back(dtm.register());
+    }
+
+    // TODO(feliix42): Verification only!
+    for i in 0..threadcount {
+        assert_eq!(handles[i].len(), partitioned[i].len());
+    }
+
     partitioned
+        .into_iter()
+        .zip(handles)
+        .map(|(items, handlelist)| {
+            items
+                .into_iter()
+                .zip(handlelist)
+                .collect::<VecDeque<(Packet, DTMHandle)>>()
+        })
+        .collect()
 }
 
 fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
     let mut found_attacks = Vec::new();
     let decoder_state = StmDecoderState::new(threadcount);
 
+    // create a DTM queue
+    let mut dtm = dtm();
+
     let mut handles = Vec::with_capacity(threadcount);
-    let mut inputs = partition_input_vec(packets, threadcount);
+    let inputs = partition_input_vec(packets, threadcount, &mut dtm);
+
+    // freeze the DTM queue
+    freeze(dtm);
 
     for packets in inputs {
         let ds = decoder_state.clone();
