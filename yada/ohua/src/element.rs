@@ -6,8 +6,6 @@ use num_traits::real::Real;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-const MIN_ANGLE: f64 = 30.0;
-
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Element {
     T(Triangle),
@@ -25,9 +23,9 @@ impl fmt::Display for Element {
 
 impl Element {
     /// Determines whether an element needs to be processed.
-    pub fn is_bad(&self) -> bool {
+    pub fn is_bad(&self, min_angle: f64) -> bool {
         match self {
-            Self::T(t) => t.is_bad(),
+            Self::T(t) => t.is_bad(min_angle),
             Self::E(e) => e.is_bad(),
         }
     }
@@ -292,7 +290,7 @@ impl Triangle {
         ((a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y)) / 2_f64).abs()
     }
 
-    pub fn is_bad(&self) -> bool {
+    pub fn is_bad(&self, min_angle: f64) -> bool {
         // Stopgap measure
         if self.area() < 1e-1 {
             return false;
@@ -304,7 +302,7 @@ impl Triangle {
             if self.coordinates[i].angle_is_greater_than(
                 &self.coordinates[(i + 1) % 3],
                 &self.coordinates[(i + 2) % 3],
-                MIN_ANGLE,
+                min_angle,
             ) {
                 return true;
             }

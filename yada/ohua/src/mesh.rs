@@ -25,12 +25,14 @@ pub struct Mesh {
     pub elements: Arc<HashMap<Triangle, Vec<Element>>>,
     // pub elements: HashMap<Triangle, [Element; 3]>,
     pub boundary_set: Arc<HashMap<Edge, Element>>,
+    /// Minimum angle to be achieved for all elements.
+    pub min_angle: f64,
 
     pub computation_steps: usize,
 }
 
 impl Mesh {
-    pub fn load_from_file(filename_prefix: &str) -> std::io::Result<Self> {
+    pub fn load_from_file(filename_prefix: &str, min_angle: f64) -> std::io::Result<Self> {
         // load *.node file
         let node_file = File::open(format!("{}.node", filename_prefix))?;
         let mut node_reader = BufReader::new(node_file);
@@ -120,8 +122,8 @@ impl Mesh {
             assert!(coords[1] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0]];
-            let c_1 = coordinates[coords[1]];
+            let c_0 = coordinates[coords[0] - 1];
+            let c_1 = coordinates[coords[1] - 1];
             edge_set.insert(Edge::new(c_0, c_1));
         }
 
@@ -158,9 +160,9 @@ impl Mesh {
             assert!(coords[2] <= entry_count);
 
             // they count items from 1 for some reason
-            let c_0 = coordinates[coords[0]];
-            let c_1 = coordinates[coords[1]];
-            let c_2 = coordinates[coords[2]];
+            let c_0 = coordinates[coords[0] - 1];
+            let c_1 = coordinates[coords[1] - 1];
+            let c_2 = coordinates[coords[2] - 1];
             elem_vec.push(Triangle::new(c_0, c_1, c_2));
         }
 
@@ -208,6 +210,7 @@ impl Mesh {
         Ok(Mesh {
             elements: Arc::new(elems),
             boundary_set: Arc::new(edges),
+            min_angle,
             computation_steps: 0,
         })
     }
@@ -216,7 +219,7 @@ impl Mesh {
         let mut r = Vec::new();
 
         for elem in self.elements.keys() {
-            if elem.is_bad() {
+            if elem.is_bad(self.min_angle) {
                 r.push(elem.to_owned());
             }
         }
@@ -333,7 +336,7 @@ impl Mesh {
             match new_node {
                 Element::T(t) => {
                     elems.insert(t, Vec::with_capacity(3));
-                    if t.is_bad() {
+                    if t.is_bad(self.min_angle) {
                         // println!("Appending triangle with area: {}", t.area());
                         new_bad.push_back(t);
                     }
