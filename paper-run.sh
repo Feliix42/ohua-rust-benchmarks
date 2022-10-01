@@ -33,16 +33,16 @@ do
 done
 cd ..
 # labyrinth w/o pipelining
-cd labyrinth_no_pipelining
-for ((i=0; i < ${#labtcs[@]}; i++))
-do
-    sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = ${labtcs[$i]}/" src/generated.rs
-    sed -i "s/FREQUENCY: usize = [0-9]\+/FREQUENCY: usize = ${labfre[$i]}/" src/generated.rs
-    cargo build --quiet --release
+#cd labyrinth_no_pipelining
+#for ((i=0; i < ${#labtcs[@]}; i++))
+#do
+    #sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = ${labtcs[$i]}/" src/generated.rs
+    #sed -i "s/FREQUENCY: usize = [0-9]\+/FREQUENCY: usize = ${labfre[$i]}/" src/generated.rs
+    #cargo build --quiet --release
 
-    target/release/labyrinth_no_pipelining ../labyrinth/inputs/random-x256-y256-z5-n256.txt --json --outdir ../$TODAY-results/labyrinth/ --runs 30
-done
-cd ..
+    #target/release/labyrinth_no_pipelining ../labyrinth/inputs/random-x256-y256-z5-n256.txt --json --outdir ../$TODAY-results/labyrinth/ --runs 30
+#done
+#cd ..
 
 
 echo "Current time: $(date)\n\n"
@@ -70,6 +70,64 @@ do
     sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = $tc/" src/generated.rs
     cargo build --release --quiet
     target/release/kmeans_new_compiler ../kmeans/inputs/random-n65536-d32-c16.txt --json --outdir ../$TODAY-results/kmeans/ --runs 30 -n 40 -t 0.00001
+done
+cd ..
+
+
+echo "Current time: $(date)\n\n"
+########################################################################################
+########################################################################################
+########################################################################################
+#echo "----------------------------------[ intruder ]-----------------------------------"
+#echo "Building binaries"
+#cd intruder
+#cargo build --quiet --release --bin sequential --features "cli"
+#cargo build --quiet --release --bin stm --features "cli transactional"
+#cd ..
+
+#echo "Running intruder"
+#intruder/target/release/sequential --json --outdir $TODAY-results/intruder/ --runs 30 -a 10 -l 128 -n 262144 -s 1
+
+#for tc in {1..12}
+#do
+    #intruder/target/release/stm --json --outdir $TODAY-results/intruder/ --runs 30 -a 10 -l 128 -n 262144 -s 1 --threads $tc
+#done
+
+#cd intruder_new_compiler
+#for tc in {1..12}
+#do
+    #sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = $tc/" src/generated.rs
+    #cargo build --release --quiet
+    #target/release/intruder_new_compiler --json --outdir ../$TODAY-results/intruder/ --runs 30 -a 10 -l 128 -n 262144 -s 1
+#done
+#cd ..
+
+
+#echo "Current time: $(date)\n\n"
+########################################################################################
+########################################################################################
+########################################################################################
+echo "-----------------------------------[ genome ]------------------------------------"
+echo "Building binaries"
+cd genome
+cargo build --quiet --release --bin sequential --features "cli"
+cargo build --quiet --release --bin stm --features "cli transactional"
+cd ..
+
+echo "Running genome"
+genome/target/release/sequential --json --outdir $TODAY-results/genome/ --runs 30 -g 510 -s 32 -n 32768
+
+for tc in {1..12}
+do
+    genome/target/release/stm --json --outdir $TODAY-results/genome/ --runs 30 --threads $tc -g 510 -s 32 -n 32768
+done
+
+cd genome_new_compiler
+for tc in {1..12}
+do
+    sed -i "s/THREADCOUNT: usize = [0-9]\+/THREADCOUNT: usize = $tc/" src/generated.rs
+    cargo build --release --quiet
+    target/release/genome_new_compiler --json --outdir ../$TODAY-results/genome/ --runs 30 -g 510 -s 32 -n 32768
 done
 cd ..
 
@@ -114,7 +172,7 @@ cd yada
 cargo build --quiet --release
 
 echo "Running delaunay"
-target/release/seq-yada inputs/massive.2 --json --runs 30 --outdir ../$TODAY-results/delaunay/ 
+target/release/seq-yada inputs/ttimeu10000.2 --json --runs 30 --outdir ../$TODAY-results/delaunay/ 
 
 # ohua first here
 cd ohua
@@ -128,7 +186,7 @@ do
         sed -i "s/FREQUENCY: usize = [0-9]\+/FREQUENCY: usize = $fre/" src/generated.rs
         cargo build --release --quiet
 
-        ../target/release/ohua-yada ../inputs/massive.2 --json --runs 30 --outdir ../../$TODAY-results/delaunay/$fre/
+        ../target/release/ohua-yada ../inputs/ttimeu10000.2 --json --runs 30 --outdir ../../$TODAY-results/delaunay/$fre/
     done
 done
 cd ..
@@ -138,7 +196,7 @@ echo "Current time: $(date)\n\n"
 echo "STM Time"
 for tc in {1..12}
 do
-    target/release/stm-yada inputs/massive.2 --json --runs 30 --outdir ../$TODAY-results/delaunay/ --threads $tc
+    target/release/stm-yada inputs/ttimeu10000.2 --json --runs 30 --outdir ../$TODAY-results/delaunay/ --threads $tc
 done
     
 
