@@ -192,7 +192,7 @@ fn main() {
 /// Everything inside this function is being timed.
 ///
 /// Returns a Vec of flow IDs that contained an attack for later check
-fn analyze_stream(packets: VecDeque<(Packet, DTMHandle)>, decoder_state: StmDecoderState) -> Vec<usize> {
+fn analyze_stream0(packets: VecDeque<(Packet, DTMHandle)>, decoder_state: StmDecoderState) -> Vec<usize> {
     let mut found_attacks = Vec::new();
 
     // NOTE: This is a deviation from the original code where packets where
@@ -229,20 +229,58 @@ fn analyze_stream(packets: VecDeque<(Packet, DTMHandle)>, decoder_state: StmDeco
     found_attacks
 }
 
+// So, the above version does not work because the implemented algorithm
+// for deterministic STM proceeds in rounds. That is, it needs to finish
+// a round first in order to re-execute the retries.
+// Here is the deadlock:
+// Tx1 on thread 1 gets a retry which means it will try to redo its computation in the next round.
+// In order to do so it waits for the first round to be done.
+// But this in turn blocks Tx2 which would normally run after Tx1.
+// We are left with putting Tx1 and Tx2 into a single transaction.
+// Otherwise, I would not know how pause Tx1 and continue with Tx2 *on the same* thread. This would
+// require quite a different programming model because for that the library. Would need to schedule
+// the transactions across a pool of threads.
+
+fn analyze_stream(packets: VecDeque<Packet>, decoder_state: StmDecoderState, handle:DTMHandle) -> STMResult<Vec<usize>> {
+    let mut found_attacks = Vec::new();
+
+    let decoder_results = 
+        det_atomically(handle,
+            |trans2|{
+                let mut ds = Vec::new();
+                for p in packets {
+                    let decoder_result = decode_packet(&p, &decoder_state, trans2);
+                    match decoder_result {
+                        Ok(d) => ds.push(d),
+                        Err(e) => return Err(e) // error type cast
+                    }
+                }
+                Ok(ds)
+            });
+
+   for decoder_result in decoder_results {
+        if let Some(decoded_flow) = decoder_result {
+            // process the output -> run the detector
+            if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
+                found_attacks.push(decoded_flow.flow_id);
+            }
+        }
+    }
+
+    found_attacks
+}
+
 //fn partition_input_vec(mut packets: VecDeque<Packet>, threadcount: usize, dtm: &mut DTM) -> (Vec<VecDeque<Packet>>, Vec<VecDeque<DTMHandle>>) {
 fn partition_input_vec(
     mut packets: VecDeque<Packet>,
     threadcount: usize,
     dtm: &mut DTM,
-) -> Vec<VecDeque<(Packet, DTMHandle)>> {
+) -> Vec<(VecDeque<Packet>, DTMHandle)> {
     let total_packets = packets.len();
     let l = total_packets / threadcount;
     let mut rest = packets.len() % threadcount;
 
     let mut partitioned = vec![VecDeque::with_capacity(0); threadcount];
-    let mut handles: Vec<VecDeque<DTMHandle>> = (0..threadcount)
-        .map(|_| VecDeque::with_capacity(l + 1))
-        .collect();
 
     for t_num in 0..threadcount {
         if rest > 0 {
@@ -257,23 +295,10 @@ fn partition_input_vec(
         }
     }
 
-    for i in 0..total_packets {
-        handles[i % threadcount].push_back(dtm.register());
-    }
-
-    // TODO(feliix42): Verification only!
-    for i in 0..threadcount {
-        assert_eq!(handles[i].len(), partitioned[i].len());
-    }
-
     partitioned
         .into_iter()
-        .zip(handles)
-        .map(|(items, handlelist)| {
-            items
-                .into_iter()
-                .zip(handlelist)
-                .collect::<VecDeque<(Packet, DTMHandle)>>()
+        .map(|items| {
+            (items, dtm.register())
         })
         .collect()
 }
@@ -285,19 +310,22 @@ fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
     // create a DTM queue
     let mut dtm = dtm();
 
-    let mut handles = Vec::with_capacity(threadcount);
+    let mut threads = Vec::with_capacity(threadcount);
     let inputs = partition_input_vec(packets, threadcount, &mut dtm);
 
     // freeze the DTM queue
     freeze(dtm);
 
-    for packets in inputs {
+    for (packets,handle) in inputs {
         let ds = decoder_state.clone();
-        handles.push(thread::spawn(move || analyze_stream(packets, ds)));
+        threads.push(thread::spawn(move || 
+                det_atomically(
+                    handle,
+                    |tx| analyze_stream(packets, ds, tx))));
     }
 
-    for handle in handles {
-        let mut attacks = handle.join().unwrap();
+    for thread in threads {
+        let mut attacks = thread.join().unwrap();
         found_attacks.append(&mut attacks);
     }
 
