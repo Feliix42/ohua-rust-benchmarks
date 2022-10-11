@@ -22,7 +22,7 @@ fn main() {
 
         let start_gen = std::time::Instant::now();
         let start_gen_cpu = ProcessTime::now();
-        let sdg_data = GraphSDG::generate(p);
+        let sdg_data = GraphSDG::threaded_generate(p);
         let end_gen_cpu = ProcessTime::now();
         let end_gen = std::time::Instant::now();
 
