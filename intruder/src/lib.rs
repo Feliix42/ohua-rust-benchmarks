@@ -7,7 +7,7 @@ use std::iter::FromIterator;
 pub mod decoder;
 pub mod detector;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Packet {
     pub flow_id: usize,
     pub fragment_id: usize,
