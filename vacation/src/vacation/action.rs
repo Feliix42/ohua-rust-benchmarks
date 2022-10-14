@@ -1,4 +1,4 @@
-enum Action {
+pub(crate) enum Action {
     MakeReservation,
     DeleteCustomer,
     UpdateTables,

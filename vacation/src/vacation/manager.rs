@@ -5,11 +5,22 @@ use std::collections::HashMap;
 // The benchmark implements tables as hashmaps.
 // That is reasonable for point access but any range read
 // will be a big performance burden.
-struct Manager {
+pub(crate) struct Manager {
     carTable: HashMap<u64, Reservation>,
     roomTable: HashMap<u64, Reservation>,
     flightTable: HashMap<u64, Reservation>,
     customerTable: HashMap<u64, Customer>, // a customer should at least have a name etc.
+}
+
+impl Manager {
+    pub(crate) fn new() -> Self {
+        Manager {
+            carTable : HashMap::new(),
+            roomTable : HashMap::new(),
+            flightTable : HashMap::new(),
+            customerTable : HashMap::new()
+        }
+    }
 }
 
 fn upsert_reservation(

@@ -5,3 +5,4 @@ authors = ["Sebastian Ertel <sebastian.ertel@barkhauseninstitut.org>"]
 edition = "2018"
 
 [dependencies]
+rand = "0.8.5"
