@@ -4,7 +4,7 @@ use rand_chacha::ChaCha12Rng;
 use rand_core::{RngCore, SeedableRng};
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::sync::{Arc, Barrier};
+use std::sync::Arc;
 use std::thread;
 use std::thread::JoinHandle;
 use stm::{atomically, TVar};
@@ -154,7 +154,13 @@ impl GraphSDG {
             estimated_total_edges / parameters.threads
         };
 
+        let c = Arc::new(clique_sizes);
+        let f = Arc::new(first_vs_in_cliques);
+
         for thread_id in 0..parameters.threads {
+            let clique_sizes = c.clone();
+            let first_vs_in_cliques = f.clone();
+
             handles.push(thread::spawn(move || {
                 // NOTE(feliix42): need to re-initialize due to loss of thread context
                 let mut rng = ChaCha12Rng::seed_from_u64(thread_id as u64);
@@ -248,6 +254,8 @@ impl GraphSDG {
         let mut handles = Vec::with_capacity(parameters.threads);
 
         for thread_id in 0..parameters.threads {
+            let first_vs_in_cliques = f.clone();
+
             handles.push(thread::spawn(move || {
                 // NOTE(feliix42): need to re-initialize due to loss of thread context
                 let mut rng = ChaCha12Rng::seed_from_u64(thread_id as u64);
@@ -435,8 +443,6 @@ impl GraphSDG {
         println!("No. of inter-clique edges - {}", num_edges_placed_outside);
         println!("Total no. of edges        - {}", num_edges_placed);
 
-        std::mem::drop(clique_sizes);
-        std::mem::drop(first_vs_in_cliques);
         std::mem::drop(last_vs_in_cliques);
 
         // STEP 4: Generate Edge weights
@@ -477,7 +483,7 @@ impl GraphSDG {
             .unzip();
 
         let mut int_weight: Vec<i64> = tmp_weights.into_iter().flatten().collect();
-        let num_str_wt_edges = tmp_ctr.into_iter().sum();
+        let num_str_wt_edges: usize = tmp_ctr.into_iter().sum();
 
         let mut t = 0;
         for item in int_weight.iter_mut() {

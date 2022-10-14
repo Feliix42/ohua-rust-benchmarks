@@ -29,7 +29,7 @@ fn main() {
         let start_comp = std::time::Instant::now();
         let start_comp_cpu = ProcessTime::now();
         #[allow(unused_variables)]
-        let graph = Graph::compute(sdg_data);
+        let graph = Graph::compute(sdg_data, params.threads);
         let end_comp_cpu = ProcessTime::now();
         let end_comp = std::time::Instant::now();
 
