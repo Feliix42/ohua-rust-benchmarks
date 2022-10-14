@@ -12,4 +12,4 @@ num-traits = "0.2.11"
 clap = "2.33"
 cpu-time = "1.0"
 
-stm = { git = "https://github.com/feliix42/rust-stm", rev = "c0f823d3b4dfbf33c483a1785148404bd2a27c6d" }
+stm = { git = "https://github.com/feliix42/rust-stm" }

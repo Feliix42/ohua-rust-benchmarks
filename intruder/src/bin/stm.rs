@@ -268,6 +268,10 @@ fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
     }
 
     // State verification
+    let fmap = decoder_state.fragments_map.get_contents();
+    if !fmap.is_empty() {
+        println!("{:#?}", fmap);
+    }
     assert!(atomically(|trans3| decoder_state
         .fragments_map
         .is_empty(trans3)));

@@ -1,6 +1,6 @@
 use super::DecodedPacket;
 use crate::Packet;
-use stm::{StmResult, Transaction, TVar};
+use stm::{StmError, StmResult, Transaction, TVar};
 use stm_datastructures::THashMap;
 use std::collections::HashMap;
 
@@ -66,7 +66,15 @@ pub fn decode_packet(
             v.push(packet.to_owned());
             let state = TVar::new(v);
 
-            bucket.modify(transaction, |mut hm| { hm.insert(flow_id, state); hm })?;
+            let mut hm = bucket.read(transaction)?;
+            // must do this test since we did an atomic read before and with many threads it can
+            // happen that we construct data races :facepalm:
+            if hm.contains_key(&flow_id) {
+                return Err(StmError::Retry);
+            }
+
+            hm.insert(flow_id, state);
+            bucket.write(transaction, hm)?;
 
             // it can by definition never happen that this branch will complete a flow, so that's
             // it for this one
