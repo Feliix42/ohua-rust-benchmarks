@@ -38,7 +38,7 @@ impl Customer {
      * customer_addReservationInfo
      * =============================================================================
      */
-    fn add_reservation_info(&mut self, typ: ReservationType, id: u64, price: i64) {
+    pub(crate) fn add_reservation_info(&mut self, typ: ReservationType, id: u64, price: u64) {
         let reservation_info = ReservationInfo::new(typ, id, price);
         let a = self.reservation_info_list.binary_search(&reservation_info);
         match a {
@@ -52,7 +52,7 @@ impl Customer {
      * customer_removeReservationInfo
      * =============================================================================
      */
-    fn remove_reservation_info(&mut self, typ: ReservationType, id: u64) -> bool {
+    pub(crate) fn remove_reservation_info(&mut self, typ: ReservationType, id: u64) -> bool {
         let find_reservation_info = ReservationInfo::new(typ, id, 0);
         /* price not used to compare reservation infos */
 
@@ -74,10 +74,10 @@ impl Customer {
      * -- Returns total cost of reservations
      * =============================================================================
      */
-    pub(crate) fn get_bill(&self) -> i64 {
+    pub(crate) fn get_bill(&self) -> u64 {
         let mut bill = 0;
         for ri in &self.reservation_info_list {
-            bill += ri.get_price();
+            bill += ri.price;
         }
         bill
     }

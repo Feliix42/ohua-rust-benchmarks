@@ -283,7 +283,7 @@ trait QueryInterface {
      * -- Return the total price of all reservations held for a customer
      * =============================================================================
      */
-    fn queryCustomerBill(&self, customerId: u64) -> Option<i64>;
+    fn queryCustomerBill(&self, customerId: u64) -> Option<u64>;
 }
 
 /* =============================================================================
@@ -329,7 +329,179 @@ impl QueryInterface for Manager {
         queryPrice(&self.flightTable, flightId)
     }
 
-    fn queryCustomerBill(&self, customerId: u64) -> Option<i64> {
+    fn queryCustomerBill(&self, customerId: u64) -> Option<u64> {
         self.customerTable.get(&customerId).map(|c| c.get_bill())
+    }
+}
+
+trait ReservationInterface {
+    /* =============================================================================
+     * reserveCar
+     * -- Returns failure if the car or customer does not exist
+     * -- Returns TRUE on success, else FALSE
+     * =============================================================================
+     */
+    fn reserveCar(&mut self, customerId: u64, carId: u64) -> bool;
+
+    /* =============================================================================
+     * reserveRoom
+     * -- Returns failure if the room or customer does not exist
+     * -- Returns TRUE on success, else FALSE
+     * =============================================================================
+     */
+    fn reserveRoom(&mut self, customerId: u64, roomId: u64) -> bool;
+
+    /* =============================================================================
+     * reserveFlight
+     * -- Returns failure if the flight or customer does not exist
+     * -- Returns TRUE on success, else FALSE
+     * =============================================================================
+     */
+    fn reserveFlight(&mut self, customerId: u64, flightId: u64) -> bool;
+
+    /* =============================================================================
+     * cancelCar
+     * -- Returns failure if the car, reservation, or customer does not exist
+     * -- Returns TRUE on success, else FALSE
+     * =============================================================================
+     */
+    fn cancelCar(&mut self, customerId: u64, carId: u64) -> bool;
+
+    /* =============================================================================
+     * cancelRoom
+     * -- Returns failure if the room, reservation, or customer does not exist
+     * -- Returns TRUE on success, else FALSE
+     * =============================================================================
+     */
+    fn cancelRoom(&mut self, customerId: u64, roomId: u64) -> bool;
+
+    /* =============================================================================
+     * cancelFlight
+     * -- Returns failure if the flight, reservation, or customer does not exist
+     * -- Returns TRUE on success, else FALSE
+     * =============================================================================
+     */
+    fn cancelFlight(&mut self, customerId: u64, flightId: u64) -> bool;
+}
+
+/* =============================================================================
+ * reserve
+ * -- Customer is not allowed to reserve same (type, id) multiple times
+ * -- Returns TRUE on success, else FALSE
+ * =============================================================================
+ */
+fn reserve(
+    table: &mut HashMap<u64, Reservation>,
+    customerTable: &mut HashMap<u64, Customer>,
+    customerId: u64,
+    id: u64,
+    typ: ReservationType,
+) -> bool {
+    match customerTable.get_mut(&customerId) {
+        None => false,
+        Some(customer) => match table.get_mut(&id) {
+            None => false,
+            Some(reservation) => match reservation.make() {
+                false => false,
+                true => {
+                    customer.add_reservation_info(typ, id, reservation.price);
+                    true
+                }
+            },
+        },
+    }
+    // TODO the tranactional version needs to check whether the reservation was successful and
+    // if not cancel it again.
+}
+
+/* =============================================================================
+ * cancel
+ * -- Customer is not allowed to cancel multiple times
+ * -- Returns TRUE on success, else FALSE
+ * =============================================================================
+ */
+fn cancel(
+    table: &mut HashMap<u64, Reservation>,
+    customerTable: &mut HashMap<u64, Customer>,
+    customerId: u64,
+    id: u64,
+    typ: ReservationType,
+) -> bool {
+    match customerTable.get_mut(&customerId) {
+        None => false,
+        Some(customer) => match table.get_mut(&id) {
+            None => false,
+            Some(reservation) => match reservation.cancel() {
+                false => false,
+                true => {
+                    customer.remove_reservation_info(typ, id);
+                    true
+                }
+            },
+        },
+    }
+    // TODO the tranactional version needs to check whether the cancellation was successful and
+    // if not make it again.
+}
+
+impl ReservationInterface for Manager {
+    fn reserveCar(&mut self, customerId: u64, carId: u64) -> bool {
+        reserve(
+            &mut self.carTable,
+            &mut self.customerTable,
+            customerId,
+            carId,
+            ReservationType::Car,
+        )
+    }
+
+    fn reserveRoom(&mut self, customerId: u64, roomId: u64) -> bool {
+        reserve(
+            &mut self.roomTable,
+            &mut self.customerTable,
+            customerId,
+            roomId,
+            ReservationType::Room,
+        )
+    }
+
+    fn reserveFlight(&mut self, customerId: u64, flightId: u64) -> bool {
+        reserve(
+            &mut self.flightTable,
+            &mut self.customerTable,
+            customerId,
+            flightId,
+            ReservationType::Flight,
+        )
+    }
+
+    fn cancelCar(&mut self, customerId: u64, carId: u64) -> bool {
+        cancel(
+            &mut self.carTable,
+            &mut self.customerTable,
+            customerId,
+            carId,
+            ReservationType::Car,
+        )
+    }
+
+    fn cancelRoom(&mut self, customerId: u64, roomId: u64) -> bool {
+        cancel(
+            &mut self.roomTable,
+            &mut self.customerTable,
+            customerId,
+            roomId,
+            ReservationType::Room,
+        )
+    }
+
+    fn cancelFlight(&mut self, customerId: u64, flightId: u64) -> bool {
+        cancel(
+            &mut self.flightTable,
+            &mut self.customerTable,
+            customerId,
+            flightId,
+            ReservationType::Flight,
+        )
     }
 }

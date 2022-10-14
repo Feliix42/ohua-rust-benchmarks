@@ -13,7 +13,7 @@ pub(crate) enum ReservationType {
 pub(crate) struct ReservationInfo {
     pub(crate) typ: ReservationType,
     pub(crate) id: u64,
-    price: i64, /* holds price at time reservation was made */
+    pub(crate) price: u64, /* holds price at time reservation was made */
 }
 
 pub(crate) struct Reservation {
@@ -25,12 +25,8 @@ pub(crate) struct Reservation {
 }
 
 impl ReservationInfo {
-    pub(crate) fn new(typ: ReservationType, id: u64, price: i64) -> Self {
-        ReservationInfo { typ, id, price: 0 }
-    }
-
-    pub(crate) fn get_price(&self) -> i64 {
-        self.price
+    pub(crate) fn new(typ: ReservationType, id: u64, price: u64) -> Self {
+        ReservationInfo { typ, id, price }
     }
 }
 
@@ -108,7 +104,7 @@ impl Reservation {
         self.num_total
     }
 
-    fn make(&mut self) -> bool {
+    pub(crate) fn make(&mut self) -> bool {
         if self.num_free < 1 {
             false
         } else {
