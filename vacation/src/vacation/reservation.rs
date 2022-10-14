@@ -19,9 +19,9 @@ pub(crate) struct ReservationInfo {
 pub(crate) struct Reservation {
     id: u64,
     pub(crate) num_used: u64,
-    num_free: u64,
+    pub(crate) num_free: u64,
     pub(crate) num_total: u64,
-    price: u64,
+    pub(crate) price: u64,
 }
 
 impl ReservationInfo {

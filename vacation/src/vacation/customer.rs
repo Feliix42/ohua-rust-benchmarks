@@ -74,7 +74,7 @@ impl Customer {
      * -- Returns total cost of reservations
      * =============================================================================
      */
-    fn get_bill(&self) -> i64 {
+    pub(crate) fn get_bill(&self) -> i64 {
         let mut bill = 0;
         for ri in &self.reservation_info_list {
             bill += ri.get_price();
