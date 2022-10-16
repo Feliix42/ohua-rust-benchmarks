@@ -1,7 +1,7 @@
 use rand::{Rng, RngCore};
 use std::collections::VecDeque;
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 enum NodeMark {
     Init,
     Done,
@@ -20,7 +20,7 @@ pub struct Net {
     nodes: Vec<Node>,
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub enum Operation {
     Insert,
     Remove,
@@ -102,53 +102,25 @@ impl Net {
     }
 
     fn is_cycle0(&mut self, id: usize) -> bool {
-        let m = {
-            let node = self.nodes.get_mut(id).expect("invariant broken");
-            match node.mark {
-                NodeMark::Init => {
-                    node.mark = NodeMark::Test;
-                }
-                _ => (),
-            }
-            node.mark.clone()
-        }; // release mutable borrow on `node`
-
-        let result = match m {
+        // NOTE(feliix42): Optionally comment this line
+        assert!(self.nodes.len() > id);
+        match self.nodes[id].mark {
             NodeMark::Init => {
-                let l = {
-                    let node = self.nodes.get(id).expect("invariant broken");
-                    node.child_ids.len()
-                };
-                let mut result = false;
-                for i in 0..l {
-                    let node = self.nodes.get(id).expect("invariant broken");
-                    let child_id = node.child_ids[i];
+                self.nodes[id].mark = NodeMark::Test;
+
+                for child_id in self.nodes[id].child_ids.clone() {
                     if self.is_cycle0(child_id) {
-                        result = true;
-                        break;
-                    } else {
-                        // continue
+                        return true;
                     }
                 }
-                result
-            }
-            NodeMark::Test => true,
-            NodeMark::Done => false,
-        }; // release the immutable borrow on `node`
-
-        match m {
-            NodeMark::Init => {
-                if !result {
-                    let node = self.nodes.get_mut(id).expect("invariant broken");
-                    node.mark = NodeMark::Done;
-                } else {
-                    // the original code only sets this when `false`
-                } // release mutable borrow on `node`
-            }
-            _ => (),
+            },
+            NodeMark::Test => return true,
+            NodeMark::Done => return false,
         }
 
-        result
+        self.nodes[id].mark = NodeMark::Done;
+
+        false
     }
 }
 
