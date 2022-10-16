@@ -83,17 +83,13 @@ impl Node {
 
 impl Net {
     fn insert_edge(&mut self, from_id: usize, to_id: usize) {
-        let child_node = self.nodes.get_mut(to_id).expect("invariant broken");
-        child_node.parent_ids.push(from_id);
-        let parent_node = self.nodes.get_mut(from_id).expect("invariant broken");
-        parent_node.child_ids.push(to_id);
+        self.nodes[to_id].parent_ids.push(from_id);
+        self.nodes[from_id].child_ids.push(to_id);
     }
 
     fn remove_edge(&mut self, from_id: usize, to_id: usize) {
-        let child_node = self.nodes.get_mut(to_id).expect("invariant broken");
-        child_node.parent_ids.remove(from_id);
-        let parent_node = self.nodes.get_mut(from_id).expect("invariant broken");
-        parent_node.child_ids.remove(to_id);
+        self.nodes[to_id].parent_ids.retain(|x| x != &from_id);
+        self.nodes[from_id].child_ids.retain(|x| x != &to_id);
     }
 
     fn reverse_edge(&mut self, from_id: usize, to_id: usize) {
@@ -176,7 +172,7 @@ impl NetT for Net {
                 visited[id] = true;
                 let node = self.nodes.get(id).expect("invariant broken");
                 for child_id in &node.child_ids {
-                    if visited.get(*child_id).is_none() {
+                    if !visited[*child_id] {
                         work_queue.push_back(*child_id)
                     } else {
                         // already visited
