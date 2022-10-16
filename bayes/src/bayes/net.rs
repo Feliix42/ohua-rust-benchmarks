@@ -302,10 +302,7 @@ impl NetT for Net {
                 result = false;
             } else {
                 for grand_child_id in &self
-                    .nodes
-                    .get(child_id)
-                    .expect("invariant broken")
-                    .child_ids
+                    .nodes[child_id].child_ids
                 {
                     if !descendant[*grand_child_id] {
                         descendant[*grand_child_id] = true;
@@ -394,20 +391,18 @@ mod tests {
 
             // let ancestor = Vec::with_capacity(num_node);
             // ancestor.fill(false);
-            let ancestor = net.find_ancestors(c_id, /*&mut ancestor,*/ &mut work_queue);
-            assert!(ancestor.is_some());
-            assert!(ancestor.as_ref().unwrap().get(a_id).unwrap());
-            assert!(ancestor.as_ref().unwrap().get(b_id).unwrap());
-            assert!(ancestor.as_ref().unwrap().get(d_id).unwrap());
-            assert!(ancestor.as_ref().unwrap().len() == 3);
+            let ancestor = net.find_ancestors(c_id, /*&mut ancestor,*/ &mut work_queue).unwrap();
+            assert!(ancestor[a_id]);
+            assert!(ancestor[b_id]);
+            assert!(ancestor[d_id]);
+            assert!(ancestor.iter().filter(|&x| *x).count() == 3);
 
             // let descendant = Vec::with_capacity(num_node);
             // descendant.fill(false);
-            let descendant = net.find_descendants(a_id, /*&mut descendant,*/ &mut work_queue);
-            assert!(descendant.is_some());
-            assert!(descendant.as_ref().unwrap().get(b_id).unwrap());
-            assert!(descendant.as_ref().unwrap().get(c_id).unwrap());
-            assert!(descendant.as_ref().unwrap().len() == 2);
+            let descendant = net.find_descendants(a_id, /*&mut descendant,*/ &mut work_queue).unwrap();
+            assert!(descendant[b_id]);
+            assert!(descendant[c_id]);
+            assert!(descendant.iter().filter(|&x| *x).count() == 2);
         }
         {
             let mut random = rand::rngs::StdRng::seed_from_u64(0);
