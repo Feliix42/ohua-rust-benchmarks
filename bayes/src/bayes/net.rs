@@ -157,6 +157,7 @@ impl NetT for Net {
         from_id: usize,
         to_id: usize,
         // FIXME are the below parameters only there for reuse/optimization?
+        // NOTE(feliix42): Yes. I wouldn't keep them
         visited: &mut Vec<bool>,
         work_queue: &mut VecDeque<usize>,
     ) -> bool {
@@ -167,13 +168,12 @@ impl NetT for Net {
 
         work_queue.push_back(from_id);
 
-        let mut result = false;
         while let Some(id) = work_queue.pop_front() {
             if id == to_id {
                 work_queue.clear();
-                result = true;
+                return true;
             } else {
-                visited.insert(id, true);
+                visited[id] = true;
                 let node = self.nodes.get(id).expect("invariant broken");
                 for child_id in &node.child_ids {
                     if visited.get(*child_id).is_none() {
@@ -185,7 +185,7 @@ impl NetT for Net {
             }
         }
 
-        result
+        false
     }
 
     // This is yet another function that seems to answer a totally harmless
@@ -218,11 +218,11 @@ impl NetT for Net {
     }
 
     fn get_parent_id_list(&self, id0: usize) -> &Vec<usize> {
-        &self.nodes.get(id0).expect("invariant broken").parent_ids
+        &self.nodes[id0].parent_ids
     }
 
     fn get_child_id_list(&self, id0: usize) -> &Vec<usize> {
-        &self.nodes.get(id0).expect("invariant broken").child_ids
+        &self.nodes[id0].child_ids
     }
 
     /* =============================================================================
@@ -245,8 +245,8 @@ impl NetT for Net {
         let mut ancestor = vec![false; self.nodes.len()];
         work_queue.clear();
 
-        for parent_id in &self.nodes.get(id0).expect("invariant broken").parent_ids {
-            ancestor.insert(*parent_id, true);
+        for parent_id in &self.nodes[id0].parent_ids {
+            ancestor[*parent_id] = true;
             work_queue.push_back(*parent_id);
         }
 
@@ -257,13 +257,10 @@ impl NetT for Net {
                 result = false;
             } else {
                 for grand_parent_id in &self
-                    .nodes
-                    .get(parent_id)
-                    .expect("invariant broken")
-                    .parent_ids
+                    .nodes[parent_id].parent_ids
                 {
-                    if !ancestor.get(*grand_parent_id).expect("invariant broken") {
-                        ancestor.insert(*grand_parent_id, true);
+                    if !ancestor[*grand_parent_id] {
+                        ancestor[*grand_parent_id] = true;
                         work_queue.push_back(*grand_parent_id);
                     }
                 }
@@ -297,8 +294,8 @@ impl NetT for Net {
         let mut descendant = vec![false; self.nodes.len()];
         work_queue.clear();
 
-        for child_id in &self.nodes.get(id0).expect("invariant broken").child_ids {
-            descendant.insert(*child_id, true);
+        for child_id in &self.nodes[id0].child_ids {
+            descendant[*child_id] = true;
             work_queue.push_back(*child_id);
         }
 
@@ -314,8 +311,8 @@ impl NetT for Net {
                     .expect("invariant broken")
                     .child_ids
                 {
-                    if !descendant.get(*grand_child_id).expect("invariant broken") {
-                        descendant.insert(*grand_child_id, true);
+                    if !descendant[*grand_child_id] {
+                        descendant[*grand_child_id] = true;
                         work_queue.push_back(*grand_child_id);
                     }
                 }
