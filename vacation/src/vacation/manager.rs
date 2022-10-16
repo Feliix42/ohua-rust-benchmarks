@@ -66,7 +66,7 @@ fn upsert_reservation(
     }
 }
 
-trait Admin {
+pub(crate) trait Admin {
     /* =============================================================================
      * addCar
      * -- Add cars to a city
@@ -246,7 +246,7 @@ impl Admin for Manager {
     }
 }
 
-trait QueryInterface {
+pub(crate) trait QueryInterface {
     /* =============================================================================
      * queryCar
      * -- Return the number of empty seats on a car
@@ -345,7 +345,7 @@ impl QueryInterface for Manager {
     }
 }
 
-trait ReservationInterface {
+pub(crate) trait ReservationInterface {
     /* =============================================================================
      * reserveCar
      * -- Returns failure if the car or customer does not exist

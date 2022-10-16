@@ -1,13 +1,16 @@
 use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use rand::{
+    distributions::{Distribution, Standard},
+    Rng,
+};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum ReservationType {
     Car,
     Flight,
-    Room,
-    //NUM_RESERVATION_TYPE
+    Room
 }
 
 pub(crate) struct ReservationInfo {
@@ -22,6 +25,16 @@ pub(crate) struct Reservation {
     pub(crate) num_free: u64,
     pub(crate) num_total: u64,
     pub(crate) price: u64,
+}
+
+impl Distribution<ReservationType> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ReservationType {
+        match rng.gen_range(0..=2) { // rand 0.8
+            0 => ReservationType::Car,
+            1 => ReservationType::Flight,
+            _ => ReservationType::Room,
+        }
+    }
 }
 
 impl ReservationInfo {
