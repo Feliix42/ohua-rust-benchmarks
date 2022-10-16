@@ -41,8 +41,7 @@ impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
     fn new(num_var: usize, num_record: usize, random: T) -> Self {
         let mut records = Vec::with_capacity(num_record);
         for _ in 0..num_record {
-            let mut vars = Vec::with_capacity(num_var);
-            vars.fill(0);
+            let mut vars = vec![0; num_var];
             records.push(vars);
         }
 

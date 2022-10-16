@@ -242,8 +242,7 @@ impl NetT for Net {
 
         // TODO if this reinitialization becomes a performance
         // problem then tie this state to the struct!
-        let mut ancestor = Vec::with_capacity(self.nodes.len());
-        ancestor.fill(false);
+        let mut ancestor = vec![false; self.nodes.len()];
         work_queue.clear();
 
         for parent_id in &self.nodes.get(id0).expect("invariant broken").parent_ids {
@@ -295,8 +294,7 @@ impl NetT for Net {
         //assert!(descendant.len() == self.nodes.len());
 
         // see comment in find_ancestors
-        let mut descendant = Vec::with_capacity(self.nodes.len());
-        descendant.fill(false);
+        let mut descendant = vec![false; self.nodes.len()];
         work_queue.clear();
 
         for child_id in &self.nodes.get(id0).expect("invariant broken").child_ids {
@@ -338,8 +336,7 @@ impl NetT for Net {
         random: &mut T,
     ) {
         let num_node = self.nodes.len();
-        let mut visited = Vec::with_capacity(num_node);
-        visited.fill(false);
+        let mut visited = vec![false; num_node];
         let mut work_queue = VecDeque::new();
 
         for n in 0..num_node {
@@ -371,8 +368,7 @@ mod tests {
         let num_node = 100;
         {
             let mut net = Net::new(num_node);
-            let mut visited = Vec::with_capacity(num_node);
-            visited.fill(false);
+            let mut visited = vec![false; num_node];
             let mut work_queue = VecDeque::new();
 
             assert!(!net.is_cycle());

@@ -282,8 +282,7 @@ impl Learner {
         //float* localBaseLogLikelihoods = learnerPtr->localBaseLogLikelihoods;
         //list_t* taskListPtr = learnerPtr->taskListPtr;
 
-        let mut visited = Vec::with_capacity(self.ad_tree.num_var);
-        visited.fill(false);
+        let mut visited = vec![false; self.ad_tree.num_var];
         let mut work_queue = VecDeque::new();
 
         //long numVar = adtreePtr->numVar;
