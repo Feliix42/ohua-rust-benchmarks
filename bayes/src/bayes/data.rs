@@ -97,7 +97,6 @@ impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
          */
 
         let mut order = Vec::with_capacity(self.num_var);
-        let mut num_order = 0;
 
         let mut work_queue = VecDeque::new();
 
@@ -138,13 +137,12 @@ impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
                 for id in dependency_vector.drain(..).rev() {
                     if !ordered_bitmap[id] {
                         ordered_bitmap[id] = true;
-                        order[num_order] = id;
-                        num_order = num_order + 1;
+                        order.push(id);
                     }
                 }
             }
         }
-        assert!(num_order == self.num_var);
+        assert!(order.len() == self.num_var);
 
         /*
          * Create records
@@ -152,7 +150,7 @@ impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
 
         assert!(self.num_record == self.records.len());
         for record in self.records.iter_mut() {
-            for o in 0..num_order {
+            for o in 0..order.len() {
                 let v = order[o];
                 let parent_id_list = net.get_parent_id_list(v);
                 let mut index = 0;
