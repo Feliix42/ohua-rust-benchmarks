@@ -88,11 +88,11 @@ impl Reservation {
      * =============================================================================
      */
     fn check(&self) {
-        assert!(self.num_used >= 0);
-        assert!(self.num_free >= 0);
-        assert!(self.num_total >= 0);
+        // assert!(self.num_used >= 0);
+        // assert!(self.num_free >= 0);
+        // assert!(self.num_total >= 0);
         assert!((self.num_used + self.num_free) == self.num_total);
-        assert!(self.price >= 0);
+        // assert!(self.price >= 0);
     }
 
     pub(crate) fn update_total(&mut self, num: TotalUpdate) -> u64 {

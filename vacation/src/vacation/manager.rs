@@ -5,20 +5,20 @@ use std::collections::HashMap;
 // The benchmark implements tables as hashmaps.
 // That is reasonable for point access but any range read
 // will be a big performance burden.
-pub(crate) struct Manager {
-    carTable: HashMap<u64, Reservation>,
-    roomTable: HashMap<u64, Reservation>,
-    flightTable: HashMap<u64, Reservation>,
-    customerTable: HashMap<u64, Customer>, // a customer should at least have a name etc.
+pub struct Manager {
+    car_table: HashMap<u64, Reservation>,
+    room_table: HashMap<u64, Reservation>,
+    flight_table: HashMap<u64, Reservation>,
+    customer_table: HashMap<u64, Customer>, // a customer should at least have a name etc.
 }
 
 impl Manager {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Manager {
-            carTable : HashMap::new(),
-            roomTable : HashMap::new(),
-            flightTable : HashMap::new(),
-            customerTable : HashMap::new()
+            car_table : HashMap::new(),
+            room_table : HashMap::new(),
+            flight_table : HashMap::new(),
+            customer_table : HashMap::new()
         }
     }
 }
@@ -44,7 +44,7 @@ fn upsert_reservation(
                         }
                     }
                 }
-                Some(mut res) => {
+                Some(res) => {
                     /* Update existing reservation */
                     let num_total = res.update_total(num);
 
@@ -68,16 +68,16 @@ fn upsert_reservation(
 
 pub(crate) trait Admin {
     /* =============================================================================
-     * addCar
+     * add_car
      * -- Add cars to a city
      * -- Adding to an existing car overwrite the price if 'price' >= 0
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn addCar(&mut self, carId: u64, numCars: u64, price: u64) -> bool;
+    fn add_car(&mut self, car_id: u64, num_cars: u64, price: u64) -> bool;
 
     /* =============================================================================
-     * deleteCar
+     * delete_car
      * -- Delete cars from a city
      * -- Decreases available car count (those not allocated to a customer)
      * -- Fails if would make available car count negative
@@ -85,19 +85,19 @@ pub(crate) trait Admin {
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn deleteCar(&mut self, carId: u64, numCar: u64) -> bool;
+    fn delete_car(&mut self, car_id: u64, num_car: u64) -> bool;
 
     /* =============================================================================
-     * addRoom
+     * add_room
      * -- Add rooms to a city
      * -- Adding to an existing room overwrite the price if 'price' >= 0
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn addRoom(&mut self, roomId: u64, numRoom: u64, price: u64) -> bool;
+    fn add_room(&mut self, room_id: u64, num_room: u64, price: u64) -> bool;
 
     /* =============================================================================
-     * deleteRoom
+     * delete_room
      * -- Delete rooms from a city
      * -- Decreases available room count (those not allocated to a customer)
      * -- Fails if would make available room count negative
@@ -105,94 +105,94 @@ pub(crate) trait Admin {
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn deleteRoom(&mut self, roomId: u64, numRoom: u64) -> bool;
+    fn delete_room(&mut self, room_id: u64, num_room: u64) -> bool;
 
     /* =============================================================================
-     * addFlight
+     * add_flight
      * -- Add seats to a flight
      * -- Adding to an existing flight overwrite the price if 'price' >= 0
      * -- Returns TRUE on success, FALSE on failure
      * =============================================================================
      */
-    fn addFlight(&mut self, flightId: u64, numSeat: u64, price: u64) -> bool;
+    fn add_flight(&mut self, flight_id: u64, num_seat: u64, price: u64) -> bool;
 
     /* =============================================================================
-     * deleteFlight
+     * delete_flight
      * -- Delete an entire flight
      * -- Fails if customer has reservation on this flight
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn deleteFlight(&mut self, flightId: u64) -> bool;
+    fn delete_flight(&mut self, flight_id: u64) -> bool;
 
     /* =============================================================================
-     * addCustomer
+     * add_customer
      * -- If customer already exists, returns failure
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn addCustomer(&mut self, customerId: u64) -> bool;
+    fn add_customer(&mut self, customer_id: u64) -> bool;
 
     /* =============================================================================
-     * deleteCustomer
+     * delete_customer
      * -- Delete this customer and associated reservations
      * -- If customer does not exist, returns success
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn deleteCustomer(&mut self, customerId: u64) -> bool;
+    fn delete_customer(&mut self, customer_id: u64) -> bool;
 }
 
 impl Admin for Manager {
-    fn addCar(&mut self, carId: u64, numCars: u64, price: u64) -> bool {
+    fn add_car(&mut self, car_id: u64, num_cars: u64, price: u64) -> bool {
         upsert_reservation(
-            &mut self.carTable,
-            carId,
-            TotalUpdate::Add(numCars),
+            &mut self.car_table,
+            car_id,
+            TotalUpdate::Add(num_cars),
             Some(price),
         )
     }
 
-    fn deleteCar(&mut self, carId: u64, numCar: u64) -> bool {
+    fn delete_car(&mut self, car_id: u64, num_car: u64) -> bool {
         /* None keeps old price */
         upsert_reservation(
-            &mut self.carTable,
-            carId,
-            TotalUpdate::Subtract(numCar),
+            &mut self.car_table,
+            car_id,
+            TotalUpdate::Subtract(num_car),
             None,
         )
     }
 
-    fn addRoom(&mut self, roomId: u64, numRoom: u64, price: u64) -> bool {
+    fn add_room(&mut self, room_id: u64, num_room: u64, price: u64) -> bool {
         upsert_reservation(
-            &mut self.roomTable,
-            roomId,
-            TotalUpdate::Add(numRoom),
+            &mut self.room_table,
+            room_id,
+            TotalUpdate::Add(num_room),
             Some(price),
         )
     }
 
-    fn deleteRoom(&mut self, roomId: u64, numRoom: u64) -> bool {
+    fn delete_room(&mut self, room_id: u64, num_room: u64) -> bool {
         /* None keeps old price */
         upsert_reservation(
-            &mut self.roomTable,
-            roomId,
-            TotalUpdate::Subtract(numRoom),
+            &mut self.room_table,
+            room_id,
+            TotalUpdate::Subtract(num_room),
             None,
         )
     }
 
-    fn addFlight(&mut self, flightId: u64, numSeat: u64, price: u64) -> bool {
+    fn add_flight(&mut self, flight_id: u64, num_seat: u64, price: u64) -> bool {
         upsert_reservation(
-            &mut self.flightTable,
-            flightId,
-            TotalUpdate::Add(numSeat),
+            &mut self.flight_table,
+            flight_id,
+            TotalUpdate::Add(num_seat),
             Some(price),
         )
     }
 
-    fn deleteFlight(&mut self, flightId: u64) -> bool {
-        let reservation = self.flightTable.get(&flightId);
+    fn delete_flight(&mut self, flight_id: u64) -> bool {
+        let reservation = self.flight_table.get(&flight_id);
         let delete = match reservation {
             None => None,
             Some(res) => {
@@ -204,40 +204,40 @@ impl Admin for Manager {
             }
         };
         match delete {
-            Some(numTotal) => upsert_reservation(
-                &mut self.flightTable,
-                flightId,
-                TotalUpdate::Subtract(numTotal),
+            Some(num_total) => upsert_reservation(
+                &mut self.flight_table,
+                flight_id,
+                TotalUpdate::Subtract(num_total),
                 None,
             ),
             None => false,
         }
     }
 
-    fn addCustomer(&mut self, customerId: u64) -> bool {
-        let customer_contained = self.customerTable.contains_key(&customerId);
+    fn add_customer(&mut self, customer_id: u64) -> bool {
+        let customer_contained = self.customer_table.contains_key(&customer_id);
         if customer_contained {
             false
         } else {
-            self.customerTable
-                .insert(customerId, Customer::new(customerId));
+            self.customer_table
+                .insert(customer_id, Customer::new(customer_id));
             true
         }
     }
 
-    fn deleteCustomer(&mut self, customerId: u64) -> bool {
-        let customer = self.customerTable.remove(&customerId);
+    fn delete_customer(&mut self, customer_id: u64) -> bool {
+        let customer = self.customer_table.remove(&customer_id);
         match customer {
             None => false,
             Some(cus) => {
                 /* Cancel this customer's reservations */
                 for reservation in cus.reservation_info_list {
                     let tbl = match reservation.typ {
-                        ReservationType::Car => &mut self.carTable,
-                        ReservationType::Flight => &mut self.flightTable,
-                        ReservationType::Room => &mut self.roomTable,
+                        ReservationType::Car => &mut self.car_table,
+                        ReservationType::Flight => &mut self.flight_table,
+                        ReservationType::Room => &mut self.room_table,
                     };
-                    let mut e = tbl.get_mut(&reservation.id);
+                    let e = tbl.get_mut(&reservation.id);
                     e.map(|e0| e0.cancel());
                 }
                 true
@@ -248,151 +248,151 @@ impl Admin for Manager {
 
 pub(crate) trait QueryInterface {
     /* =============================================================================
-     * queryCar
+     * query_car
      * -- Return the number of empty seats on a car
      * =============================================================================
      */
-    fn queryCar(&self, carId: u64) -> Option<u64>;
+    fn query_car(&self, car_id: u64) -> Option<u64>;
 
     /* =============================================================================
-     * queryCarPrice
+     * query_car_price
      * -- Return the price of the car
      * =============================================================================
      */
-    fn queryCarPrice(&self, carId: u64) -> Option<u64>;
+    fn query_car_price(&self, car_id: u64) -> Option<u64>;
 
     /* =============================================================================
-     * queryRoom
+     * query_room
      * -- Return the number of empty seats on a room
      * =============================================================================
      */
-    fn queryRoom(&self, roomId: u64) -> Option<u64>;
+    fn query_room(&self, room_id: u64) -> Option<u64>;
 
     /* =============================================================================
-     * queryRoomPrice
+     * query_room_price
      * -- Return the price of the room
      * =============================================================================
      */
-    fn queryRoomPrice(&self, roomId: u64) -> Option<u64>;
+    fn query_room_price(&self, room_id: u64) -> Option<u64>;
 
     /* =============================================================================
-     * queryFlight
+     * query_flight
      * -- Return the number of empty seats on a flight
      * =============================================================================
      */
-    fn queryFlight(&self, flightId: u64) -> Option<u64>;
+    fn query_flight(&self, flight_id: u64) -> Option<u64>;
 
     /* =============================================================================
-     * queryFlightPrice
+     * query_flight_price
      * -- Return the price of the flight
      * =============================================================================
      */
-    fn queryFlightPrice(&self, flightId: u64) -> Option<u64>;
+    fn query_flight_price(&self, flight_id: u64) -> Option<u64>;
 
     /* =============================================================================
-     * queryCustomerBill
+     * query_customer_bill
      * -- Return the total price of all reservations held for a customer
      * =============================================================================
      */
-    fn queryCustomerBill(&self, customerId: u64) -> Option<u64>;
+    fn query_customer_bill(&self, customer_id: u64) -> Option<u64>;
 }
 
 /* =============================================================================
- * queryNumFree
+ * query_num_free
  * -- Return numFree of a reservation, -1 if failure
  * =============================================================================
  */
-fn queryNumFree(table: &HashMap<u64, Reservation>, id: u64) -> Option<u64> {
+fn query_num_free(table: &HashMap<u64, Reservation>, id: u64) -> Option<u64> {
     table.get(&id).map(|r| r.num_free)
 }
 
 /* =============================================================================
- * queryPrice
+ * query_price
  * -- Return price of a reservation, -1 if failure
  * =============================================================================
  */
-fn queryPrice(table: &HashMap<u64, Reservation>, id: u64) -> Option<u64> {
+fn query_price(table: &HashMap<u64, Reservation>, id: u64) -> Option<u64> {
     table.get(&id).map(|r| r.price)
 }
 
 impl QueryInterface for Manager {
-    fn queryCar(&self, carId: u64) -> Option<u64> {
-        queryNumFree(&self.carTable, carId)
+    fn query_car(&self, car_id: u64) -> Option<u64> {
+        query_num_free(&self.car_table, car_id)
     }
 
-    fn queryCarPrice(&self, carId: u64) -> Option<u64> {
-        queryPrice(&self.carTable, carId)
+    fn query_car_price(&self, car_id: u64) -> Option<u64> {
+        query_price(&self.car_table, car_id)
     }
 
-    fn queryRoom(&self, roomId: u64) -> Option<u64> {
-        queryNumFree(&self.roomTable, roomId)
+    fn query_room(&self, room_id: u64) -> Option<u64> {
+        query_num_free(&self.room_table, room_id)
     }
 
-    fn queryRoomPrice(&self, roomId: u64) -> Option<u64> {
-        queryPrice(&self.roomTable, roomId)
+    fn query_room_price(&self, room_id: u64) -> Option<u64> {
+        query_price(&self.room_table, room_id)
     }
 
-    fn queryFlight(&self, flightId: u64) -> Option<u64> {
-        queryNumFree(&self.flightTable, flightId)
+    fn query_flight(&self, flight_id: u64) -> Option<u64> {
+        query_num_free(&self.flight_table, flight_id)
     }
 
-    fn queryFlightPrice(&self, flightId: u64) -> Option<u64> {
-        queryPrice(&self.flightTable, flightId)
+    fn query_flight_price(&self, flight_id: u64) -> Option<u64> {
+        query_price(&self.flight_table, flight_id)
     }
 
-    fn queryCustomerBill(&self, customerId: u64) -> Option<u64> {
-        self.customerTable.get(&customerId).map(|c| c.get_bill())
+    fn query_customer_bill(&self, customer_id: u64) -> Option<u64> {
+        self.customer_table.get(&customer_id).map(|c| c.get_bill())
     }
 }
 
 pub(crate) trait ReservationInterface {
     /* =============================================================================
-     * reserveCar
+     * reserve_car
      * -- Returns failure if the car or customer does not exist
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn reserveCar(&mut self, customerId: u64, carId: u64) -> bool;
+    fn reserve_car(&mut self, customer_id: u64, car_id: u64) -> bool;
 
     /* =============================================================================
-     * reserveRoom
+     * reserve_room
      * -- Returns failure if the room or customer does not exist
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn reserveRoom(&mut self, customerId: u64, roomId: u64) -> bool;
+    fn reserve_room(&mut self, customer_id: u64, room_id: u64) -> bool;
 
     /* =============================================================================
-     * reserveFlight
+     * reserve_flight
      * -- Returns failure if the flight or customer does not exist
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn reserveFlight(&mut self, customerId: u64, flightId: u64) -> bool;
+    fn reserve_flight(&mut self, customer_id: u64, flight_id: u64) -> bool;
 
     /* =============================================================================
-     * cancelCar
+     * cancel_car
      * -- Returns failure if the car, reservation, or customer does not exist
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn cancelCar(&mut self, customerId: u64, carId: u64) -> bool;
+    fn cancel_car(&mut self, customer_id: u64, car_id: u64) -> bool;
 
     /* =============================================================================
-     * cancelRoom
+     * cancel_room
      * -- Returns failure if the room, reservation, or customer does not exist
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn cancelRoom(&mut self, customerId: u64, roomId: u64) -> bool;
+    fn cancel_room(&mut self, customer_id: u64, room_id: u64) -> bool;
 
     /* =============================================================================
-     * cancelFlight
+     * cancel_flight
      * -- Returns failure if the flight, reservation, or customer does not exist
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn cancelFlight(&mut self, customerId: u64, flightId: u64) -> bool;
+    fn cancel_flight(&mut self, customer_id: u64, flight_id: u64) -> bool;
 }
 
 /* =============================================================================
@@ -403,12 +403,12 @@ pub(crate) trait ReservationInterface {
  */
 fn reserve(
     table: &mut HashMap<u64, Reservation>,
-    customerTable: &mut HashMap<u64, Customer>,
-    customerId: u64,
+    customer_table: &mut HashMap<u64, Customer>,
+    customer_id: u64,
     id: u64,
     typ: ReservationType,
 ) -> bool {
-    match customerTable.get_mut(&customerId) {
+    match customer_table.get_mut(&customer_id) {
         None => false,
         Some(customer) => match table.get_mut(&id) {
             None => false,
@@ -433,12 +433,12 @@ fn reserve(
  */
 fn cancel(
     table: &mut HashMap<u64, Reservation>,
-    customerTable: &mut HashMap<u64, Customer>,
-    customerId: u64,
+    customer_table: &mut HashMap<u64, Customer>,
+    customer_id: u64,
     id: u64,
     typ: ReservationType,
 ) -> bool {
-    match customerTable.get_mut(&customerId) {
+    match customer_table.get_mut(&customer_id) {
         None => false,
         Some(customer) => match table.get_mut(&id) {
             None => false,
@@ -456,62 +456,62 @@ fn cancel(
 }
 
 impl ReservationInterface for Manager {
-    fn reserveCar(&mut self, customerId: u64, carId: u64) -> bool {
+    fn reserve_car(&mut self, customer_id: u64, car_id: u64) -> bool {
         reserve(
-            &mut self.carTable,
-            &mut self.customerTable,
-            customerId,
-            carId,
+            &mut self.car_table,
+            &mut self.customer_table,
+            customer_id,
+            car_id,
             ReservationType::Car,
         )
     }
 
-    fn reserveRoom(&mut self, customerId: u64, roomId: u64) -> bool {
+    fn reserve_room(&mut self, customer_id: u64, room_id: u64) -> bool {
         reserve(
-            &mut self.roomTable,
-            &mut self.customerTable,
-            customerId,
-            roomId,
+            &mut self.room_table,
+            &mut self.customer_table,
+            customer_id,
+            room_id,
             ReservationType::Room,
         )
     }
 
-    fn reserveFlight(&mut self, customerId: u64, flightId: u64) -> bool {
+    fn reserve_flight(&mut self, customer_id: u64, flight_id: u64) -> bool {
         reserve(
-            &mut self.flightTable,
-            &mut self.customerTable,
-            customerId,
-            flightId,
+            &mut self.flight_table,
+            &mut self.customer_table,
+            customer_id,
+            flight_id,
             ReservationType::Flight,
         )
     }
 
-    fn cancelCar(&mut self, customerId: u64, carId: u64) -> bool {
+    fn cancel_car(&mut self, customer_id: u64, car_id: u64) -> bool {
         cancel(
-            &mut self.carTable,
-            &mut self.customerTable,
-            customerId,
-            carId,
+            &mut self.car_table,
+            &mut self.customer_table,
+            customer_id,
+            car_id,
             ReservationType::Car,
         )
     }
 
-    fn cancelRoom(&mut self, customerId: u64, roomId: u64) -> bool {
+    fn cancel_room(&mut self, customer_id: u64, room_id: u64) -> bool {
         cancel(
-            &mut self.roomTable,
-            &mut self.customerTable,
-            customerId,
-            roomId,
+            &mut self.room_table,
+            &mut self.customer_table,
+            customer_id,
+            room_id,
             ReservationType::Room,
         )
     }
 
-    fn cancelFlight(&mut self, customerId: u64, flightId: u64) -> bool {
+    fn cancel_flight(&mut self, customer_id: u64, flight_id: u64) -> bool {
         cancel(
-            &mut self.flightTable,
-            &mut self.customerTable,
-            customerId,
-            flightId,
+            &mut self.flight_table,
+            &mut self.customer_table,
+            customer_id,
+            flight_id,
             ReservationType::Flight,
         )
     }
