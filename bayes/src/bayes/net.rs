@@ -1,7 +1,7 @@
 use rand::{Rng, RngCore};
 use std::collections::VecDeque;
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 enum NodeMark {
     Init,
     Done,
@@ -20,7 +20,7 @@ pub struct Net {
     nodes: Vec<Node>,
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub enum Operation {
     Insert,
     Remove,
@@ -83,17 +83,13 @@ impl Node {
 
 impl Net {
     fn insert_edge(&mut self, from_id: usize, to_id: usize) {
-        let child_node = self.nodes.get_mut(to_id).expect("invariant broken");
-        child_node.parent_ids.push(from_id);
-        let parent_node = self.nodes.get_mut(from_id).expect("invariant broken");
-        parent_node.child_ids.push(to_id);
+        self.nodes[to_id].parent_ids.push(from_id);
+        self.nodes[from_id].child_ids.push(to_id);
     }
 
     fn remove_edge(&mut self, from_id: usize, to_id: usize) {
-        let child_node = self.nodes.get_mut(to_id).expect("invariant broken");
-        child_node.parent_ids.remove(from_id);
-        let parent_node = self.nodes.get_mut(from_id).expect("invariant broken");
-        parent_node.child_ids.remove(to_id);
+        self.nodes[to_id].parent_ids.retain(|x| x != &from_id);
+        self.nodes[from_id].child_ids.retain(|x| x != &to_id);
     }
 
     fn reverse_edge(&mut self, from_id: usize, to_id: usize) {
@@ -102,53 +98,25 @@ impl Net {
     }
 
     fn is_cycle0(&mut self, id: usize) -> bool {
-        let m = {
-            let node = self.nodes.get_mut(id).expect("invariant broken");
-            match node.mark {
-                NodeMark::Init => {
-                    node.mark = NodeMark::Test;
-                }
-                _ => (),
-            }
-            node.mark.clone()
-        }; // release mutable borrow on `node`
-
-        let result = match m {
+        // NOTE(feliix42): Optionally comment this line
+        assert!(self.nodes.len() > id);
+        match self.nodes[id].mark {
             NodeMark::Init => {
-                let l = {
-                    let node = self.nodes.get(id).expect("invariant broken");
-                    node.child_ids.len()
-                };
-                let mut result = false;
-                for i in 0..l {
-                    let node = self.nodes.get(id).expect("invariant broken");
-                    let child_id = node.child_ids[i];
+                self.nodes[id].mark = NodeMark::Test;
+
+                for child_id in self.nodes[id].child_ids.clone() {
                     if self.is_cycle0(child_id) {
-                        result = true;
-                        break;
-                    } else {
-                        // continue
+                        return true;
                     }
                 }
-                result
-            }
-            NodeMark::Test => true,
-            NodeMark::Done => false,
-        }; // release the immutable borrow on `node`
-
-        match m {
-            NodeMark::Init => {
-                if !result {
-                    let node = self.nodes.get_mut(id).expect("invariant broken");
-                    node.mark = NodeMark::Done;
-                } else {
-                    // the original code only sets this when `false`
-                } // release mutable borrow on `node`
-            }
-            _ => (),
+            },
+            NodeMark::Test => return true,
+            NodeMark::Done => return false,
         }
 
-        result
+        self.nodes[id].mark = NodeMark::Done;
+
+        false
     }
 }
 
@@ -185,6 +153,7 @@ impl NetT for Net {
         from_id: usize,
         to_id: usize,
         // FIXME are the below parameters only there for reuse/optimization?
+        // NOTE(feliix42): Yes. I wouldn't keep them
         visited: &mut Vec<bool>,
         work_queue: &mut VecDeque<usize>,
     ) -> bool {
@@ -195,16 +164,15 @@ impl NetT for Net {
 
         work_queue.push_back(from_id);
 
-        let mut result = false;
         while let Some(id) = work_queue.pop_front() {
             if id == to_id {
                 work_queue.clear();
-                result = true;
+                return true;
             } else {
-                visited.insert(id, true);
+                visited[id] = true;
                 let node = self.nodes.get(id).expect("invariant broken");
                 for child_id in &node.child_ids {
-                    if visited.get(*child_id).is_none() {
+                    if !visited[*child_id] {
                         work_queue.push_back(*child_id)
                     } else {
                         // already visited
@@ -213,7 +181,7 @@ impl NetT for Net {
             }
         }
 
-        result
+        false
     }
 
     // This is yet another function that seems to answer a totally harmless
@@ -246,11 +214,11 @@ impl NetT for Net {
     }
 
     fn get_parent_id_list(&self, id0: usize) -> &Vec<usize> {
-        &self.nodes.get(id0).expect("invariant broken").parent_ids
+        &self.nodes[id0].parent_ids
     }
 
     fn get_child_id_list(&self, id0: usize) -> &Vec<usize> {
-        &self.nodes.get(id0).expect("invariant broken").child_ids
+        &self.nodes[id0].child_ids
     }
 
     /* =============================================================================
@@ -270,12 +238,11 @@ impl NetT for Net {
 
         // TODO if this reinitialization becomes a performance
         // problem then tie this state to the struct!
-        let mut ancestor = Vec::with_capacity(self.nodes.len());
-        ancestor.fill(false);
+        let mut ancestor = vec![false; self.nodes.len()];
         work_queue.clear();
 
-        for parent_id in &self.nodes.get(id0).expect("invariant broken").parent_ids {
-            ancestor.insert(*parent_id, true);
+        for parent_id in &self.nodes[id0].parent_ids {
+            ancestor[*parent_id] = true;
             work_queue.push_back(*parent_id);
         }
 
@@ -286,13 +253,10 @@ impl NetT for Net {
                 result = false;
             } else {
                 for grand_parent_id in &self
-                    .nodes
-                    .get(parent_id)
-                    .expect("invariant broken")
-                    .parent_ids
+                    .nodes[parent_id].parent_ids
                 {
-                    if !ancestor.get(*grand_parent_id).expect("invariant broken") {
-                        ancestor.insert(*grand_parent_id, true);
+                    if !ancestor[*grand_parent_id] {
+                        ancestor[*grand_parent_id] = true;
                         work_queue.push_back(*grand_parent_id);
                     }
                 }
@@ -323,12 +287,11 @@ impl NetT for Net {
         //assert!(descendant.len() == self.nodes.len());
 
         // see comment in find_ancestors
-        let mut descendant = Vec::with_capacity(self.nodes.len());
-        descendant.fill(false);
+        let mut descendant = vec![false; self.nodes.len()];
         work_queue.clear();
 
-        for child_id in &self.nodes.get(id0).expect("invariant broken").child_ids {
-            descendant.insert(*child_id, true);
+        for child_id in &self.nodes[id0].child_ids {
+            descendant[*child_id] = true;
             work_queue.push_back(*child_id);
         }
 
@@ -339,13 +302,10 @@ impl NetT for Net {
                 result = false;
             } else {
                 for grand_child_id in &self
-                    .nodes
-                    .get(child_id)
-                    .expect("invariant broken")
-                    .child_ids
+                    .nodes[child_id].child_ids
                 {
-                    if !descendant.get(*grand_child_id).expect("invariant broken") {
-                        descendant.insert(*grand_child_id, true);
+                    if !descendant[*grand_child_id] {
+                        descendant[*grand_child_id] = true;
                         work_queue.push_back(*grand_child_id);
                     }
                 }
@@ -366,8 +326,7 @@ impl NetT for Net {
         random: &mut T,
     ) {
         let num_node = self.nodes.len();
-        let mut visited = Vec::with_capacity(num_node);
-        visited.fill(false);
+        let mut visited = vec![false; num_node];
         let mut work_queue = VecDeque::new();
 
         for n in 0..num_node {
@@ -399,8 +358,7 @@ mod tests {
         let num_node = 100;
         {
             let mut net = Net::new(num_node);
-            let mut visited = Vec::with_capacity(num_node);
-            visited.fill(false);
+            let mut visited = vec![false; num_node];
             let mut work_queue = VecDeque::new();
 
             assert!(!net.is_cycle());
@@ -433,20 +391,18 @@ mod tests {
 
             // let ancestor = Vec::with_capacity(num_node);
             // ancestor.fill(false);
-            let ancestor = net.find_ancestors(c_id, /*&mut ancestor,*/ &mut work_queue);
-            assert!(ancestor.is_some());
-            assert!(ancestor.as_ref().unwrap().get(a_id).unwrap());
-            assert!(ancestor.as_ref().unwrap().get(b_id).unwrap());
-            assert!(ancestor.as_ref().unwrap().get(d_id).unwrap());
-            assert!(ancestor.as_ref().unwrap().len() == 3);
+            let ancestor = net.find_ancestors(c_id, /*&mut ancestor,*/ &mut work_queue).unwrap();
+            assert!(ancestor[a_id]);
+            assert!(ancestor[b_id]);
+            assert!(ancestor[d_id]);
+            assert!(ancestor.iter().filter(|&x| *x).count() == 3);
 
             // let descendant = Vec::with_capacity(num_node);
             // descendant.fill(false);
-            let descendant = net.find_descendants(a_id, /*&mut descendant,*/ &mut work_queue);
-            assert!(descendant.is_some());
-            assert!(descendant.as_ref().unwrap().get(b_id).unwrap());
-            assert!(descendant.as_ref().unwrap().get(c_id).unwrap());
-            assert!(descendant.as_ref().unwrap().len() == 2);
+            let descendant = net.find_descendants(a_id, /*&mut descendant,*/ &mut work_queue).unwrap();
+            assert!(descendant[b_id]);
+            assert!(descendant[c_id]);
+            assert!(descendant.iter().filter(|&x| *x).count() == 2);
         }
         {
             let mut random = rand::rngs::StdRng::seed_from_u64(0);
