@@ -106,15 +106,14 @@ impl GraphSDG {
         //let p = parameters.probability_unidirectional;
 
         // partial edge lists
-        let mut start_v: Vec<usize> = vec![0; estimated_total_edges];
-        let mut end_v: Vec<usize> = vec![0; estimated_total_edges];
+        let mut start_vertex: Vec<usize> = Vec::with_capacity(estimated_total_edges);
+        let mut end_vertex: Vec<usize> = Vec::with_capacity(estimated_total_edges);
 
         // tmp array to keep track of the no. of parallel edges in each direction
         let mut tmp_edge_counter: Vec<Vec<usize>> =
             vec![vec![0; parameters.max_clique_size]; parameters.max_clique_size];
 
         // create edges
-        let mut i_edge_ptr = 0;
         for i_clique in 0..total_cliques {
             // get current clique parameters
             let i_clique_size = clique_sizes[i_clique];
@@ -126,25 +125,21 @@ impl GraphSDG {
                     let r = (rng.next_u32() % 1000) as f32 / 1000_f32;
 
                     if r >= parameters.probability_unidirectional {
-                        start_v[i_edge_ptr] = i + i_first_vs_in_clique;
-                        end_v[i_edge_ptr] = j + i_first_vs_in_clique;
-                        i_edge_ptr += 1;
+                        start_vertex.push(i + i_first_vs_in_clique);
+                        end_vertex.push(j + i_first_vs_in_clique);
                         tmp_edge_counter[i][j] = 1;
 
-                        start_v[i_edge_ptr] = j + i_first_vs_in_clique;
-                        end_v[i_edge_ptr] = i + i_first_vs_in_clique;
-                        i_edge_ptr += 1;
+                        start_vertex.push(j + i_first_vs_in_clique);
+                        end_vertex.push(i + i_first_vs_in_clique);
                         tmp_edge_counter[j][i] = 1;
                     } else if r >= 0.5 {
-                        start_v[i_edge_ptr] = i + i_first_vs_in_clique;
-                        end_v[i_edge_ptr] = j + i_first_vs_in_clique;
-                        i_edge_ptr += 1;
+                        start_vertex.push(i + i_first_vs_in_clique);
+                        end_vertex.push(j + i_first_vs_in_clique);
                         tmp_edge_counter[i][j] = 1;
                         tmp_edge_counter[j][i] = 0;
                     } else {
-                        start_v[i_edge_ptr] = j + i_first_vs_in_clique;
-                        end_v[i_edge_ptr] = i + i_first_vs_in_clique;
-                        i_edge_ptr += 1;
+                        start_vertex.push(j + i_first_vs_in_clique);
+                        end_vertex.push(i + i_first_vs_in_clique);
                         tmp_edge_counter[j][i] = 1;
                         tmp_edge_counter[i][j] = 0;
                     }
@@ -165,9 +160,8 @@ impl GraphSDG {
 
                         if r >= parameters.probability_unidirectional {
                             // copy the edge structure
-                            start_v[i_edge_ptr] = i + i_first_vs_in_clique;
-                            end_v[i_edge_ptr] = j + i_first_vs_in_clique;
-                            i_edge_ptr += 1;
+                            start_vertex.push(i + i_first_vs_in_clique);
+                            end_vertex.push(j + i_first_vs_in_clique);
                             tmp_edge_counter[i][j] += 1;
                         }
                     }
@@ -178,36 +172,18 @@ impl GraphSDG {
         // housekeeping
         std::mem::drop(tmp_edge_counter);
 
-        // merge partial edge lists
-        let mut i_edge_start_counter = 0; // NOTE(feliix42): This makes no sense in sequential execution
-        let mut i_edge_end_counter = i_edge_ptr;
-        let mut edge_number = i_edge_ptr;
+        //let mut start_vertex: Vec<usize> = start_v;
+        //let mut end_vertex: Vec<usize> = end_v;
 
-        // initialize edge list arrays
-        let mut start_vertex: Vec<usize>;
-        let mut end_vertex: Vec<usize>;
-
-        if parameters.scale < 10 {
-            start_vertex = vec![0; 2 * edge_number];
-            end_vertex = vec![0; 2 * edge_number];
-        } else {
-            let count = edge_number + parameters.max_parallel_edges * parameters.total_vertices;
-            start_vertex = vec![0; count];
-            end_vertex = vec![0; count];
-        }
-
-        for i in i_edge_start_counter..i_edge_end_counter {
-            start_vertex[i] = start_v[i - i_edge_start_counter];
-            end_vertex[i] = end_v[i - i_edge_start_counter];
-        }
-
-        let num_edges_placed_in_cliques = edge_number;
+        let num_edges_placed_in_cliques = start_vertex.len();
 
         // STEP 3: Connect the cliques
         // --------------------------------------------------------------------
 
-        i_edge_ptr = 0;
         let mut p; // = parameters.probability_interclique_edges;
+        
+        let mut start_v = Vec::new();
+        let mut end_v = Vec::new();
 
         // generating inter-clique edges as given in the specs
         for i in 0..parameters.total_vertices {
@@ -293,9 +269,8 @@ impl GraphSDG {
                             rng.next_u32() as usize % parameters.max_parallel_edges + 1;
 
                         for _ in 0..random_no_edges {
-                            start_v[i_edge_ptr] = tmp_vertex1;
-                            end_v[i_edge_ptr] = tmp_vertex2;
-                            i_edge_ptr += 1;
+                            start_v.push(tmp_vertex1);
+                            end_v.push(tmp_vertex2);
                         }
                     }
                 } // r <= p
@@ -344,9 +319,8 @@ impl GraphSDG {
                             rng.next_u32() as usize % parameters.max_parallel_edges + 1;
 
                         for _ in 0..random_no_edges {
-                            start_v[i_edge_ptr] = tmp_vertex1;
-                            end_v[i_edge_ptr] = tmp_vertex2;
-                            i_edge_ptr += 1;
+                            start_v.push(tmp_vertex1);
+                            end_v.push(tmp_vertex2);
                         }
                     }
                 } // r0 <= p && (i - d) > 0
@@ -356,21 +330,10 @@ impl GraphSDG {
             } // for d, p
         } // for i
 
-        i_edge_end_counter = i_edge_ptr;
-        i_edge_start_counter = 0;
+        let num_edges_placed_outside = start_v.len();
 
-        edge_number = i_edge_ptr;
-        let num_edges_placed_outside = edge_number;
-
-        for i in i_edge_start_counter..i_edge_end_counter {
-            if (i+num_edges_placed_in_cliques) >= start_vertex.len() {
-                println!("[warn] reached the end of `start_vertex`!");
-                println!("    Still want to place {} more elements", i_edge_end_counter - i -1);
-                println!("    Size of `start_vertex`: {} elements", start_vertex.len());
-            }
-            start_vertex[i + num_edges_placed_in_cliques] = start_v[i - i_edge_start_counter];
-            end_vertex[i + num_edges_placed_in_cliques] = end_v[i - i_edge_start_counter];
-        }
+        start_vertex.extend(start_v.into_iter());
+        end_vertex.extend(end_v.into_iter());
 
         let num_edges_placed = num_edges_placed_in_cliques + num_edges_placed_outside;
 
@@ -382,11 +345,9 @@ impl GraphSDG {
         println!("No. of inter-clique edges - {}", num_edges_placed_outside);
         println!("Total no. of edges        - {}", num_edges_placed);
 
-        std::mem::drop(clique_sizes);
-        std::mem::drop(first_vs_in_cliques);
+        //std::mem::drop(clique_sizes);
+        //std::mem::drop(first_vs_in_cliques);
         std::mem::drop(last_vs_in_cliques);
-        std::mem::drop(start_v);
-        std::mem::drop(end_v);
 
         // STEP 4: Generate Edge weights
         // --------------------------------------------------------------------
