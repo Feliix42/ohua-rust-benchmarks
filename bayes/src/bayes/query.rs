@@ -1,13 +1,13 @@
 use std::cmp::Ordering;
 
-#[derive(Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub(crate) enum Val { 
     Zero, 
     One, 
     WildCard 
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct Query {
     pub(crate) index: usize,
     pub(crate) val: Val

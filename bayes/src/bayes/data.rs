@@ -39,11 +39,7 @@ pub(crate) trait DataT<T: RngCore + SeedableRng> {
 
 impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
     fn new(num_var: usize, num_record: usize, random: T) -> Self {
-        let mut records = Vec::with_capacity(num_record);
-        for _ in 0..num_record {
-            let mut vars = vec![0; num_var];
-            records.push(vars);
-        }
+        let records = vec![vec![0; num_var]; num_record];
 
         Data {
             num_var,
@@ -179,7 +175,7 @@ impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
         assert!(num <= self.num_record);
         assert!(start + num <= self.num_record);
         // just always sort all! this may have performance implications.
-        self.records.sort();
+        self.records.sort_unstable();
     }
 
     fn find_split(&self, start: usize, num: usize, offset: usize) -> usize {

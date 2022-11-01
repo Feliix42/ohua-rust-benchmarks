@@ -131,6 +131,7 @@ fn main() {
 
         if !json_dump {
             print!(".");
+            std::io::stdout().flush().unwrap();
         }
 
         results.push(runtime_ms);

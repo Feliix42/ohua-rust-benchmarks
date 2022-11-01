@@ -3,11 +3,13 @@ use rand::{RngCore, SeedableRng};
 use crate::bayes::data::{Data, DataT};
 use crate::bayes::query::{QueryT, Val};
 
+#[derive(Debug)]
 pub(crate) struct RootNode {
     count: usize,
     vary: Vec<Vary>,
 }
 
+#[derive(Debug)]
 struct TreeNode {
     index: usize,
     value: u64, // this could be just a bool!
@@ -15,6 +17,7 @@ struct TreeNode {
     vary: Vec<Vary>,
 }
 
+#[derive(Debug)]
 struct Vary {
     index: usize,
     most_common_value: Val,
@@ -22,6 +25,7 @@ struct Vary {
     one: Option<TreeNode>,
 }
 
+#[derive(Debug)]
 pub struct AdTree {
     pub(crate) num_var: usize,
     pub(crate) num_record: usize,
@@ -71,17 +75,17 @@ impl RootNode {
         adtree: &AdTree,
     ) -> usize {
         match last_query_index {
-            None => 0,
+            None => self.count,
             Some(last_query_index0) => {
                 if queries.get(q).is_none() {
                     self.count
                 } else {
                     let (index, val, num_query) = {
-                        let query = queries.get(q).expect("impossible");
-                        (query.index(), query.val().clone(), queries.len())
+                        let query = &queries[q];
+                        (query.index(), *query.val(), queries.len())
                     };
                     assert!(index <= last_query_index0);
-                    let vary0 = self.vary.get(index).expect("invariant: can find a vary");
+                    let vary0 = &self.vary[index];
 
                     if val == vary0.most_common_value {
                         /*
@@ -95,7 +99,7 @@ impl RootNode {
 
                             for qq in 0..num_query {
                                 if qq != q {
-                                    super_queries.push(queries.get(qq).expect("invariant").clon());
+                                    super_queries.push(queries[qq].clon());
                                 }
                             }
                             // FIXME this looks like an endless loop because it starts at the top
@@ -107,27 +111,23 @@ impl RootNode {
                         let invert_count = match val {
                             Val::Zero => {
                                 {
-                                    let query = queries.get_mut(q).expect("impossible");
                                     // FIXME this is no good. it changes the value just for the call below!
-                                    query.update_val(Val::One);
+                                    queries[q].update_val(Val::One);
                                 }
                                 let c = self.get_count(q, queries, last_query_index, adtree);
                                 {
-                                    let query = queries.get_mut(q).expect("impossible");
-                                    query.update_val(Val::Zero);
+                                    queries[q].update_val(Val::Zero);
                                 }
                                 c
                             }
                             _ => {
                                 {
-                                    let query = queries.get_mut(q).expect("impossible");
                                     // FIXME this is no good. it changes the value just for the call below!
-                                    query.update_val(Val::Zero);
+                                    queries[q].update_val(Val::Zero);
                                 }
                                 let c = self.get_count(q, queries, last_query_index, adtree);
                                 {
-                                    let query = queries.get_mut(q).expect("impossible");
-                                    query.update_val(Val::One);
+                                    queries[q].update_val(Val::One);
                                 }
                                 c
                             }
@@ -199,14 +199,11 @@ impl TreeNode {
                         self.count
                     } else {
                     let (index, val, num_query) = {
-                        let query = queries.get(q).expect("impossible");
-                        (query.index(), query.val().clone(), queries.len())
+                        let query = &queries[q];
+                        (query.index(), *query.val(), queries.len())
                     };
                            assert!(index <= last_query_index0);
-                            let vary0 = self
-                                .vary
-                                .get(index - self.index - 1)
-                                .expect("invariant: cannot find a vary");
+                            let vary0 = &self.vary[index - self.index - 1];
 
                             if val == vary0.most_common_value {
                                 /*
@@ -229,7 +226,7 @@ impl TreeNode {
                                              * initial value.
                                              */
                                             super_queries
-                                                .push(queries.get(qq).expect("invariant").clon());
+                                                .push(queries[qq].clon());
                                         }
                                     }
                                     // FIXME this looks like an endless loop because it starts at the top
@@ -245,30 +242,18 @@ impl TreeNode {
                                         // the queries to queries0 and parent_queries. sadly,
                                         // the code wants to run *this* function on both of the
                                         // query vectors!
-                                        {
-                                            let query = queries.get_mut(q).expect("impossible");
-                                            query.update_val(Val::One);
-                                        }
+                                        queries[q].update_val(Val::One);
                                         let c =
                                             self.get_count(i, q, queries, last_query_index, adtree);
-                                        {
-                                            let query = queries.get_mut(q).expect("impossible");
-                                            query.update_val(Val::Zero);
-                                        }
+                                        queries[q].update_val(Val::Zero);
                                         c
                                     }
                                     _ => {
                                         // FIXME this is no good. it changes the value just for the call below!
-                                        {
-                                            let query = queries.get_mut(q).expect("impossible");
-                                            query.update_val(Val::Zero);
-                                        }
+                                        queries[q].update_val(Val::Zero);
                                         let c =
                                             self.get_count(i, q, queries, last_query_index, adtree);
-                                        {
-                                            let query = queries.get_mut(q).expect("impossible");
-                                            query.update_val(Val::One);
-                                        }
+                                        queries[q].update_val(Val::One);
                                         c
                                     }
                                 };
@@ -390,7 +375,7 @@ mod test {
         count
     }
 
-    fn test_count<T: RngCore + SeedableRng>(
+    fn test_count<T: RngCore + SeedableRng + std::fmt::Debug>(
         ad_tree: &AdTree,
         mut data: &mut Data<T>,
         queries: &mut Vec<Query>,
@@ -400,8 +385,14 @@ mod test {
         if index >= num_var {
             // just nothing
         } else {
+            println!("{:#?}", ad_tree);
+            println!("{:#?}", queries);
+            println!("{:#?}", data);
+            println!("{:#?}", queries);
+
             let count1 = ad_tree.get_count(queries);
             let count2 = count_data(data, queries);
+            println!("count1: {}, count2: {}", count1, count2);
             assert!(count1 == count2);
 
             for i in 1..num_var {
@@ -416,7 +407,7 @@ mod test {
         }
     }
 
-    fn test_counts<T: RngCore + SeedableRng>(ad_tree: AdTree, mut data: Data<T>) {
+    fn test_counts<T: RngCore + SeedableRng + std::fmt::Debug>(ad_tree: AdTree, mut data: Data<T>) {
         let mut queries: Vec<Query> = Vec::with_capacity(data.num_var);
         //for (v = -1; v < numVar; v++) {
         let mut num_var = data.num_var;
