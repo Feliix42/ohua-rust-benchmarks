@@ -2,10 +2,13 @@ use crate::vacation::action::Action;
 use crate::vacation::manager::{Admin, Manager, QueryInterface, ReservationInterface};
 use crate::vacation::reservation::ReservationType;
 use rand::{Rng, RngCore, SeedableRng};
+use std::cell::RefCell;
+use std::rc::Rc;
+
 
 pub struct Client<T: RngCore + SeedableRng> {
-    id: u64,
-    manager: Manager,
+    //id: u64,
+    manager: Rc<RefCell<Manager>>,
     random: T,
     num_operation: usize,
     num_query_per_transaction: usize,
@@ -15,15 +18,15 @@ pub struct Client<T: RngCore + SeedableRng> {
 
 impl<T: RngCore + SeedableRng> Client<T> {
     pub fn new(
-        id: u64,
-        manager: Manager,
+        //id: u64,
+        manager: Rc<RefCell<Manager>>,
         num_operation: usize,
         num_query_per_transaction: usize,
         query_range: u64,
         percent_user: i64,
     ) -> Self {
         Client {
-            id,
+            //id,
             manager,
             random: <T as SeedableRng>::seed_from_u64(1),
             num_operation,
@@ -50,27 +53,29 @@ impl<T: RngCore + SeedableRng> Client<T> {
                     let num_query = self.random.gen::<usize>() % self.num_query_per_transaction + 1;
                     let customer_id = self.random.gen::<u64>() % self.query_range + 1;
                     let mut is_found = false;
+
+                    let mgr = self.manager.borrow();
                     for _ in 0..num_query {
                         let t = self.random.gen::<ReservationType>();
                         let id = (self.random.gen::<u64>() % self.query_range) + 1;
                         let price = match t {
                             ReservationType::Car => {
-                                if self.manager.query_car(id).is_some() {
-                                    self.manager.query_car_price(id)
+                                if mgr.query_car(id).is_some() {
+                                    mgr.query_car_price(id)
                                 } else {
                                     None
                                 }
                             }
                             ReservationType::Flight => {
-                                if self.manager.query_flight(id).is_some() {
-                                    self.manager.query_flight_price(id)
+                                if mgr.query_flight(id).is_some() {
+                                    mgr.query_flight_price(id)
                                 } else {
                                     None
                                 }
                             }
                             ReservationType::Room => {
-                                if self.manager.query_room(id).is_some() {
-                                    self.manager.query_room_price(id)
+                                if mgr.query_room(id).is_some() {
+                                    mgr.query_room_price(id)
                                 } else {
                                     None
                                 }
@@ -86,44 +91,49 @@ impl<T: RngCore + SeedableRng> Client<T> {
                         }
                     } /* for n */
 
+                    std::mem::drop(mgr);
+                    let mut mutmgr = self.manager.borrow_mut();
+
                     if is_found {
-                        self.manager.add_customer(customer_id);
+                        mutmgr.add_customer(customer_id);
                     } else {
                         // nothing
                     }
 
                     match max_ids[ReservationType::Car as usize] {
                         Some(id) => {
-                            self.manager.reserve_car(customer_id, id);
+                            mutmgr.reserve_car(customer_id, id);
                         }
                         _ => (),
                     }
 
                     match max_ids[ReservationType::Flight as usize] {
                         Some(id) => {
-                            self.manager.reserve_flight(customer_id, id);
+                            mutmgr.reserve_flight(customer_id, id);
                         }
                         _ => (),
                     }
 
                     match max_ids[ReservationType::Room as usize] {
                         Some(id) => {
-                            self.manager.reserve_room(customer_id, id);
+                            mutmgr.reserve_room(customer_id, id);
                         }
                         _ => (),
                     }
                 }
                 Action::DeleteCustomer => {
                     let customer_id = self.random.gen::<u64>() % self.query_range + 1;
-                    let bill = self.manager.query_customer_bill(customer_id);
+                    let bill = self.manager.borrow().query_customer_bill(customer_id);
                     if bill.is_some() {
-                        self.manager.delete_customer(customer_id);
+                        self.manager.borrow_mut().delete_customer(customer_id);
                     } else {
                         //nothing
                     }
                 }
                 Action::UpdateTables => {
                     let num_update = self.random.gen::<usize>() % self.num_query_per_transaction + 1;
+                    let mut mutmgr = self.manager.borrow_mut();
+
                     for _ in 0..num_update {
                         let t = self.random.gen::<ReservationType>();
                         let id = (self.random.gen::<u64>() % self.query_range) + 1;
@@ -135,18 +145,18 @@ impl<T: RngCore + SeedableRng> Client<T> {
                         };
                         match new_price0 {
                             Some(new_price) => match t {
-                                ReservationType::Car => self.manager.add_car(id, 100, new_price),
+                                ReservationType::Car => mutmgr.add_car(id, 100, new_price),
                                 ReservationType::Flight => {
-                                    self.manager.add_flight(id, 100, new_price)
+                                    mutmgr.add_flight(id, 100, new_price)
                                 }
-                                ReservationType::Room => self.manager.add_room(id, 100, new_price),
+                                ReservationType::Room => mutmgr.add_room(id, 100, new_price),
                             },
                             None => {
                                 /* do delete */
                                 match t {
-                                    ReservationType::Car => self.manager.delete_car(id, 100),
-                                    ReservationType::Flight => self.manager.delete_flight(id),
-                                    ReservationType::Room => self.manager.delete_room(id, 100),
+                                    ReservationType::Car => mutmgr.delete_car(id, 100),
+                                    ReservationType::Flight => mutmgr.delete_flight(id),
+                                    ReservationType::Room => mutmgr.delete_room(id, 100),
                                 }
                             }
                         };
@@ -164,7 +174,7 @@ impl<T: RngCore + SeedableRng> Client<T> {
 fn select_action(r: i64, percent_user: i64) -> Action {
     if r < percent_user {
         Action::MakeReservation
-    } else if r & 1 == 1 {
+    } else if r & 1 != 0 {
         // FIXME check this again. the original code was just `if r&1 {`.
         Action::DeleteCustomer
     } else {
