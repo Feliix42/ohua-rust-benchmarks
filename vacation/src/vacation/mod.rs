@@ -9,7 +9,6 @@ mod action;
 pub mod client;
 mod customer;
 pub mod manager;
-mod operation;
 mod reservation;
 
 #[derive(Parser, Clone, Debug)]

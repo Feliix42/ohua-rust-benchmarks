@@ -49,41 +49,44 @@ fn main() {
 
     if params.json {
         create_dir_all(&params.outdir).unwrap();
-        //let filename = format!("{}/seq-s{}-i{:.1}-u{:.1}-l{}-p{}-r{}_log.json",
-        //params.outdir,
-        //params.scale,
-        //params.probability_interclique_edges,
-        //params.probability_unidirectional,
-        //params.subgraph_edge_length,
-        //params.max_parallel_edges,
-        //params.runs,
-        //);
+        let filename = format!(
+            "{}/seq-c{}-n{}-q{}-u{}-r{}-t{}-runs{}_log.json",
+            params.clients,
+            params.num_queries,
+            params.percentage_queried,
+            params.percentage_user_tx,
+            params.num_relations,
+            params.num_transactions
+            params.runs,
+        );
 
-        //let mut f = File::create(&filename).unwrap();
-        //f.write_fmt(format_args!(
-        //"{{
-        //\"application\": \"ssca2\",
-        //\"algorithm\": \"sequential\",
-        //\"threadcount\": 1,
-        //\"scaling-heuristic\": {scale},
-        //\"probability-interclique\": {prob_ie},
-        //\"probability-unidirectional\": \"{prob_u}\",
-        //\"max-path-length\": {sub_edge_len},
-        //\"max-par-edges\": {mpe},
-        //\"runs\": {runs},
-        //\"cpu_time\": {cpu:?},
-        //\"results\": {res:?}
-        //}}",
-        //scale = params.scale,
-        //prob_ie = params.probability_interclique_edges,
-        //prob_u = params.probability_unidirectional,
-        //sub_edge_len = params.subgraph_edge_length,
-        //mpe = params.max_parallel_edges,
-        //runs = params.runs,
-        //cpu = cpu_results,
-        //res = results
-        //))
-        //.unwrap();
+        let mut f = File::create(&filename).unwrap();
+        f.write_fmt(format_args!(
+            "{{
+        \"application\": \"vacation\",
+        \"algorithm\": \"sequential\",
+        \"threadcount\": 1,
+        \"clients\": {clients},
+        \"num_queries\": {queries},
+        \"percentage_queried\": {queried},
+        \"percentage_user_tx\": {user_tx},
+        \"num_relations\": {num_rel},
+        \"num_transactions\": {num_tx},
+        \"runs\": {runs},
+        \"cpu_time\": {cpu:?},
+        \"results\": {res:?}
+        }}",
+            clients = params.clients,
+            queries = params.num_queries,
+            queried = params.percentage_queried,
+            user_tx = params.percentage_user_tx,
+            num_rel = params.num_relations,
+            num_tx = params.num_transactions,
+            runs = params.runs,
+            cpu = cpu_results,
+            res = results
+        ))
+        .unwrap();
     } else {
         println!("[INFO] All runs completed successfully.");
         println!("\nStatistics:");
