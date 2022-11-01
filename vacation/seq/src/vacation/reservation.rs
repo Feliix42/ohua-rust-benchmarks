@@ -87,6 +87,7 @@ impl Reservation {
      * -- Check if consistent
      * =============================================================================
      */
+    #[allow(dead_code)]
     fn check(&self) {
         // assert!(self.num_used >= 0);
         // assert!(self.num_free >= 0);
@@ -141,6 +142,7 @@ impl Reservation {
         self.price = new_price;
     }
 
+    #[allow(dead_code)]
     fn hash0(&self) -> u64 {
         let mut s = DefaultHasher::new();
         self.hash(&mut s);

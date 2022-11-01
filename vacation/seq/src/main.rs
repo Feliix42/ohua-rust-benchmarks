@@ -3,7 +3,8 @@ use cpu_time::ProcessTime;
 use rand::SeedableRng;
 use rand_chacha::ChaCha12Rng;
 use std::cell::RefCell;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, File};
+use std::io::Write;
 use std::rc::Rc;
 use std::time::Instant;
 use vacation::{client::Client, manager::Manager, Parameters};
@@ -51,12 +52,13 @@ fn main() {
         create_dir_all(&params.outdir).unwrap();
         let filename = format!(
             "{}/seq-c{}-n{}-q{}-u{}-r{}-t{}-runs{}_log.json",
+            params.outdir,
             params.clients,
             params.num_queries,
             params.percentage_queried,
             params.percentage_user_tx,
             params.num_relations,
-            params.num_transactions
+            params.num_transactions,
             params.runs,
         );
 
