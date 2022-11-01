@@ -14,12 +14,6 @@ mod vacation;
 fn main() {
     let params = Parameters::parse();
 
-    if params.clients != 1 {
-        println!(
-            "[WARN] setting client count to anything else than 1 makes no sense and is discouraged"
-        );
-    }
-
     let mut results = Vec::with_capacity(params.runs);
     let mut cpu_results = Vec::with_capacity(params.runs);
 
