@@ -1,5 +1,6 @@
 use crate::vacation::customer::Customer;
 use crate::vacation::reservation::{Reservation, ReservationType, TotalUpdate};
+use rand::Rng;
 use std::collections::HashMap;
 
 // The benchmark implements tables as hashmaps.
@@ -15,11 +16,42 @@ pub struct Manager {
 impl Manager {
     pub fn new() -> Self {
         Manager {
-            car_table : HashMap::new(),
-            room_table : HashMap::new(),
-            flight_table : HashMap::new(),
-            customer_table : HashMap::new()
+            car_table: HashMap::new(),
+            room_table: HashMap::new(),
+            flight_table: HashMap::new(),
+            customer_table: HashMap::new(),
         }
+    }
+
+    pub fn initialize<T: Rng>(&mut self, rng: &mut T, num_relations: usize) {
+        let mut ids: Vec<u64> = (1..(num_relations as u64) + 1).collect();
+
+        for tab in 0..3 {
+            for _ in 0..num_relations {
+                let x: usize = rng.gen_range(0..num_relations);
+                let y: usize = rng.gen_range(0..num_relations);
+                ids.swap(x, y);
+            }
+
+            for id in &ids {
+                let num = (rng.gen_range(0..5) + 1) * 100;
+                let price = (rng.gen_range(0..5) * 10) + 50;
+                match tab {
+                    0 => self.add_car(*id, num, price),
+                    1 => self.add_flight(*id, num, price),
+                    2 => self.add_room(*id, num, price),
+                    _ => unreachable!("table num cannot exceed 0..2"),
+                };
+            }
+        }
+
+        for _ in 0..num_relations {
+            let x: usize = rng.gen_range(0..num_relations);
+            let y: usize = rng.gen_range(0..num_relations);
+            ids.swap(x, y);
+        }
+
+        ids.into_iter().for_each(|id| { self.add_customer(id); });
     }
 }
 
