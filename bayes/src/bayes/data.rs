@@ -1,4 +1,5 @@
 use crate::bayes::net::{Net, NetT};
+use crate::bayes::query::Val;
 use rand::{Rng, RngCore, SeedableRng};
 use std::collections::VecDeque;
 
@@ -21,7 +22,7 @@ impl DataConfig {
 pub(crate) struct Data<T: RngCore + SeedableRng> {
     pub(crate) num_var: usize,
     pub(crate) num_record: usize,
-    pub(crate) records: Vec<Vec<usize>>, /* concatenation of all records */
+    pub(crate) records: Vec<Vec<Val>>, /* concatenation of all records */
     pub(crate) random: T,
 }
 
@@ -30,7 +31,7 @@ pub(crate) trait DataT<T: RngCore + SeedableRng> {
 
     fn generate(&mut self, seed: Option<u64>, max_num_parent: usize, percent_parent: usize) -> Net;
 
-    fn get_record(&self, index: usize) -> Option<&Vec<usize>>;
+    fn get_record(&self, index: usize) -> Option<&Vec<Val>>;
 
     fn sort(&mut self, start: usize, num: usize, offset: usize);
 
@@ -39,7 +40,7 @@ pub(crate) trait DataT<T: RngCore + SeedableRng> {
 
 impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
     fn new(num_var: usize, num_record: usize, random: T) -> Self {
-        let records = vec![vec![0; num_var]; num_record];
+        let records = vec![vec![Val::Zero; num_var]; num_record];
 
         Data {
             num_var,
@@ -159,14 +160,14 @@ impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
                 }
                 let rnd = self.random.gen::<usize>() % DataConfig::Precision.val();
                 let threshold = thresholds_table[v][index];
-                record[v] = if rnd < threshold { 1 } else { 0 };
+                record[v] = if rnd < threshold { Val::One } else { Val::Zero };
             }
         }
 
         net
     }
 
-    fn get_record(&self, index: usize) -> Option<&Vec<usize>> {
+    fn get_record(&self, index: usize) -> Option<&Vec<Val>> {
         self.records.get(index)
     }
 
@@ -186,7 +187,7 @@ impl<T: RngCore + SeedableRng> DataT<T> for Data<T> {
 
         while low <= high {
             let mid = (low + high) / 2;
-            if self.records[mid][offset] == 0 {
+            if self.records[mid][offset] == Val::Zero {
                 low = mid + 1;
             } else {
                 high = mid - 1;

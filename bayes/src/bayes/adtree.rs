@@ -3,21 +3,21 @@ use rand::{RngCore, SeedableRng};
 use crate::bayes::data::{Data, DataT};
 use crate::bayes::query::{QueryT, Val};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct RootNode {
     count: usize,
     vary: Vec<Vary>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct TreeNode {
     index: usize,
-    value: u64, // this could be just a bool!
+    value: Val, // this could be just a bool!
     count: usize,
     vary: Vec<Vary>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Vary {
     index: usize,
     most_common_value: Val,
@@ -25,7 +25,7 @@ struct Vary {
     one: Option<TreeNode>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct AdTree {
     pub(crate) num_var: usize,
     pub(crate) num_record: usize,
@@ -58,7 +58,7 @@ impl RootNode {
     fn make<T: RngCore + SeedableRng>(num_record: usize, data: &mut Data<T>) -> RootNode {
         let mut vary = Vec::with_capacity(data.num_var);
         for v in 0..data.num_var {
-            vary.push(Vary::make(v, 0, num_record, data));
+            vary.push(Vary::make(None, v, 0, num_record, data));
         }
 
         RootNode::new(num_record, vary)
@@ -82,7 +82,7 @@ impl RootNode {
                 } else {
                     let (index, val, num_query) = {
                         let query = &queries[q];
-                        (query.index(), *query.val(), queries.len())
+                        (query.index(), query.val().clone(), queries.len())
                     };
                     assert!(index <= last_query_index0);
                     let vary0 = &self.vary[index];
@@ -132,15 +132,18 @@ impl RootNode {
                                 c
                             }
                         };
+                        println!("here");
+                        println!("{:#?}", super_count);
+                        println!("{:#?}", invert_count);
 
                         super_count - invert_count
                     } else {
                         match val {
                             Val::Zero => vary0.zero.as_ref().map_or(0, |n| {
-                                n.get_count(0, q + 1, queries, last_query_index, adtree)
+                                n.get_count(q + 1, queries, last_query_index, adtree)
                             }),
                             Val::One => vary0.one.as_ref().map_or(0, |n| {
-                                n.get_count(0, q + 1, queries, last_query_index, adtree)
+                                n.get_count(q + 1, queries, last_query_index, adtree)
                             }),
                             Val::WildCard => panic!("Hit WildCard. Not supported."),
                         }
@@ -152,7 +155,7 @@ impl RootNode {
 }
 
 impl TreeNode {
-    fn new(index: usize, value: u64, count: usize, vary: Vec<Vary>) -> TreeNode {
+    fn new(index: usize, value: Val, count: usize, vary: Vec<Vary>) -> TreeNode {
         TreeNode {
             index,
             value,
@@ -162,17 +165,17 @@ impl TreeNode {
     }
 
     fn make<T: RngCore + SeedableRng>(
-        // parent_index: usize,
+        parent_index: Option<usize>,
         index: usize,
         start: usize,
         num_record: usize,
-        value: u64,
+        value: Val,
         data: &mut Data<T>,
     ) -> TreeNode {
-        let mut vary = Vec::with_capacity(data.num_var - index + 1);
-        for v in (index + 1)..data.num_var {
+        let mut vary = Vec::with_capacity(data.num_var - index);
+        for v in (index+1)..data.num_var {
             vary.push(Vary::make(
-                //parent_index,
+                parent_index,
                 v, start, num_record, data,
             ));
         }
@@ -183,7 +186,7 @@ impl TreeNode {
     // TODO abstract over the type of the Node
     fn get_count<T: QueryT>(
         &self,
-        i: usize,
+        //i: usize,
         q: usize,
         queries: &mut Vec<T>,
         last_query_index: Option<usize>,
@@ -196,11 +199,15 @@ impl TreeNode {
                     self.count
                 } else {
                     if queries.get(q).is_none() {
+                     //println!("Own count2");
+                     //println!("q: {:#?}", q);
+                     //println!("queries.len(): {:#?}", queries.len());
+                     //   println!("self.count: {:#?}", self.count);
                         self.count
                     } else {
                     let (index, val, num_query) = {
                         let query = &queries[q];
-                        (query.index(), *query.val(), queries.len())
+                        (query.index(), query.val().clone(), queries.len())
                     };
                            assert!(index <= last_query_index0);
                             let vary0 = &self.vary[index - self.index - 1];
@@ -244,7 +251,7 @@ impl TreeNode {
                                         // query vectors!
                                         queries[q].update_val(Val::One);
                                         let c =
-                                            self.get_count(i, q, queries, last_query_index, adtree);
+                                            self.get_count(q, queries, last_query_index, adtree);
                                         queries[q].update_val(Val::Zero);
                                         c
                                     }
@@ -252,20 +259,20 @@ impl TreeNode {
                                         // FIXME this is no good. it changes the value just for the call below!
                                         queries[q].update_val(Val::Zero);
                                         let c =
-                                            self.get_count(i, q, queries, last_query_index, adtree);
+                                            self.get_count(q, queries, last_query_index, adtree);
                                         queries[q].update_val(Val::One);
                                         c
                                     }
                                 };
-
+                                
                                 super_count - invert_count
                             } else {
                                 match val {
                                     Val::Zero => vary0.zero.as_ref().map_or(0, |n| {
-                                        n.get_count(i + 1, q + 1, queries, last_query_index, adtree)
+                                        n.get_count(q + 1, queries, last_query_index, adtree)
                                     }),
                                     Val::One => vary0.one.as_ref().map_or(0, |n| {
-                                        n.get_count(i + 1, q + 1, queries, last_query_index, adtree)
+                                        n.get_count(q + 1, queries, last_query_index, adtree)
                                     }),
                                     Val::WildCard => panic!("Hit WildCard. Not supported."),
                                 }
@@ -293,31 +300,41 @@ impl Vary {
     }
 
     fn make<T: RngCore + SeedableRng>(
-        // parent_index: usize, this turned out to be never updated!
+        parent_index: Option<usize>, //this turned out to be never updated!
         index: usize,
         start: usize,
         num_record: usize,
         data: &mut Data<T>,
     ) -> Vary {
         //let parent_index = -1; // this was set AdTree::make
+        let parent_idx = match parent_index {
+            None => 0,
+            Some(i) => i+1
+        };
+
         if
-        //(parent_index + 1 != index)
-        0 != index && (num_record > 1) {
+        (parent_idx != index)
+        && (num_record > 1) {
             data.sort(start, num_record, index);
+            println!("sorted!");
+        } else {
+            println!("not sorted!");
         }
 
         let num0 = data.find_split(start, num_record, index);
+        println!("num0: {:#?}", num0);
         let num1 = num_record - num0;
+        println!("num1: {:#?}", num1);
 
         let most_common_value = if num0 >= num1 { Val::Zero } else { Val::One };
 
         let zero = match num0 == 0 || most_common_value == Val::Zero {
             true => None,
-            false => Some(TreeNode::make(index, start, num0, 0, data)),
+            false => Some(TreeNode::make(Some(index), index, start, num0, Val::Zero, data)),
         };
         let one = match num1 == 0 || most_common_value == Val::One {
             true => None,
-            false => Some(TreeNode::make(index, start + num0, num1, 1, data)),
+            false => Some(TreeNode::make(Some(index), index, start + num0, num1, Val::One, data)),
         };
 
         Vary::new(index, most_common_value, zero, one)
@@ -363,7 +380,7 @@ mod test {
         for record in data.records.iter() {
             let mut is_match = true;
             for query in queries {
-                if query.val != Val::WildCard && query.val.clone() as usize != record[query.index] {
+                if query.val != Val::WildCard && query.val != record[query.index] {
                     is_match = false;
                     break;
                 } else {
@@ -386,11 +403,14 @@ mod test {
             // just nothing
         } else {
             println!("{:#?}", ad_tree);
-            println!("{:#?}", queries);
+            //println!("{:#?}", queries);
             println!("{:#?}", data);
-            println!("{:#?}", queries);
 
+            let ad_tree0 = ad_tree.clone();
+            let queries0 = queries.clone();
             let count1 = ad_tree.get_count(queries);
+            assert!(ad_tree0 == ad_tree);
+            // TODO assert!(queries0 == queries);
             let count2 = count_data(data, queries);
             println!("count1: {}, count2: {}", count1, count2);
             assert!(count1 == count2);
