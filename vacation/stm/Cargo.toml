@@ -1,0 +1,15 @@
+[package]
+name = "stm-vacation"
+version = "0.1.0"
+authors = ["Sebastian Ertel <sebastian.ertel@barkhauseninstitut.org>", "Felix Suchert <dev@felixsuchert.de>"]
+edition = "2018"
+
+[dependencies]
+rand = "0.8.5"
+rand_chacha = "0.3"
+
+stm = { git = "https://github.com/feliix42/rust-stm" }
+stm-datastructures = { git = "https://github.com/feliix42/stm-datastructures" }
+
+clap = { version = "3.2", features = [ "derive" ] }
+cpu-time = "1.0"
