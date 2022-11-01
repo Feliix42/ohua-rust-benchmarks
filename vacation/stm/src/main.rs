@@ -60,8 +60,8 @@ fn main() {
         f.write_fmt(format_args!(
             "{{
         \"application\": \"vacation\",
-        \"algorithm\": \"sequential\",
-        \"threadcount\": 1,
+        \"algorithm\": \"rust-stm\",
+        \"threadcount\": {clients},
         \"clients\": {clients},
         \"num_queries\": {queries},
         \"percentage_queried\": {queried},
