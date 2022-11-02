@@ -114,7 +114,7 @@ fn main() {
         let algo = if cfg!(feature = "naive") {
             "stm-naive"
         } else {
-            "stm"
+            "rust-stm"
         };
         let filename = format!(
             "{}/{}-{}-p{}-t{}-r{}_log.json",

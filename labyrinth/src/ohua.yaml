@@ -1,4 +1,0 @@
-compilation-scope:
-- original/futures.rs
-debug:
-  log-level: verbose
