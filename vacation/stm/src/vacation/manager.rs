@@ -2,7 +2,7 @@ use crate::vacation::customer::Customer;
 use crate::vacation::reservation::{Reservation, ReservationType, TotalUpdate};
 use rand::Rng;
 use std::collections::HashMap;
-use stm::{atomically, StmResult, TVar, Transaction};
+use stm::{StmResult, TVar, Transaction};
 use stm_datastructures::THashMap;
 
 // The benchmark implements tables as hashmaps.
@@ -16,6 +16,7 @@ pub struct Manager {
 }
 
 impl Manager {
+    #[allow(dead_code)]
     pub fn new(bucket_no: usize) -> Self {
         Manager {
             car_table: THashMap::new(bucket_no),
@@ -25,7 +26,12 @@ impl Manager {
         }
     }
 
-    pub fn initialize<T: Rng>(&mut self, rng: &mut T, num_relations: usize) {
+    pub fn initialize<T: Rng>(rng: &mut T, num_relations: usize, bucket_no: usize) -> Self {
+        let mut cars = HashMap::new();
+        let mut rooms = HashMap::new();
+        let mut flights = HashMap::new();
+        let mut customers = HashMap::new();
+
         let mut ids: Vec<u64> = (1..(num_relations as u64) + 1).collect();
 
         for tab in 0..3 {
@@ -39,9 +45,12 @@ impl Manager {
                 let num = (rng.gen_range(0..5) + 1) * 100;
                 let price = (rng.gen_range(0..5) * 10) + 50;
                 match tab {
-                    0 => atomically(|trans| self.add_car(*id, num, price, trans)),
-                    1 => atomically(|trans| self.add_flight(*id, num, price, trans)),
-                    2 => atomically(|trans| self.add_room(*id, num, price, trans)),
+                    //0 => atomically(|trans| self.add_car(*id, num, price, trans)),
+                    //1 => atomically(|trans| self.add_flight(*id, num, price, trans)),
+                    //2 => atomically(|trans| self.add_room(*id, num, price, trans)),
+                    0 => cars.insert(*id, TVar::new(Reservation::new(*id, num, price))),
+                    1 => flights.insert(*id, TVar::new(Reservation::new(*id, num, price))),
+                    2 => rooms.insert(*id, TVar::new(Reservation::new(*id, num, price))),
                     _ => unreachable!("table num cannot exceed 0..2"),
                 };
             }
@@ -53,12 +62,16 @@ impl Manager {
             ids.swap(x, y);
         }
 
-        atomically(|trans| {
-            for id in &ids {
-                self.add_customer(*id, trans)?;
-            }
-            Ok(())
-        });
+        for id in ids {
+            customers.insert(id, TVar::new(Customer::new(id)));
+        }
+
+        Manager {
+            car_table: THashMap::from_hashmap(cars, bucket_no),
+            room_table: THashMap::from_hashmap(rooms, bucket_no),
+            flight_table: THashMap::from_hashmap(flights, bucket_no),
+            customer_table: THashMap::from_hashmap(customers, bucket_no),
+        }
     }
 }
 
