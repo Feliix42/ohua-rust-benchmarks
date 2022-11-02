@@ -240,15 +240,19 @@ fn route(
             }
         });
 
+        //match ta_result {
+            //(Some(path), retries) => {
+                //mapped.push(path);
+                //overall_retries += retries;
+            //}
+            //(None, retries) => {
+                //unmappable_paths.push(pair);
+                //overall_retries += retries;
+            //}
+        //}
         match ta_result {
-            (Some(path), retries) => {
-                mapped.push(path);
-                overall_retries += retries;
-            }
-            (None, retries) => {
-                unmappable_paths.push(pair);
-                overall_retries += retries;
-            }
+            Some(path) => mapped.push(path),
+            None => unmappable_paths.push(pair),
         }
     }
 
