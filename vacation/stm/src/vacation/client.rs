@@ -6,7 +6,6 @@ use rand_chacha::ChaCha12Rng;
 use std::sync::Arc;
 use stm::atomically;
 
-
 pub struct Client<T: RngCore + SeedableRng> {
     //id: u64,
     manager: Arc<Manager>,
@@ -54,8 +53,8 @@ impl<T: RngCore + SeedableRng> Client<T> {
                     let seed = self.random.gen::<u64>();
 
                     atomically(|trans| {
-                        let mut max_prices = vec![None,None,None];
-                        let mut max_ids = vec![None,None,None];
+                        let mut max_prices = vec![None, None, None];
+                        let mut max_ids = vec![None, None, None];
                         let mut is_found = false;
                         let mut rng = ChaCha12Rng::seed_from_u64(seed);
 
@@ -137,7 +136,8 @@ impl<T: RngCore + SeedableRng> Client<T> {
                     });
                 }
                 Action::UpdateTables => {
-                    let num_update = self.random.gen::<usize>() % self.num_query_per_transaction + 1;
+                    let num_update =
+                        self.random.gen::<usize>() % self.num_query_per_transaction + 1;
                     let seed = self.random.gen::<u64>();
 
                     atomically(|trans| {
@@ -153,18 +153,28 @@ impl<T: RngCore + SeedableRng> Client<T> {
                             };
                             match new_price0 {
                                 Some(new_price) => match t {
-                                    ReservationType::Car => self.manager.add_car(id, 100, new_price, trans)?,
+                                    ReservationType::Car => {
+                                        self.manager.add_car(id, 100, new_price, trans)?
+                                    }
                                     ReservationType::Flight => {
                                         self.manager.add_flight(id, 100, new_price, trans)?
                                     }
-                                    ReservationType::Room => self.manager.add_room(id, 100, new_price, trans)?,
+                                    ReservationType::Room => {
+                                        self.manager.add_room(id, 100, new_price, trans)?
+                                    }
                                 },
                                 None => {
                                     /* do delete */
                                     match t {
-                                        ReservationType::Car => self.manager.delete_car(id, 100, trans)?,
-                                        ReservationType::Flight => self.manager.delete_flight(id, trans)?,
-                                        ReservationType::Room => self.manager.delete_room(id, 100, trans)?,
+                                        ReservationType::Car => {
+                                            self.manager.delete_car(id, 100, trans)?
+                                        }
+                                        ReservationType::Flight => {
+                                            self.manager.delete_flight(id, trans)?
+                                        }
+                                        ReservationType::Room => {
+                                            self.manager.delete_room(id, 100, trans)?
+                                        }
                                     }
                                 }
                             };

@@ -99,6 +99,9 @@ fn run(clients: Vec<Client<ChaCha12Rng>>) {
     for mut c in clients {
         handles.push(thread::spawn(move || c.run()));
     }
-    
-    handles.into_iter().map(JoinHandle::join).for_each(Result::unwrap);
+
+    handles
+        .into_iter()
+        .map(JoinHandle::join)
+        .for_each(Result::unwrap);
 }

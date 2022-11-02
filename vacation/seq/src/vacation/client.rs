@@ -5,7 +5,6 @@ use rand::{Rng, RngCore, SeedableRng};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-
 pub struct Client<T: RngCore + SeedableRng> {
     //id: u64,
     manager: Rc<RefCell<Manager>>,
@@ -48,8 +47,8 @@ impl<T: RngCore + SeedableRng> Client<T> {
 
             match action {
                 Action::MakeReservation => {
-                    let mut max_prices = vec![None,None,None];
-                    let mut max_ids = vec![None,None,None];
+                    let mut max_prices = vec![None, None, None];
+                    let mut max_ids = vec![None, None, None];
                     let num_query = self.random.gen::<usize>() % self.num_query_per_transaction + 1;
                     let customer_id = self.random.gen::<u64>() % self.query_range + 1;
                     let mut is_found = false;
@@ -131,7 +130,8 @@ impl<T: RngCore + SeedableRng> Client<T> {
                     }
                 }
                 Action::UpdateTables => {
-                    let num_update = self.random.gen::<usize>() % self.num_query_per_transaction + 1;
+                    let num_update =
+                        self.random.gen::<usize>() % self.num_query_per_transaction + 1;
                     let mut mutmgr = self.manager.borrow_mut();
 
                     for _ in 0..num_update {
@@ -146,9 +146,7 @@ impl<T: RngCore + SeedableRng> Client<T> {
                         match new_price0 {
                             Some(new_price) => match t {
                                 ReservationType::Car => mutmgr.add_car(id, 100, new_price),
-                                ReservationType::Flight => {
-                                    mutmgr.add_flight(id, 100, new_price)
-                                }
+                                ReservationType::Flight => mutmgr.add_flight(id, 100, new_price),
                                 ReservationType::Room => mutmgr.add_room(id, 100, new_price),
                             },
                             None => {

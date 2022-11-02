@@ -51,7 +51,9 @@ impl Manager {
             ids.swap(x, y);
         }
 
-        ids.into_iter().for_each(|id| { self.add_customer(id); });
+        ids.into_iter().for_each(|id| {
+            self.add_customer(id);
+        });
     }
 }
 

@@ -367,9 +367,16 @@ impl Admin for Manager {
                         ReservationType::Room => &self.room_table,
                     };
                     // TODO: update this
-                    let e = tbl.get_bucket(&reservation.id).read_ref_atomic().downcast::<HashMap<u64, TVar<Reservation>>>().unwrap();
+                    let e = tbl
+                        .get_bucket(&reservation.id)
+                        .read_ref_atomic()
+                        .downcast::<HashMap<u64, TVar<Reservation>>>()
+                        .unwrap();
                     if let Some(entry) = e.get(&reservation.id) {
-                        entry.modify(trans, |mut e| { e.cancel(); e })?;
+                        entry.modify(trans, |mut e| {
+                            e.cancel();
+                            e
+                        })?;
                     }
                 }
                 Ok(true)
@@ -419,14 +426,19 @@ pub(crate) trait QueryInterface {
      * -- Return the price of the flight
      * =============================================================================
      */
-    fn query_flight_price(&self, flight_id: u64, trans: &mut Transaction) -> StmResult<Option<u64>>;
+    fn query_flight_price(&self, flight_id: u64, trans: &mut Transaction)
+        -> StmResult<Option<u64>>;
 
     /* =============================================================================
      * query_customer_bill
      * -- Return the total price of all reservations held for a customer
      * =============================================================================
      */
-    fn query_customer_bill(&self, customer_id: u64, trans: &mut Transaction) -> StmResult<Option<u64>>;
+    fn query_customer_bill(
+        &self,
+        customer_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<Option<u64>>;
 }
 
 /* =============================================================================
@@ -434,11 +446,19 @@ pub(crate) trait QueryInterface {
  * -- Return numFree of a reservation, -1 if failure
  * =============================================================================
  */
-fn query_num_free(table: &THashMap<u64, TVar<Reservation>>, id: u64, trans: &mut Transaction) -> StmResult<Option<u64>> {
-    let tab = table.get_bucket(&id).read_ref_atomic().downcast::<HashMap<u64, TVar<Reservation>>>().unwrap();
+fn query_num_free(
+    table: &THashMap<u64, TVar<Reservation>>,
+    id: u64,
+    trans: &mut Transaction,
+) -> StmResult<Option<u64>> {
+    let tab = table
+        .get_bucket(&id)
+        .read_ref_atomic()
+        .downcast::<HashMap<u64, TVar<Reservation>>>()
+        .unwrap();
     match tab.get(&id) {
         Some(entry) => Ok(Some(entry.read(trans)?.num_free)),
-        None => Ok(None)
+        None => Ok(None),
     }
 }
 
@@ -447,11 +467,19 @@ fn query_num_free(table: &THashMap<u64, TVar<Reservation>>, id: u64, trans: &mut
  * -- Return price of a reservation, -1 if failure
  * =============================================================================
  */
-fn query_price(table: &THashMap<u64, TVar<Reservation>>, id: u64, trans: &mut Transaction) -> StmResult<Option<u64>> {
-    let tab = table.get_bucket(&id).read_ref_atomic().downcast::<HashMap<u64, TVar<Reservation>>>().unwrap();
+fn query_price(
+    table: &THashMap<u64, TVar<Reservation>>,
+    id: u64,
+    trans: &mut Transaction,
+) -> StmResult<Option<u64>> {
+    let tab = table
+        .get_bucket(&id)
+        .read_ref_atomic()
+        .downcast::<HashMap<u64, TVar<Reservation>>>()
+        .unwrap();
     match tab.get(&id) {
         Some(entry) => Ok(Some(entry.read(trans)?.price)),
-        None => Ok(None)
+        None => Ok(None),
     }
 }
 
@@ -476,15 +504,28 @@ impl QueryInterface for Manager {
         query_num_free(&self.flight_table, flight_id, trans)
     }
 
-    fn query_flight_price(&self, flight_id: u64, trans: &mut Transaction) -> StmResult<Option<u64>> {
+    fn query_flight_price(
+        &self,
+        flight_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<Option<u64>> {
         query_price(&self.flight_table, flight_id, trans)
     }
 
-    fn query_customer_bill(&self, customer_id: u64, trans: &mut Transaction) -> StmResult<Option<u64>> {
-        let tab = self.customer_table.get_bucket(&customer_id).read_ref_atomic().downcast::<HashMap<u64, TVar<Customer>>>().unwrap();
+    fn query_customer_bill(
+        &self,
+        customer_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<Option<u64>> {
+        let tab = self
+            .customer_table
+            .get_bucket(&customer_id)
+            .read_ref_atomic()
+            .downcast::<HashMap<u64, TVar<Customer>>>()
+            .unwrap();
         match tab.get(&customer_id) {
             Some(entry) => Ok(Some(entry.read(trans)?.get_bill())),
-            None => Ok(None)
+            None => Ok(None),
         }
     }
 }
@@ -496,7 +537,12 @@ pub(crate) trait ReservationInterface {
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn reserve_car(&self, customer_id: u64, car_id: u64, trans: &mut Transaction) -> StmResult<bool>;
+    fn reserve_car(
+        &self,
+        customer_id: u64,
+        car_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool>;
 
     /* =============================================================================
      * reserve_room
@@ -504,7 +550,12 @@ pub(crate) trait ReservationInterface {
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn reserve_room(&self, customer_id: u64, room_id: u64, trans: &mut Transaction) -> StmResult<bool>;
+    fn reserve_room(
+        &self,
+        customer_id: u64,
+        room_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool>;
 
     /* =============================================================================
      * reserve_flight
@@ -512,7 +563,12 @@ pub(crate) trait ReservationInterface {
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn reserve_flight(&self, customer_id: u64, flight_id: u64, trans: &mut Transaction) -> StmResult<bool>;
+    fn reserve_flight(
+        &self,
+        customer_id: u64,
+        flight_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool>;
 
     /* =============================================================================
      * cancel_car
@@ -520,7 +576,8 @@ pub(crate) trait ReservationInterface {
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn cancel_car(&self, customer_id: u64, car_id: u64, trans: &mut Transaction) -> StmResult<bool>;
+    fn cancel_car(&self, customer_id: u64, car_id: u64, trans: &mut Transaction)
+        -> StmResult<bool>;
 
     /* =============================================================================
      * cancel_room
@@ -528,7 +585,12 @@ pub(crate) trait ReservationInterface {
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn cancel_room(&self, customer_id: u64, room_id: u64, trans: &mut Transaction) -> StmResult<bool>;
+    fn cancel_room(
+        &self,
+        customer_id: u64,
+        room_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool>;
 
     /* =============================================================================
      * cancel_flight
@@ -536,7 +598,12 @@ pub(crate) trait ReservationInterface {
      * -- Returns TRUE on success, else FALSE
      * =============================================================================
      */
-    fn cancel_flight(&self, customer_id: u64, flight_id: u64, trans: &mut Transaction) -> StmResult<bool>;
+    fn cancel_flight(
+        &self,
+        customer_id: u64,
+        flight_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool>;
 }
 
 /* =============================================================================
@@ -576,7 +643,10 @@ fn reserve(
                         // this is ok without write due to the semantics of make()
                         false => Ok(false),
                         true => {
-                            customer.modify(trans, |mut c| { c.add_reservation_info(typ, id, res.price); c })?;
+                            customer.modify(trans, |mut c| {
+                                c.add_reservation_info(typ, id, res.price);
+                                c
+                            })?;
                             r.write(trans, res)?;
                             Ok(true)
                         }
@@ -626,7 +696,10 @@ fn cancel(
                         // this is ok without write due to the semantics of make()
                         false => Ok(false),
                         true => {
-                            customer.modify(trans, |mut c| { c.remove_reservation_info(typ, id); c })?;
+                            customer.modify(trans, |mut c| {
+                                c.remove_reservation_info(typ, id);
+                                c
+                            })?;
                             r.write(trans, res)?;
                             Ok(true)
                         }
@@ -636,24 +709,29 @@ fn cancel(
         }
     }
     //match customer_table.get_mut(&customer_id) {
-        //None => false,
-        //Some(customer) => match table.get_mut(&id) {
-            //None => false,
-            //Some(reservation) => match reservation.cancel() {
-                //false => false,
-                //true => {
-                    //customer.remove_reservation_info(typ, id);
-                    //true
-                //}
-            //},
-        //},
+    //None => false,
+    //Some(customer) => match table.get_mut(&id) {
+    //None => false,
+    //Some(reservation) => match reservation.cancel() {
+    //false => false,
+    //true => {
+    //customer.remove_reservation_info(typ, id);
+    //true
+    //}
+    //},
+    //},
     //}
     // TODO the tranactional version needs to check whether the cancellation was successful and
     // if not make it again.
 }
 
 impl ReservationInterface for Manager {
-    fn reserve_car(&self, customer_id: u64, car_id: u64, trans: &mut Transaction) -> StmResult<bool> {
+    fn reserve_car(
+        &self,
+        customer_id: u64,
+        car_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool> {
         reserve(
             &self.car_table,
             &self.customer_table,
@@ -664,7 +742,12 @@ impl ReservationInterface for Manager {
         )
     }
 
-    fn reserve_room(&self, customer_id: u64, room_id: u64, trans: &mut Transaction) -> StmResult<bool> {
+    fn reserve_room(
+        &self,
+        customer_id: u64,
+        room_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool> {
         reserve(
             &self.room_table,
             &self.customer_table,
@@ -675,7 +758,12 @@ impl ReservationInterface for Manager {
         )
     }
 
-    fn reserve_flight(&self, customer_id: u64, flight_id: u64, trans: &mut Transaction) -> StmResult<bool> {
+    fn reserve_flight(
+        &self,
+        customer_id: u64,
+        flight_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool> {
         reserve(
             &self.flight_table,
             &self.customer_table,
@@ -686,7 +774,12 @@ impl ReservationInterface for Manager {
         )
     }
 
-    fn cancel_car(&self, customer_id: u64, car_id: u64, trans: &mut Transaction) -> StmResult<bool> {
+    fn cancel_car(
+        &self,
+        customer_id: u64,
+        car_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool> {
         cancel(
             &self.car_table,
             &self.customer_table,
@@ -697,7 +790,12 @@ impl ReservationInterface for Manager {
         )
     }
 
-    fn cancel_room(&self, customer_id: u64, room_id: u64, trans: &mut Transaction) -> StmResult<bool> {
+    fn cancel_room(
+        &self,
+        customer_id: u64,
+        room_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool> {
         cancel(
             &self.room_table,
             &self.customer_table,
@@ -708,7 +806,12 @@ impl ReservationInterface for Manager {
         )
     }
 
-    fn cancel_flight(&self, customer_id: u64, flight_id: u64, trans: &mut Transaction) -> StmResult<bool> {
+    fn cancel_flight(
+        &self,
+        customer_id: u64,
+        flight_id: u64,
+        trans: &mut Transaction,
+    ) -> StmResult<bool> {
         cancel(
             &self.flight_table,
             &self.customer_table,

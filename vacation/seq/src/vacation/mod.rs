@@ -42,7 +42,10 @@ pub struct Parameters {
     pub num_transactions: usize,
 }
 
-pub fn initialize_clients(manager: Rc<RefCell<Manager>>, params: &Parameters) -> Vec<Client<ChaCha12Rng>> {
+pub fn initialize_clients(
+    manager: Rc<RefCell<Manager>>,
+    params: &Parameters,
+) -> Vec<Client<ChaCha12Rng>> {
     let mut clients = Vec::with_capacity(params.clients);
 
     let num_tx_per_client = (params.num_transactions as f64 / params.clients as f64 + 0.5) as usize;
