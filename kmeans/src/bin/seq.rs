@@ -9,7 +9,7 @@ use time::PreciseTime;
 fn main() {
     let matches = App::new("Sequential kmeans benchmark")
         .version("1.0")
-        .author("Felix Wittwer <dev@felixwittwer.de>")
+        .author("Felix Suchert <dev@felixsuchert.de>")
         .about("A Rust port of the kmeans benchmark from the STAMP collection, implemented in a sequential manner.")
         .arg(
             Arg::with_name("INPUT")
