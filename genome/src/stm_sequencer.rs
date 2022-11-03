@@ -1,6 +1,5 @@
 use crate::segments::Segments;
 use crate::Nucleotide;
-use itertools::Itertools;
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::{Arc, Barrier};

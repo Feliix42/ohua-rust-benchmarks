@@ -10,6 +10,8 @@ pub mod segments;
 pub mod sequencer;
 #[cfg(feature = "transactional")]
 pub mod stm_sequencer;
+#[cfg(feature = "transactional")]
+pub mod dstm_sequencer;
 #[cfg(feature = "ohua")]
 pub mod ohua_sequencer;
 
