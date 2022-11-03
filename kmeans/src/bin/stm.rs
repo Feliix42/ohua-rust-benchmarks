@@ -106,7 +106,8 @@ fn main() {
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
     let mut convergence_after = Vec::with_capacity(runs);
-    let mut computations = Vec::with_capacity(runs);
+    #[allow(unused_mut)]
+    let mut computations: Vec<usize> = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -118,7 +119,7 @@ fn main() {
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        let (iterations, comps) = run_kmeans(input_data, initial_centers, threshold, threadcount);
+        let iterations = run_kmeans(input_data, initial_centers, threshold, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -133,7 +134,7 @@ fn main() {
         results.push(runtime_ms);
         cpu_results.push(cpu_runtime_ms);
         convergence_after.push(iterations);
-        computations.push(comps);
+        //computations.push(comps);
     }
 
     // generate output
@@ -191,11 +192,11 @@ fn run_kmeans(
     mut centroids: Arc<Vec<Centroid>>,
     threshold: f32,
     threadcount: usize,
-) -> (usize, usize) {
+) -> usize {
     let mut runs = 0;
     let delta = TVar::new(std::f32::MAX);
     let new_centroids = ComputeCentroid::new_empty(values[0].values.len(), centroids.len());
-    let mut total_computations: usize = 0;
+    //let mut total_computations: usize = 0;
 
     // exit conditions: either we are below our self-set threshold or 500 iterations have passed
     while runs < 500 && delta.read_atomic() > threshold {
@@ -207,21 +208,23 @@ fn run_kmeans(
         // after collect: reunite and read the ComputeCentroids
 
         // Step 1: Assign all clusters to a centroid
-        let mut splitted = splitup(values, threadcount);
-        let mut handles: Vec<JoinHandle<(Vec<Value>, usize)>> = Vec::with_capacity(threadcount);
+        let splitted = splitup(values, threadcount);
+        //let mut handles: Vec<JoinHandle<(Vec<Value>, usize)>> = Vec::with_capacity(threadcount);
+        let mut handles: Vec<JoinHandle<Vec<Value>>> = Vec::with_capacity(threadcount);
 
         // spawn the worksets onto threads
-        for mut workset in splitted.drain(..) {
+        for mut workset in splitted {
             // copy data for workset
             let local_delta = delta.clone();
             let local_centroids = centroids.clone();
             let local_new_centroids = new_centroids.clone();
 
             handles.push(thread::spawn(move || {
-                let mut comps = workset.len();
+                //let mut comps = workset.len();
                 for val in workset.iter_mut() {
                     let new_cluster = val.find_nearest_centroid(&local_centroids);
-                    let (_, collisions) = atomically(|trans| {
+                    //let (_, collisions) = atomically(|trans| {
+                    atomically(|trans| {
                         if new_cluster != val.associated_cluster {
                             local_delta.modify(trans, |d| d + 1.0)?;
                         }
@@ -231,36 +234,37 @@ fn run_kmeans(
                         })
                     });
 
-                    comps += collisions;
+                    //comps += collisions;
                     if new_cluster != val.associated_cluster {
                         val.associated_cluster = new_cluster;
                     }
                 }
 
-                (workset, comps)
+                workset
             }));
         }
 
         // collect the work
-        let (tmp, cmp_list): (Vec<Vec<Value>>, Vec<usize>) = handles
+        // let (tmp, cmp_list): (Vec<Vec<Value>>, Vec<usize>) = handles
+        //     .into_iter()
+        //     .map(JoinHandle::join)
+        //     .map(Result::unwrap)
+        //     .unzip();
+        // values = tmp.into_iter().flatten().collect();
+        // total_computations += cmp_list.into_iter().sum::<usize>();
+        values = handles
             .into_iter()
             .map(JoinHandle::join)
             .map(Result::unwrap)
-            .unzip();
-        values = tmp.into_iter().flatten().collect();
-        total_computations += cmp_list.into_iter().sum::<usize>();
-        // values = handles
-        //     .drain(..)
-        //     .map(JoinHandle::join)
-        //     .map(Result::unwrap)
-        //     .flatten()
-        //     .collect();
+            .flatten()
+            .collect();
 
         // calculate the definite delta
         atomically(|trans| delta.modify(trans, |d| d / values.len() as f32));
 
         // Step 2: Calculate new centroids
-        let (c, _) = atomically(|trans| {
+        //let (c, _) = atomically(|trans| {
+        let c = atomically(|trans| {
             // calculate and assign the new centroids
             let c = new_centroids
                 .iter()
@@ -282,7 +286,7 @@ fn run_kmeans(
         centroids = c;
     }
 
-    (runs, total_computations)
+    runs
 }
 
 /// Splits the input vector into evenly sized vectors for `split_size` workers.
