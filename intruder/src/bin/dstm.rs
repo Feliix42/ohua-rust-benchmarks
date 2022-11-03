@@ -3,18 +3,17 @@ use cpu_time::ProcessTime;
 use intruder::decoder::stm_decoder::{decode_packet, StmDecoderState};
 use intruder::detector::{run_detector, DetectorResult};
 use intruder::*;
-use std::collections::VecDeque;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
-use std::thread;
-use stm::{atomically, det_atomically, dtm, freeze, DTMHandle, DTM};
+use std::thread::{self, JoinHandle};
+use stm::{atomically, det_atomically, dtm, freeze, DTMHandle};
 use time::PreciseTime;
 
 fn main() {
-    let matches = App::new("STM Intruder Benchmark")
+    let matches = App::new("DSTM Intruder Benchmark")
         .version("1.0")
-        .author("Felix Wittwer <dev@felixwittwer.de>")
+        .author("Felix Suchert <dev@felixsuchert.de>")
         .about("A Rust port of the intruder benchmark from the STAMP collection, implemented in software transactional memeory.")
         .arg(
             Arg::with_name("attacks")
@@ -100,6 +99,7 @@ fn main() {
 
     // generate the input data
     let (input, attacks) = generate_stream(flowcount, attack_percentage, max_packet_len, rng_seed);
+    let input: Vec<Packet> = input.into_iter().collect();
     if !json_dump {
         println!(
             "[INFO] Generated flows containing an attack: {}",
@@ -145,13 +145,13 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/stm-n{}-p{}-s{}-pl{}-t{}-r{}_log.json",
+            "{}/dstm-n{}-p{}-s{}-pl{}-t{}-r{}_log.json",
             out_dir, flowcount, attack_percentage, rng_seed, max_packet_len, threads, runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"stm\",
+    \"algorithm\": \"rust-dstm\",
     \"flow_count\": {flows},
     \"attack_percentage\": {attack_perc},
     \"attack_count\": {attacks},
@@ -188,47 +188,6 @@ fn main() {
     }
 }
 
-/// Function that analyzes the incoming packet stream. The "benchmark" itself.
-/// Everything inside this function is being timed.
-///
-/// Returns a Vec of flow IDs that contained an attack for later check
-fn analyze_stream0(packets: VecDeque<(Packet, DTMHandle)>, decoder_state: StmDecoderState) -> Vec<usize> {
-    let mut found_attacks = Vec::new();
-
-    // NOTE: This is a deviation from the original code where packets where
-    // retrieved individually. Unfortunately, this made up for 96% of all
-    // processing time, hence the simplification
-    // loop {
-    //     let packet = atomically(|trans| {
-    //         let mut v = packets.read(trans)?;
-    //         if v.len() == 0 {
-    //             Ok(None)
-    //         } else {
-    //             let r = v.pop_front().unwrap();
-    //             packets.write(trans, v)?;
-    //             Ok(Some(r))
-    //         }
-    //     });
-
-    for (p, h) in packets {
-        // if let Some(p) = packet {
-        // do the algorithm
-        let decoder_result = det_atomically(h, |trans2| decode_packet(&p, &decoder_state, trans2));
-        //println!("Comitted!");
-        if let Some(decoded_flow) = decoder_result {
-            // process the output -> run the detector
-            if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
-                found_attacks.push(decoded_flow.flow_id);
-            }
-        }
-        // } else {
-        //     break;
-        // }
-    }
-
-    found_attacks
-}
-
 // So, the above version does not work because the implemented algorithm
 // for deterministic STM proceeds in rounds. That is, it needs to finish
 // a round first in order to re-execute the retries.
@@ -241,92 +200,72 @@ fn analyze_stream0(packets: VecDeque<(Packet, DTMHandle)>, decoder_state: StmDec
 // require quite a different programming model because for that the library. Would need to schedule
 // the transactions across a pool of threads.
 
-fn analyze_stream(packets: VecDeque<Packet>, decoder_state: StmDecoderState, handle:DTMHandle) -> STMResult<Vec<usize>> {
-    let mut found_attacks = Vec::new();
+fn analyze_stream(
+    packet: Packet,
+    decoder_state: StmDecoderState,
+    handle: DTMHandle,
+) -> Option<usize> {
+    let decoder_result = det_atomically(handle, |trans| {
+        decode_packet(&packet, &decoder_state, trans)
+        //let mut ds = Vec::new();
+        //for p in packets {
+        //let decoder_result = decode_packet(&p, &decoder_state, trans);
+        //match decoder_result {
+        //Ok(d) => ds.push(d),
+        //Err(e) => return Err(e) // error type cast
+        //}
+        //}
+        //Ok(ds)
+    });
 
-    let decoder_results = 
-        det_atomically(handle,
-            |trans2|{
-                let mut ds = Vec::new();
-                for p in packets {
-                    let decoder_result = decode_packet(&p, &decoder_state, trans2);
-                    match decoder_result {
-                        Ok(d) => ds.push(d),
-                        Err(e) => return Err(e) // error type cast
-                    }
-                }
-                Ok(ds)
-            });
-
-   for decoder_result in decoder_results {
-        if let Some(decoded_flow) = decoder_result {
-            // process the output -> run the detector
-            if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
-                found_attacks.push(decoded_flow.flow_id);
-            }
+    //for decoder_result in decoder_results {
+    if let Some(decoded_flow) = decoder_result {
+        // process the output -> run the detector
+        if run_detector(&decoded_flow.data) == DetectorResult::SignatureMatch {
+            //found_attacks.push(decoded_flow.flow_id);
+            return Some(decoded_flow.flow_id);
         }
     }
 
-    found_attacks
+    None
+    //}
+
+    //found_attacks
 }
 
-//fn partition_input_vec(mut packets: VecDeque<Packet>, threadcount: usize, dtm: &mut DTM) -> (Vec<VecDeque<Packet>>, Vec<VecDeque<DTMHandle>>) {
-fn partition_input_vec(
-    mut packets: VecDeque<Packet>,
-    threadcount: usize,
-    dtm: &mut DTM,
-) -> Vec<(VecDeque<Packet>, DTMHandle)> {
-    let total_packets = packets.len();
-    let l = total_packets / threadcount;
-    let mut rest = packets.len() % threadcount;
-
-    let mut partitioned = vec![VecDeque::with_capacity(0); threadcount];
-
-    for t_num in 0..threadcount {
-        if rest > 0 {
-            partitioned[t_num] = packets.split_off(packets.len() - l - 1);
-            rest -= 1;
-        } else {
-            if packets.len() <= l {
-                partitioned[t_num] = packets.split_off(0);
-            } else {
-                partitioned[t_num] = packets.split_off(packets.len() - l);
-            }
-        }
-    }
-
-    partitioned
-        .into_iter()
-        .map(|items| {
-            (items, dtm.register())
-        })
-        .collect()
-}
-
-fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
+fn run_eval(packets: Vec<Packet>, threadcount: usize) -> Vec<usize> {
     let mut found_attacks = Vec::new();
     let decoder_state = StmDecoderState::new(threadcount);
 
-    // create a DTM queue
-    let mut dtm = dtm();
+    // TODO(feliix42): This could be improved by processing multiple elements in a single Tx. But
+    // that would already be an optimization.
+    for chunk in packets.chunks(threadcount) {
+        // create DTM handles
+        let mut dtm = dtm();
+        let work: Vec<(Packet, DTMHandle)> = chunk
+            .into_iter()
+            .map(std::borrow::ToOwned::to_owned)
+            .map(|item| (item, dtm.register()))
+            .collect();
+        freeze(dtm);
 
-    let mut threads = Vec::with_capacity(threadcount);
-    let inputs = partition_input_vec(packets, threadcount, &mut dtm);
+        // spawn threads
+        let mut threads = Vec::with_capacity(threadcount);
+        for item in work {
+            let ds = decoder_state.clone();
+            let (packet, handle) = item;
+            threads.push(thread::spawn(move || analyze_stream(packet, ds, handle)));
+        }
 
-    // freeze the DTM queue
-    freeze(dtm);
-
-    for (packets,handle) in inputs {
-        let ds = decoder_state.clone();
-        threads.push(thread::spawn(move || 
-                det_atomically(
-                    handle,
-                    |tx| analyze_stream(packets, ds, tx))));
-    }
-
-    for thread in threads {
-        let mut attacks = thread.join().unwrap();
-        found_attacks.append(&mut attacks);
+        // collect work
+        found_attacks.extend(
+            threads
+                .into_iter()
+                .map(JoinHandle::join)
+                .map(Result::unwrap)
+                .filter(Option::is_some)
+                .map(Option::unwrap),
+        );
     }
 
     // State verification

@@ -12,7 +12,7 @@ use time::PreciseTime;
 fn main() {
     let matches = App::new("Sequential Intruder Benchmark")
         .version("1.0")
-        .author("Felix Wittwer <dev@felixwittwer.de>")
+        .author("Felix Suchert <dev@felixsuchert.de>")
         .about("A Rust port of the intruder benchmark from the STAMP collection, implemented in a sequential manner.")
         .arg(
             Arg::with_name("attacks")

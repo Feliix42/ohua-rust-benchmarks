@@ -14,7 +14,7 @@ use time::PreciseTime;
 fn main() {
     let matches = App::new("STM Intruder Benchmark")
         .version("1.0")
-        .author("Felix Wittwer <dev@felixwittwer.de>")
+        .author("Felix Suchert <dev@felixsuchert.de>")
         .about("A Rust port of the intruder benchmark from the STAMP collection, implemented in software transactional memeory.")
         .arg(
             Arg::with_name("attacks")
@@ -151,7 +151,7 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"stm\",
+    \"algorithm\": \"rust-stm\",
     \"flow_count\": {flows},
     \"attack_percentage\": {attack_perc},
     \"attack_count\": {attacks},

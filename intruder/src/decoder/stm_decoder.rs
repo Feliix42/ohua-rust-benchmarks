@@ -1,8 +1,8 @@
 use super::DecodedPacket;
 use crate::Packet;
-use stm::{StmError, StmResult, Transaction, TVar};
-use stm_datastructures::THashMap;
 use std::collections::HashMap;
+use stm::{StmError, StmResult, TVar, Transaction};
+use stm_datastructures::THashMap;
 
 #[derive(Clone)]
 pub struct StmDecoderState {
@@ -28,7 +28,10 @@ pub fn decode_packet(
     if packet.packets_in_flow != 1 {
         // get the matching TVar (== bucket) and read it
         let bucket = state.fragments_map.get_bucket(&packet.flow_id);
-        let frags = bucket.read_ref_atomic().downcast::<HashMap<usize, TVar<Vec<Packet>>>>().unwrap();
+        let frags = bucket
+            .read_ref_atomic()
+            .downcast::<HashMap<usize, TVar<Vec<Packet>>>>()
+            .unwrap();
 
         if let Some(decoded_tv) = frags.get(&packet.flow_id) {
             // we already have some packets with that ID
@@ -49,7 +52,10 @@ pub fn decode_packet(
                     .fold(String::new(), |acc, p| acc + &p.data);
 
                 // remove the flow from the hashmap & write that back
-                bucket.modify(transaction, |mut hm| { let _ = hm.remove(&flow_id); hm })?;
+                bucket.modify(transaction, |mut hm| {
+                    let _ = hm.remove(&flow_id);
+                    hm
+                })?;
 
                 Ok(Some(DecodedPacket {
                     flow_id,

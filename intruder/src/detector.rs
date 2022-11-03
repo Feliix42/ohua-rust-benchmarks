@@ -31,7 +31,6 @@ pub fn run_detector(flow: &str) -> DetectorResult {
     DetectorResult::Clear
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -47,8 +46,8 @@ mod tests {
         assert_eq!(run_detector("aBoUt"), DetectorResult::SignatureMatch);
     }
 
-//     #[test]
-//     fn escape_sequence_normalization() {
-//         assert_eq!(run_detector("%41Bout"), DetectorResult::SignatureMatch);
-//     }
+    //     #[test]
+    //     fn escape_sequence_normalization() {
+    //         assert_eq!(run_detector("%41Bout"), DetectorResult::SignatureMatch);
+    //     }
 }
