@@ -25,7 +25,7 @@ static TASKS_PER_THREAD: usize = 2;
 fn main() {
     let matches = App::new("Ohua genome benchmark")
         .version("1.0")
-        .author("Felix Wittwer <dev@felixwittwer.de>")
+        .author("Felix Suchert <dev@felixsuchert.de>")
         .about(
             "A Rust port of the genome benchmark from the STAMP collection, implemented in Ohua with futures and state partitioning.",
         )

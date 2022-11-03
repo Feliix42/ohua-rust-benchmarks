@@ -18,7 +18,7 @@ use cpu_time::ProcessTime;
 fn main() {
     let matches = App::new("STM genome benchmark")
         .version("1.0")
-        .author("Felix Wittwer <dev@felixwittwer.de>")
+        .author("Felix Suchert <dev@felixsuchert.de>")
         .about("A Rust port of the genome benchmark from the STAMP collection, implemented in STM.")
         .arg(
             Arg::with_name("genelength")
@@ -150,7 +150,7 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"stm\",
+    \"algorithm\": \"rust-stm\",
     \"gene_length\": {gene_len},
     \"min_segment_count\": {min_segment},
     \"segment_length\": {seg_len},
