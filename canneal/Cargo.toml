@@ -34,3 +34,9 @@ required-features = ["transactional", "cli"]
 name = "stm_small_tx"
 path = "src/bin/stm_small_tx.rs"
 required-features = ["transactional", "cli", "less_tx"]
+
+[[bin]]
+name = "dstm"
+path = "src/bin/dstm.rs"
+required-features = ["transactional", "cli"]
+
