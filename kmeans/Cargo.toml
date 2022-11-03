@@ -27,3 +27,8 @@ required-features = ["cli"]
 name = "stm"
 path = "src/bin/stm.rs"
 required-features = ["transactional", "cli"]
+
+[[bin]]
+name = "dstm"
+path = "src/bin/dstm.rs"
+required-features = ["transactional", "cli"]
