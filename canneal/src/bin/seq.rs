@@ -12,7 +12,7 @@ use std::time::Instant;
 fn main() {
     let matches = App::new("Sequential canneal benchmark")
         .version("1.0")
-        .author("Felix Wittwer <dev@felixwittwer.de>")
+        .author("Felix Suchert <dev@felixsuchert.de>")
         .about("A Rust port of the canneal benchmark from the PARSEC collection, implemented in a sequential manner.")
         .arg(
             Arg::with_name("INPUT")

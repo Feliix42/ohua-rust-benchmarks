@@ -16,7 +16,7 @@ use stm::{atomically, TVar};
 fn main() {
     let matches = App::new("STM canneal benchmark")
         .version("1.0")
-        .author("Felix Wittwer <dev@felixwittwer.de>")
+        .author("Felix Suchert <dev@felixsuchert.de>")
         .about("A Rust port of the canneal benchmark from the PARSEC collection, implemented using Rust-STM.")
         .arg(
             Arg::with_name("INPUT")

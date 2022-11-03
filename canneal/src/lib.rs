@@ -2,11 +2,8 @@ use rand::Rng;
 #[cfg(feature = "transactional")]
 use stm::{StmResult, TVar, Transaction};
 
-#[cfg(all(not(feature = "transactional"), not(feature = "ohua")))]
+#[cfg(not(feature = "transactional"))]
 pub mod netlist;
-
-#[cfg(feature = "ohua")]
-pub mod ohua_netlist;
 #[cfg(feature = "transactional")]
 pub mod stm_netlist;
 
@@ -47,7 +44,7 @@ pub fn keep_going(
     }
 }
 
-#[cfg(all(not(feature = "transactional"), not(feature = "ohua")))]
+#[cfg(not(feature = "transactional"))]
 pub fn calculate_delta_routing_cost(
     a: &netlist::NetlistElement,
     b: &netlist::NetlistElement,
