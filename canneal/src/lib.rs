@@ -1,3 +1,4 @@
+#[cfg(not(feature = "transactional"))]
 use rand::Rng;
 #[cfg(feature = "transactional")]
 use stm::{StmResult, TVar, Transaction};

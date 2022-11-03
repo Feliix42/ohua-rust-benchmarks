@@ -153,14 +153,14 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"stm\",
+    \"algorithm\": \"rust-stm\",
     \"netlist_elements\": {opt},
     \"runs\": {runs},
     \"threadcount\": {threads},
     \"initial_temperature\": {init_tmp},
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
-    \"computations\": {comps:?},
+    \"computations (not real)\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -256,7 +256,7 @@ fn run_annealer(
                 // atomically() requires a non-mutable item, which means I cannot use the RNG within
                 let random_value = thread_rng.gen();
 
-                let (_, retries) = atomically(|trans| {
+                atomically(|trans| {
                     let delta_cost = calculate_delta_routing_cost(
                         &netlist.elements[idx_a].read(trans)?,
                         &netlist.elements[idx_b].read(trans)?,
@@ -276,7 +276,7 @@ fn run_annealer(
                     }
                 });
 
-                computations += 1 + retries;
+                computations += 1; // + retries;
             }
 
             // notify main thread we're done
