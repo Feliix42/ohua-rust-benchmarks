@@ -262,13 +262,12 @@ fn run_annealer(
                 // atomically() requires a non-mutable item, which means I cannot use the RNG within
                 let random_value = thread_rng.gen();
 
-                det_atomically(dtm_handle, |trans| {
-                    let delta_cost = calculate_delta_routing_cost(
-                        &netlist.elements[idx_a].read(trans)?,
-                        &netlist.elements[idx_b].read(trans)?,
-                        trans,
-                    )?;
+                let delta_cost = calculate_delta_routing_cost(
+                    &netlist.elements[idx_a].read_atomic(),
+                    &netlist.elements[idx_b].read_atomic(),
+                );
 
+                det_atomically(dtm_handle, |trans| {
                     match assess_move(delta_cost, local_tmp.read(trans)?, random_value) {
                         MoveDecision::Good => {
                             accepted_good.modify(trans, |x| x + 1)?;

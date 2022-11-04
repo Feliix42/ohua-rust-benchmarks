@@ -38,5 +38,4 @@ required-features = ["transactional", "cli", "less_tx"]
 [[bin]]
 name = "dstm"
 path = "src/bin/dstm.rs"
-required-features = ["transactional", "cli"]
-
+required-features = ["transactional", "cli", "less_tx"]

@@ -275,7 +275,7 @@ fn run_annealer(
                     }
                 });
 
-                computations += 1 + retries;
+                computations += 1; // + retries;
             }
 
             // notify main thread we're done
