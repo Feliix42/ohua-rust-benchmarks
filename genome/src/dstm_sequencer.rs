@@ -99,7 +99,6 @@ pub fn deduplicate(segments: Segments, threadcount: usize) -> VecDeque<Sequencer
         let mut i = 0;
         loop {
             // to avoid handing out too many tokens we must do this:
-            i += 1;
             if rest != 0 && i == bounds {
                 // should the last round of items be unequal to the threadcount, the last round
                 // will have fewer items
@@ -117,6 +116,8 @@ pub fn deduplicate(segments: Segments, threadcount: usize) -> VecDeque<Sequencer
                 dtm_sx[idx].send(dtm.register()).unwrap();
             }
             freeze(dtm);
+
+            i += 1;
         }
     }));
 
