@@ -7,6 +7,7 @@ use std::io::Write;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
+use stm::{dtm, freeze};
 use vacation::{client::Client, manager::Manager, Parameters};
 
 mod vacation;
@@ -44,7 +45,7 @@ fn main() {
     if params.json {
         create_dir_all(&params.outdir).unwrap();
         let filename = format!(
-            "{}/stm-c{}-n{}-q{}-u{}-r{}-t{}-runs{}_log.json",
+            "{}/dstm-c{}-n{}-q{}-u{}-r{}-t{}-runs{}_log.json",
             params.outdir,
             params.clients,
             params.num_queries,
@@ -59,7 +60,7 @@ fn main() {
         f.write_fmt(format_args!(
             "{{
         \"application\": \"vacation\",
-        \"algorithm\": \"rust-stm\",
+        \"algorithm\": \"rust-dstm\",
         \"threadcount\": {clients},
         \"clients\": {clients},
         \"num_queries\": {queries},
@@ -95,10 +96,34 @@ fn main() {
 
 fn run(clients: Vec<Client<ChaCha12Rng>>) {
     let mut handles = Vec::with_capacity(clients.len());
+    let mut end_channels = Vec::new();
+    let mut dtm_channels = Vec::new();
 
     for mut c in clients {
-        handles.push(thread::spawn(move || c.run()));
+        let (end_sx, end_rx) = std::sync::mpsc::channel();
+        let (dtm_sx, dtm_rx) = std::sync::mpsc::channel();
+        end_channels.push(end_rx);
+        dtm_channels.push(dtm_sx);
+
+        handles.push(thread::spawn(move || c.run(end_sx, dtm_rx)));
     }
+
+    handles.push(thread::spawn(move || loop {
+        // DTM handler
+        for rx in &end_channels {
+            // exit condition
+            if let Err(_) = rx.recv() {
+                return;
+            }
+        }
+
+        // hand out the new handles
+        let mut dtm = dtm();
+        for sx in &dtm_channels {
+            sx.send(dtm.register()).unwrap();
+        }
+        freeze(dtm);
+    }));
 
     handles
         .into_iter()

@@ -81,6 +81,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dstm-vacation"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "cpu-time",
+ "rand 0.8.5",
+ "rand_chacha",
+ "stm",
+ "stm-datastructures",
+]
+
+[[package]]
 name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

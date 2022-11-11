@@ -3,6 +3,7 @@
 members = [
     "seq",
     "stm",
+    "dstm",
 ]
 
 resolver = "2"
