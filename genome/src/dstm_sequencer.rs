@@ -70,28 +70,26 @@ fn split_evenly(
 pub fn deduplicate(segments: Segments, threadcount: usize) -> VecDeque<SequencerItem> {
     // Step 1: deduplicate all segments by placing them in a hashmap
     let tmp: Arc<THashSet<Vec<Nucleotide>>> = Arc::new(THashSet::new(segments.orig_gene_length));
+    let rest = segments.contents.len() % threadcount;
     let to_dedup = split_evenly(segments.contents, threadcount);
-    let barrier = Arc::new(Barrier::new(threadcount + 1));
 
+    let (done_sx, done_rx): (Vec<Sender<()>>, Vec<Receiver<()>>) =
+        (0..threadcount).map(|_| std::sync::mpsc::channel()).unzip();
     let (dtm_sx, dtm_rxs): (Vec<Sender<DTMHandle>>, Vec<Receiver<DTMHandle>>) =
         (0..threadcount).map(|_| std::sync::mpsc::channel()).unzip();
-    // TODO: the bounds must consider the rest as well (split evenly works based on a "rest")
     let bounds = to_dedup.last().unwrap().len();
 
-    // DTM handles are handed out here by syncing at a barrier
-
     let mut handles = Vec::new();
-    for (items, dtm_rx) in to_dedup.into_iter().zip(dtm_rxs.into_iter()) {
+    for (items, (dtm_rx, done)) in to_dedup.into_iter().zip(dtm_rxs.into_iter().zip(done_sx.into_iter())) {
         let local_tmp = tmp.clone();
-        let b = Arc::clone(&barrier);
         handles.push(thread::spawn(move || {
             for item in items {
+                done.send(()).unwrap();
                 let handle = dtm_rx.recv().unwrap();
                 // the following `clone` operation on `item` is absolutely necessary, since
                 // the `Fn` closure may be called numerous times in case of a retry,
                 // requiring the cloning of the variable.
                 det_atomically(handle, |trans| local_tmp.insert(trans, item.clone()));
-                b.wait();
             }
         }));
     }
@@ -102,24 +100,23 @@ pub fn deduplicate(segments: Segments, threadcount: usize) -> VecDeque<Sequencer
         loop {
             // to avoid handing out too many tokens we must do this:
             i += 1;
-            if i == bounds {
-                threadcount -= 1;
-            } else if i > bounds {
-                break;
+            if rest != 0 && i == bounds {
+                // should the last round of items be unequal to the threadcount, the last round
+                // will have fewer items
+                threadcount = rest;
+            }
+
+            for idx in 0..threadcount {
+                if let Err(_) = done_rx[idx].recv() {
+                    return;
+                }
             }
 
             let mut dtm = dtm();
-            let mut items = Vec::with_capacity(threadcount);
-            for _ in 0..threadcount {
-                items.push(dtm.register());
+            for idx in 0..threadcount {
+                dtm_sx[idx].send(dtm.register()).unwrap();
             }
             freeze(dtm);
-
-            for (chan, handle) in dtm_sx.iter().zip(items.into_iter()) {
-                chan.send(handle).unwrap();
-            }
-
-            barrier.wait();
         }
     }));
 
@@ -178,6 +175,7 @@ pub fn run_sequencer(
     segment_length: usize,
     iteration_ranges: Vec<Range<usize>>,
 ) {
+    eprintln!("alive for the sequencing!");
     let threadcount = iteration_ranges.len();
     let mut handles = Vec::with_capacity(threadcount);
 
