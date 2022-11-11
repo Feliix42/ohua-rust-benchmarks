@@ -1,9 +1,10 @@
 use crate::vacation::reservation::{ReservationInfo, ReservationType};
+use std::collections::BTreeSet;
 use std::cmp::Ordering;
 
 pub(crate) struct Customer {
     id: u64,
-    pub(crate) reservation_info_list: Vec<ReservationInfo>,
+    pub(crate) reservation_info_list: BTreeSet<ReservationInfo>,
 }
 
 impl Eq for Customer {}
@@ -30,7 +31,7 @@ impl Customer {
     pub(crate) fn new(id: u64) -> Self {
         Customer {
             id,
-            reservation_info_list: Vec::new(),
+            reservation_info_list: BTreeSet::new(),
         }
     }
 
@@ -40,12 +41,13 @@ impl Customer {
      */
     pub(crate) fn add_reservation_info(&mut self, typ: ReservationType, id: u64, price: u64) {
         let reservation_info = ReservationInfo::new(typ, id, price);
-        let a = self.reservation_info_list.binary_search(&reservation_info);
-        match a {
-            Ok(idx) => self.reservation_info_list.insert(idx, reservation_info),
-            // this insert operation is certainly expensive!
-            Err(idx) => self.reservation_info_list.insert(idx, reservation_info),
-        };
+        self.reservation_info_list.insert(reservation_info);
+        //let a = self.reservation_info_list.binary_search(&reservation_info);
+        //match a {
+            //Ok(idx) => self.reservation_info_list.insert(idx, reservation_info),
+            //// this insert operation is certainly expensive!
+            //Err(idx) => self.reservation_info_list.insert(idx, reservation_info),
+        //};
     }
 
     /* =============================================================================
@@ -56,17 +58,18 @@ impl Customer {
         let find_reservation_info = ReservationInfo::new(typ, id, 0);
         /* price not used to compare reservation infos */
 
-        let a = self
-            .reservation_info_list
-            .binary_search(&find_reservation_info);
-        match a {
-            Ok(idx) => {
-                // again a quite expensive operation
-                self.reservation_info_list.remove(idx);
-                true
-            }
-            _ => false,
-        }
+        self.reservation_info_list.remove(&find_reservation_info)
+        //let a = self
+            //.reservation_info_list
+            //.binary_search(&find_reservation_info);
+        //match a {
+            //Ok(idx) => {
+                //// again a quite expensive operation
+                //self.reservation_info_list.remove(idx);
+                //true
+            //}
+            //_ => false,
+        //}
     }
 
     /* =============================================================================
