@@ -188,7 +188,12 @@ fn run_benchmark(segments: Segments, threadcount: usize) -> Vec<Nucleotide> {
     let deduplicated = Arc::new(sequencer::deduplicate(segments, threadcount));
 
     // Phase 2
-    let step: usize = deduplicated.len() / threadcount;
+    let step: usize = if deduplicated.len() % threadcount != 0 {
+        (deduplicated.len() / threadcount) + 1
+    } else {
+        deduplicated.len() / threadcount
+    };
+
     let mut ranges = Vec::new();
     for t_no in 0..threadcount {
         let lower = step * t_no;

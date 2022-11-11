@@ -3,7 +3,7 @@ use crate::Nucleotide;
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{Arc, Barrier};
+use std::sync::Arc;
 use std::thread;
 use stm::{atomically, det_atomically, dtm, freeze, DTMHandle, TVar};
 use stm_datastructures::THashSet;
@@ -175,7 +175,6 @@ pub fn run_sequencer(
     segment_length: usize,
     iteration_ranges: Vec<Range<usize>>,
 ) {
-    eprintln!("alive for the sequencing!");
     let threadcount = iteration_ranges.len();
     let mut handles = Vec::with_capacity(threadcount);
 
