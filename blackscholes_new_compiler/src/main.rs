@@ -55,11 +55,17 @@ fn main() {
                 .short("s")
                 .help("Run the sequential ohua algorithm (bare)")
         )
-        .get_matches();
+        .arg(
+            Arg::with_name("threadcount")
+                .long("threadcount")
+                .short("tc")
+                .help("Thread count/batch size")
+        )
+       .get_matches();
 
     // parse parameters
     let input_file = matches.value_of("INPUT").unwrap();
-    let threadcount = generated::THREADCOUNT;
+    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap()).expect("Could not parse thread count");
     let sequential = matches.is_present("sequential");
 
     // parse runtime parameters
@@ -97,7 +103,7 @@ fn main() {
         let res = if sequential {
             original::calculate(options)
         } else {
-            generated::calculate(options)
+            generated::original::calculate(options)
         };
 
         // stop the clock
