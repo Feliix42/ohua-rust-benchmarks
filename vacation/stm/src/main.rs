@@ -20,7 +20,7 @@ fn main() {
     for _ in 0..params.runs {
         // setup
         let mut rng = ChaCha12Rng::seed_from_u64(0);
-        let manager = Manager::initialize(&mut rng, params.num_relations, params.clients);
+        let manager = Manager::initialize(&mut rng, params.num_relations, params.clients * 32);
         let mgr = Arc::new(manager);
 
         let clients = vacation::initialize_clients(mgr.clone(), &params);
