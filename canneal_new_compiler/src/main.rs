@@ -72,7 +72,19 @@ fn main() {
                 .short("s")
                 .help("Run the sequential ohua algorithm (bare)")
         )
-        .get_matches();
+        .arg(
+            Arg::with_name("threadcount")
+                .long("threadcount")
+                .short("tc")
+                .help("Thread count/batch size")
+        )
+        .arg(
+            Arg::with_name("frequency")
+                .long("freq")
+                .short("f")
+                .help("C-Limit")
+        )
+       .get_matches();
 
     // parse parameters
     let input_file = matches.value_of("INPUT").unwrap();
@@ -89,8 +101,8 @@ fn main() {
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
-    let threadcount = THREADCOUNT;
-    let frequency = FREQUENCY;
+    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap()).expect("Could not parse thread count");
+    let frequency = usize::from_str(matches.value_of("frequency").unwrap()).expect("Could not parse frequency/c-limit");
 
     // read and parse input data
     let input_data =
@@ -128,7 +140,7 @@ fn main() {
         let netlist = if sequential {
             original::annealer(netlist, workset, initial_temp as f64)
         } else {
-            generated::annealer(netlist, workset, initial_temp as f64)
+            generated::original::annealer(netlist, workset, initial_temp as f64)
         };
 
         // stop the clock
