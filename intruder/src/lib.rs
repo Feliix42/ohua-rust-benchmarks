@@ -4,8 +4,14 @@ use rand_chacha::ChaCha12Rng;
 use std::collections::{HashSet, VecDeque};
 use std::iter::FromIterator;
 
-pub mod decoder;
-pub mod detector;
+mod detector;
+mod decoder; 
+
+pub mod seq;
+pub mod stm;
+pub mod dstm;
+pub mod ohua;
+pub mod generated;
 
 #[derive(Clone, Debug)]
 pub struct Packet {
@@ -92,7 +98,7 @@ pub fn generate_stream(
             );
 
             // check if an attack was generated
-            if detector::run_detector(&generated) == DetectorResult::SignatureMatch {
+            if detector::detect(&generated) == DetectorResult::SignatureMatch {
                 attacks.insert(flow_number);
             }
 
@@ -112,4 +118,8 @@ pub fn generate_stream(
     }
 
     (stream, attacks)
+}
+
+pub(crate) fn id<T>(i:T) -> T {
+    i
 }

@@ -9,6 +9,9 @@ edition = "2018"
 [dependencies]
 rand_chacha = "0.2"
 clap = { version = "2.32", optional = true }
+strum = "0.24"
+strum_macros = "0.24"
+tokio = { version = "0.2", features = ["full"] }
 
 # use patched version of rust-stm
 stm = { git = "https://github.com/feliix42/rust-stm", optional = true } #, branch = "retry-count" }

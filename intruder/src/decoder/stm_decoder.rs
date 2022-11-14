@@ -1,4 +1,4 @@
-use super::DecodedPacket;
+use crate::DecodedFlow;
 use crate::Packet;
 use std::collections::HashMap;
 use stm::{StmError, StmResult, TVar, Transaction};
@@ -24,7 +24,7 @@ pub fn decode_packet(
     packet: &Packet,
     state: &StmDecoderState,
     transaction: &mut Transaction,
-) -> StmResult<Option<DecodedPacket>> {
+) -> StmResult<Option<DecodedFlow>> {
     if packet.packets_in_flow != 1 {
         // get the matching TVar (== bucket) and read it
         let bucket = state.fragments_map.get_bucket(&packet.flow_id);
@@ -57,7 +57,7 @@ pub fn decode_packet(
                     hm
                 })?;
 
-                Ok(Some(DecodedPacket {
+                Ok(Some(DecodedFlow {
                     flow_id,
                     data: reconstructed_data,
                 }))
@@ -90,7 +90,7 @@ pub fn decode_packet(
         // this is the only packet
         assert!(packet.fragment_id == 0);
 
-        Ok(Some(DecodedPacket {
+        Ok(Some(DecodedFlow {
             flow_id: packet.flow_id,
             data: packet.data.clone(),
         }))
@@ -133,7 +133,7 @@ mod tests {
         assert_eq!(atomically(|trans| decode_packet(&inp2, &dec, trans)), None);
         assert_eq!(
             atomically(|trans| decode_packet(&inp3, &dec, trans)),
-            Some(DecodedPacket {
+            Some(DecodedFlow {
                 flow_id: 42,
                 data: "two".into()
             })
