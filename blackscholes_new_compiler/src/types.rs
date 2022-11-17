@@ -175,9 +175,6 @@ pub fn verify_all_results(options: &[OptionData], results: &[f32]) -> usize {
     err_count
 }
 
-pub fn id<T>(item: T) -> T {
-    item
-}
 
 #[inline(always)]
 pub fn unpack(v: Vec<Vec<f32>>) -> Vec<f32> {

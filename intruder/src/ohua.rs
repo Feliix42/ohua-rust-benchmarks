@@ -27,8 +27,8 @@ fn analyze_flow_3(mut packets: VecDeque<Packet>) -> Vec<usize> {
     let mut decoder: Decoder = Decoder::new();
     let mut found: Vec<Option<usize>> = Vec::new();
 
-    let packets0: VecDeque<Packet> = id(packets);
-    for packet0 in packets0 {
+    //let packets0: VecDeque<Packet> = id(packets);
+    for packet0 in packets {
         let packet:Packet = packet0;
         // decode the data (state!) --> decoder.c
         let decoded_flow:Option<DecodedFlow> = decoder.decode_flow(packet);

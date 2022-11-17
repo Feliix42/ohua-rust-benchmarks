@@ -119,7 +119,3 @@ pub fn generate_stream(
 
     (stream, attacks)
 }
-
-pub(crate) fn id<T>(i:T) -> T {
-    i
-}
