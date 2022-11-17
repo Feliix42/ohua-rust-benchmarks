@@ -2,7 +2,7 @@ use crate::decoder::stm_decoder::{decode_packet, StmDecoderState};
 use crate::detector::{detect, DetectorResult};
 use crate::*;
 use std::thread::{self, JoinHandle};
-use stm::{atomically, det_atomically, dtm, freeze, DTMHandle};
+use ::stm::{atomically, det_atomically, dtm, freeze, DTMHandle};
 
 // So, the above(????) version does not work because the implemented algorithm
 // for deterministic STM proceeds in rounds. That is, it needs to finish
@@ -49,7 +49,7 @@ fn analyze_stream(
     //found_attacks
 }
 
-fn run_eval(packets: Vec<Packet>, threadcount: usize) -> Vec<usize> {
+pub fn run_eval(packets: Vec<Packet>, threadcount: usize) -> Vec<usize> {
     let mut found_attacks = Vec::new();
     let decoder_state = StmDecoderState::new(threadcount);
 

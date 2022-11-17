@@ -3,7 +3,7 @@ use crate::detector::{detect, DetectorResult};
 use crate::*;
 use std::collections::VecDeque;
 use std::thread;
-use stm::atomically; //, TVar};
+use ::stm::atomically; //, TVar};
 
 /// Function that analyzes the incoming packet stream. The "benchmark" itself.
 /// Everything inside this function is being timed.
@@ -67,7 +67,7 @@ fn partition_input_vec(mut packets: VecDeque<Packet>, threadcount: usize) -> Vec
     partitioned
 }
 
-fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
+pub fn run_eval(packets: VecDeque<Packet>, threadcount: usize) -> Vec<usize> {
     let mut found_attacks = Vec::new();
     let decoder_state = StmDecoderState::new(threadcount);
 

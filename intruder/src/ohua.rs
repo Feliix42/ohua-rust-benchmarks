@@ -5,7 +5,7 @@ use crate::decoder::simple::*;
 use std::collections::VecDeque;
 
 /// A 2-stage pipeline parallel algorithm.
-fn analyze_flow_2(mut packets: VecDeque<Packet>) -> Vec<usize> {
+pub fn analyze_flow_2(mut packets: VecDeque<Packet>) -> Vec<usize> {
     let mut decoder: Decoder = Decoder::new();
     let mut detector: AttackDetector = AttackDetector::new();
 
@@ -23,7 +23,7 @@ fn analyze_flow_2(mut packets: VecDeque<Packet>) -> Vec<usize> {
 
 /// A 3-stage pipeline parallel algorithm where the heavy compute step
 /// benefits from data parallelism.
-fn analyze_flow_3(mut packets: VecDeque<Packet>) -> Vec<usize> {
+pub fn analyze_flow_3(mut packets: VecDeque<Packet>) -> Vec<usize> {
     let mut decoder: Decoder = Decoder::new();
     let mut found: Vec<Option<usize>> = Vec::new();
 

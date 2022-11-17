@@ -1,4 +1,3 @@
-use crate::generated::*;
 use crate::types::*;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
@@ -72,18 +71,6 @@ fn main() {
                 .short("s")
                 .help("Run the sequential ohua algorithm (bare)")
         )
-        .arg(
-            Arg::with_name("threadcount")
-                .long("threadcount")
-                .short("tc")
-                .help("Thread count/batch size")
-        )
-        .arg(
-            Arg::with_name("frequency")
-                .long("freq")
-                .short("f")
-                .help("C-Limit")
-        )
        .get_matches();
 
     // parse parameters
@@ -101,8 +88,6 @@ fn main() {
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
-    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap()).expect("Could not parse thread count");
-    let frequency = usize::from_str(matches.value_of("frequency").unwrap()).expect("Could not parse frequency/c-limit");
 
     // read and parse input data
     let input_data =
@@ -163,10 +148,8 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua-{}opt-t{}-r{}_log.json",
+            "{}/ohua-r{}-log.json",
             out_dir,
-            input_data.elements.len(),
-            threadcount,
             runs
         );
         let mut f = File::create(&filename).unwrap();
@@ -175,8 +158,8 @@ fn main() {
     \"algorithm\": \"Ohua\",
     \"netlist_elements\": {opt},
     \"runs\": {runs},
-    \"threadcount\": {threads},
-    \"frequency\": {freq},
+    \"threadcount\": insert_threadcount,
+    \"frequency\": insert_freq,
     \"initial_temperature\": {init_tmp},
     \"max_number_temp_steps\": {steps},
     \"swaps_per_temp_step\": {swaps_per_temp},
@@ -187,8 +170,6 @@ fn main() {
 }}",
             opt = input_data.elements.len(),
             runs = runs,
-            threads = threadcount,
-            freq = frequency,
             init_tmp = initial_temp,
             steps = steps.unwrap_or(-1),
             swaps_per_temp = swap_count,
@@ -209,7 +190,6 @@ fn main() {
         );
         println!("    Input file used: {}", input_file);
         println!("    Runs: {}", runs);
-        println!("    Threads: {}", threadcount);
         println!("    Initial Temperature: {}", initial_temp);
         println!("    Maximal number of temperature steps: {:?}", steps);
         println!("    Swaps per temperature step: {}", swap_count);
