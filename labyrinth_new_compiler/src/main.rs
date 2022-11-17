@@ -16,8 +16,6 @@ mod grid;
 mod original;
 mod parser;
 
-mod no_amorphous;
-mod no_data_par;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -74,16 +72,6 @@ fn main() {
                 .short("s")
                 .help("Run the sequential ohua algorithm (bare)")
         )
-        .arg(
-            Arg::with_name("no_data_par")
-                .long("no-data-par")
-                .help("Run the ohua algorithm without data parallelism at all")
-        )
-        .arg(
-            Arg::with_name("no_amorphous")
-                .long("no-amorphous")
-                .help("Run the ohua algorithm without amorphous optimizations")
-        )
         .get_matches();
 
     // JSON Dump?
@@ -99,8 +87,6 @@ fn main() {
     // runtime parameters
     //let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
     //let threadcount = usize::from_str(matches.value_of("threads").unwrap()).unwrap();
-    let updates = generated::FREQUENCY;
-    let threadcount = generated::THREADCOUNT;
 
     // input location & parsing
     let input_file = matches.value_of("INPUT").unwrap();
@@ -131,12 +117,8 @@ fn main() {
         //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
         let (filled_maze, retries) = if sequential {
             original::run(dims2, paths2, 200)
-        } else if ndp {
-            no_data_par::run(dims2, paths2, 200)
-        } else if nam {
-            no_amorphous::run(dims2, paths2, 200)
         } else {
-            generated::run(dims2, paths2, 200)
+            generated::original::run(dims2, paths2, 200)
         };
 
         let cpu_end = ProcessTime::now();
@@ -164,12 +146,13 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/new_ohua_futures-{}-p{}-freq{}-t{}-r{}_log.json",
+//            "{}/new_ohua_futures-{}-p{}-freq{}-t{}-r{}_log.json",
+            "{}/new_ohua_futures-{}-p{}-freq{}_log.json",
             out_dir,
             dimensions,
             paths.len(),
-            updates,
-            threadcount,
+//            updates,
+//            threadcount,
             runs
         );
         let mut f = File::create(&filename).unwrap();
@@ -180,21 +163,33 @@ fn main() {
     \"paths\": {paths},
     \"runs\": {runs},
     \"sequential\": {seq},
-    \"threadcount\": {threadcount},
-    \"update_frequency\": {freq},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
     \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
+//           "{{
+//    \"algorithm\": \"ohua-futures\",
+//    \"configuration\": \"{conf}\",
+//    \"paths\": {paths},
+//    \"runs\": {runs},
+//    \"sequential\": {seq},
+//    \"threadcount\": {threadcount},
+//    \"update_frequency\": {freq},
+//    \"mapped\": {mapped:?},
+//    \"collisions\": {collisions:?},
+//    \"computations\": {comps:?},
+//    \"cpu_time\": {cpu:?},
+//    \"results\": {res:?}
+//}}",
             conf = dimensions,
             paths = paths.len(),
             runs = runs,
             seq = sequential,
-            threadcount = threadcount,
+//            threadcount = threadcount,
             comps = computations,
-            freq = updates,
+//            freq = updates,
             mapped = mapped_paths,
             collisions = collisions,
             cpu = cpu_results,
@@ -207,8 +202,8 @@ fn main() {
         println!("    Maze configuration: {}", dimensions);
         println!("    Paths overall:      {}", paths.len());
         println!("    Runs:               {}", runs);
-        println!("    Threadpool Size:    {}", threadcount);
-        println!("    Update frequency:   {}", updates);
+//        println!("    Threadpool Size:    {}", threadcount);
+//        println!("    Update frequency:   {}", updates);
         println!("    Mapped:             {:?}", mapped_paths);
         println!("    Collisions:         {:?}", collisions);
         println!("    Computations:       {:?}", computations);

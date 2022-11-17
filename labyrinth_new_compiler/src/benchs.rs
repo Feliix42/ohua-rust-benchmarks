@@ -47,7 +47,9 @@ impl Maze {
 
     /// Updates the labyrinth structure, returns the start and end point if the update was
     /// unsuccessful
-    pub fn update(&mut self, path: Option<Path>, retry_sender: &std::sync::mpsc::Sender<usize>) -> Option<(Point, Point)> {
+    pub fn update(&mut self, path: Option<Path>
+    //              , retry_sender: &std::sync::mpsc::Sender<usize>
+    ) -> Option<(Point, Point)> {
         let path = path?;
 
         if path_available(&self.grid, &path) {
@@ -57,7 +59,7 @@ impl Maze {
             self.paths.push(path);
             None
         } else {
-            retry_sender.send(1).unwrap();
+//            retry_sender.send(1).unwrap();
             Some((path.start, path.end))
         }
     }
@@ -234,26 +236,27 @@ fn generate_path(end_node: Point, meta_info: &Vec<Vec<Vec<PointStatus>>>) -> Pat
     }
 }
 
-//pub fn get_unmapped(
-//results: Vec<Option<(Point, Point)>>,
-//iterations_finished: u32,
-//) -> (Vec<(Point, Point)>, bool, u32) {
-//unimplemented!()
-//}
+pub type OPoint = Option<(Point, Point)>;
 
-pub fn filter_mapped(results: Vec<Option<(Point, Point)>>) -> Vec<Option<(Point, Point)>> {
-    results.into_iter().filter(Option::is_some).collect()
+#[derive(Default)]
+pub struct Unmapped {
+    rs: Vec<OPoint>
 }
 
-pub fn calculate_done(results: Vec<Option<(Point, Point)>>, iterations_finished: u32) -> (u32, bool) {
-    let should_cont = results.iter().any(Option::is_some);
-    (iterations_finished + 1, should_cont)
+impl Unmapped {
+
+    pub fn filter_mapped(&mut self) {
+        self.rs = self.rs.into_iter().filter(Option::is_some).collect();
+    }
+
+    pub fn calculate_done(self, iterations_finished: u32) -> (u32, bool, Vec<OPoint>) {
+        self.filter_mapped();
+        let should_cont = self.rs.iter().any(Option::is_some);
+        (iterations_finished + 1, should_cont, self.rs)
+    }
+
+    pub fn push(&mut self, n:OPoint) {
+        self.rs.push(n)
+    }
 }
 
-//pub fn decrement(u: u32) -> u32 {
-//unimplemented!()
-//}
-
-//pub fn fill1(m: Maze, p: Vec<(Point, Point)>, ma: u32) -> Maze {
-//unimplemented!()
-//}
