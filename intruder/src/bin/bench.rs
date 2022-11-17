@@ -62,7 +62,6 @@ fn main() {
         .arg(
             Arg::with_name("runs")
                 .long("runs")
-                .short("r")
                 .takes_value(true)
                 .help("The number of runs to conduct.")
                 .default_value("1")
@@ -136,6 +135,7 @@ fn main() {
         // prepare the data for the run
         // let input_data = TVar::new(input.clone());
         let input_data = input.clone();
+        let input_vec: Vec<_> = input.clone().into_iter().collect();
 
         // start the clock
         let start = PreciseTime::now();
@@ -145,9 +145,9 @@ fn main() {
         let result = match rt {
             Runtime::Seq => seq::analyze_flow(input_data),
             Runtime::STM => stm::run_eval(input_data, threads),
-            Runtime::DSTM => dstm::run_eval(input_data, threads),
-            Runtime::OhuaSeq => ohua::analyze_flow(input_data),
-            Runtime::Ohua => generated::ohua::analyze_flow(input_data)
+            Runtime::DSTM => dstm::run_eval(input_vec, threads),
+            Runtime::OhuaSeq => ohua::analyze_flow_3(input_data),
+            Runtime::Ohua => generated::ohua::analyze_flow_3(input_data)
         };
 
         // stop the clock
@@ -171,15 +171,23 @@ fn main() {
 
     // note time
     if json_dump {
+        let algo = match rt {
+            Runtime::Seq => "sequential",
+            Runtime::STM => "rust-stm",
+            Runtime::DSTM => "rust-dstm",
+            Runtime::OhuaSeq => "ohua-seq",
+            Runtime::Ohua => "ohua",
+        };
+
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/n{}-p{}-s{}-pl{}-t{}-r{}_log.json",
-            out_dir, flowcount, attack_percentage, rng_seed, max_packet_len, threads, runs
+            "{}/{}-n{}-p{}-s{}-pl{}-t{}-r{}_log.json",
+            out_dir, algo, flowcount, attack_percentage, rng_seed, max_packet_len, threads, runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"rust-stm\",
+    \"algorithm\": \"{alg}\",
     \"flow_count\": {flows},
     \"attack_percentage\": {attack_perc},
     \"attack_count\": {attacks},
@@ -190,6 +198,7 @@ fn main() {
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
+            alg = algo,
             flows = flowcount,
             attack_perc = attack_percentage,
             attacks = attacks.len(),

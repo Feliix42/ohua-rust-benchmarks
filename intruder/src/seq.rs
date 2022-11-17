@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 /// Everything inside this function is being timed.
 ///
 /// Returns a Vec of flow IDs that contained an attack for later check
-fn analyze_stream(mut packets: VecDeque<Packet>) -> Vec<usize> {
+pub fn analyze_flow(mut packets: VecDeque<Packet>) -> Vec<usize> {
     let mut found_attacks = Vec::new();
     let mut decoder = Decoder::new();
 
