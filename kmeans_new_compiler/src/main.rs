@@ -1,4 +1,3 @@
-use crate::generated::*;
 use crate::types::*;
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
@@ -72,6 +71,12 @@ fn main() {
                 .short("s")
                 .help("Run the sequential ohua algorithm (bare)")
         )
+        .arg(
+            Arg::with_name("threadcount")
+                .long("threadcount")
+                .short("tc")
+                .help("Thread count")
+        )
         .get_matches();
 
     // parse benchmark parameters
@@ -89,8 +94,8 @@ fn main() {
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
-
-    let threadcount = THREADCOUNT;
+    let threadcount =
+        usize::from_str(matches.value_of("threadcount").unwrap()).expect("Could not parse thread count");
 
     // read and prepare the input data
     let mut clusters =
@@ -106,7 +111,7 @@ fn main() {
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
     let mut convergence_after = Vec::with_capacity(runs);
-    let mut computations = Vec::with_capacity(runs);
+    //let mut computations = Vec::with_capacity(runs);
 
     for r in 0..runs {
         // prepare the data for the run
@@ -121,9 +126,9 @@ fn main() {
         let runs_necessary = if sequential {
             original::calculate(input_data, initial_centers, threshold, 0)
         } else {
-            let (r, comps) = calculate(input_data, initial_centers, threshold, 0);
-            computations.push(comps);
-            r
+            generated::original::calculate(input_data, initial_centers, threshold, 0)
+            //computations.push(comps);
+            //r
         };
 
         // stop the clock
@@ -154,6 +159,20 @@ fn main() {
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
+//            "{{
+//    \"algorithm\": \"ohua-futures\",
+//    \"threadcount\": {threadcount},
+//    \"cluster-count\": {cluster_count},
+//    \"threshold\": {threshold},
+//    \"input\": \"{input_path}\",
+//    \"values-count\": {value_count},
+//    \"runs\": {runs},
+//    \"sequential\": {seq},
+//    \"converged_after\": {conv:?},
+//    \"computations\": {comps:?},
+//    \"cpu_time\": {cpu:?},
+//    \"results\": {res:?}
+//}}",
             "{{
     \"algorithm\": \"ohua-futures\",
     \"threadcount\": {threadcount},
@@ -164,7 +183,6 @@ fn main() {
     \"runs\": {runs},
     \"sequential\": {seq},
     \"converged_after\": {conv:?},
-    \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
@@ -176,7 +194,7 @@ fn main() {
             runs = runs,
             seq = sequential,
             conv = convergence_after,
-            comps = computations,
+//            comps = computations,
             cpu = cpu_results,
             res = results
         ))
@@ -191,7 +209,7 @@ fn main() {
         println!("    Threads used:                {}", threadcount);
         println!("    Runs:                        {}", runs);
         println!("\nConvergence after: {:?}", convergence_after);
-        println!("Computations: {:?}", computations);
+//        println!("Computations: {:?}", computations);
         println!("CPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
     }
