@@ -8,6 +8,10 @@ use std::rc::Rc;
 #[derive(Debug, Eq, PartialEq)]
 struct SequencerItem {
     pub segment: Vec<Nucleotide>,
+    // FIXME Why does a sequential implementation have to use this
+    // RC-RefCell stuff?
+    // I think your algo is no good, if you have to do that.
+    // The Ohua version seems to be the proper algo if it wasn't for the unsafe code in it!
     pub prev: Option<Rc<RefCell<SequencerItem>>>,
     pub next: Option<Rc<RefCell<SequencerItem>>>,
     pub overlap_with_prev: usize,
@@ -23,6 +27,8 @@ impl From<Vec<Nucleotide>> for SequencerItem {
         }
     }
 }
+
+// Is this really a port of the STAMP version or a re-implementation of your own?
 
 pub fn run_sequencer(segments: Segments) -> Vec<Nucleotide> {
     // Step 1: deduplicate all segments

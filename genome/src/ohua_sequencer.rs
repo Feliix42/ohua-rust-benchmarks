@@ -101,7 +101,10 @@ pub fn update_sequence(mut seq_arc: Arc<Vec<SequencerItem>>, updates: Arc<Vec<Op
     //use std::borrow::Borrow;
     //let bla: &Vec<SequencerItem> = seq_arc.borrow();
     //let mut seq: Vec<SequencerItem> = bla.clone();
-    
+
+    // FIXME WOW!
+    // What is this?!
+    // I hope that this will just go away when this becomes a stateful function.
     unsafe {
         let mut seq: &mut Vec<SequencerItem> = Arc::get_mut_unchecked(&mut seq_arc);
 
