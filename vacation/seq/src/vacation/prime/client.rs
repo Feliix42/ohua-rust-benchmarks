@@ -2,168 +2,240 @@ use crate::vacation::action::Action;
 use crate::vacation::prime::manager::{Admin, Manager, QueryInterface, ReservationInterface};
 use crate::vacation::reservation::ReservationType;
 use rand::{Rng, RngCore, SeedableRng};
-//use std::cell::RefCell;
-//use std::rc::Rc;
+use crate::vacation::prime::communication::{Query, Response};
 
 pub struct Client<T: RngCore + SeedableRng> {
-    //id: u64,
-    //manager: Manager,
     random: T,
     num_operation: usize,
     num_query_per_transaction: usize,
     query_range: u64,
     percent_user: i64,
+
+    // state
+    op: usize,
 }
 
-impl<T: RngCore + SeedableRng> Client<T> {
-    pub fn new(
-        //id: u64,
-//        manager: Rc<RefCell<Manager>>,
-        num_operation: usize,
-        num_query_per_transaction: usize,
-        query_range: u64,
-        percent_user: i64,
-    ) -> Self {
-        Client {
-            //id,
-  //          manager,
-            random: <T as SeedableRng>::seed_from_u64(1),
-            num_operation,
-            num_query_per_transaction,
-            query_range,
-            percent_user,
+
+impl Client {
+
+    fn next_program() -> Option<Program> {
+        if self.op < self.num_operation {
+            let r = self.random.gen::<i64>() % 100;
+            let action = select_action(r, self.percent_user);
+            match action {
+                Action::MakeReservation =>
+                    MkReservation::new(
+                        self.random.gen::<usize>() % self.num_query_per_transaction + 1,
+                        self.random.gen::<u64>() % self.query_range + 1
+                    ),
+                Action::DeleteCustomer =>
+                    DeleteCustomer::new(
+                        self.random.gen::<u64>() % self.query_range + 1
+                    ),
+                Action::UpdateTables =>
+                    UpdatesTables::new(
+                        self.random.gen::<usize>() % self.num_query_per_transaction + 1
+                    )
+            }
+        } else {
+            // done
+            Nothing
+        }
+    }
+}
+
+
+/// Program abstraction
+
+trait Program {
+    /// Initialization
+    fn prepare_initial_query(&mut self) -> Query;
+
+    /// Typical client event dispatch
+    fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query>;
+
+/// Possible programs:
+
+struct MkReservation {
+    max_prices: Vec<_>,
+    max_ids: Vec<_>,
+    num_queries: usize,
+    query_id: usize,
+    customer_id: u64,
+}
+
+impl MkReservation {
+    fn new(num_query: usize, customer_id: u64) -> Self {
+        MkReservation{
+            max_prices : vec![None, None, None],
+            max_ids : vec![None, None, None],
+            num_query, // TODO self.random.gen::<usize>() % self.num_query_per_transaction + 1,
+            query_id : 0,
+            customer_id, // TODO  self.random.gen::<u64>() % self.query_range + 1,
         }
     }
 
-    /* =============================================================================
-     * client_run
-     * -- Execute list operations on the database
-     * =============================================================================
-     */
-    pub fn run(&mut self) {
-        for _ in 0..self.num_operation {
-            let r = self.random.gen::<i64>() % 100;
-            let action = select_action(r, self.percent_user);
+    fn prepare_initial_query(&mut self) -> Query {
+        self.prepare_capacity_query()
+    }
 
-            match action {
-                Action::MakeReservation => {
-                    let mut max_prices = vec![None, None, None];
-                    let mut max_ids = vec![None, None, None];
-                    let num_query = self.random.gen::<usize>() % self.num_query_per_transaction + 1;
-                    let customer_id = self.random.gen::<u64>() % self.query_range + 1;
-                    let mut is_found = false;
+    fn prepare_capacity_query(&mut self) -> Query {
+        let t = self.random.gen::<ReservationType>();
+        let id = (self.random.gen::<u64>() % self.query_range) + 1;
+        Query::GetCapacity(t, id)
+    }
 
-                    //let mgr = self.manager.borrow();
-                    for _ in 0..num_query {
-                        let t = self.random.gen::<ReservationType>();
-                        let id = (self.random.gen::<u64>() % self.query_range) + 1;
-                        let price = match t {
-                            ReservationType::Car => {
-                                if mgr.query_car(id).is_some() {
-                                    mgr.query_car_price(id)
-                                } else {
-                                    None
-                                }
-                            }
-                            ReservationType::Flight => {
-                                if mgr.query_flight(id).is_some() {
-                                    mgr.query_flight_price(id)
-                                } else {
-                                    None
-                                }
-                            }
-                            ReservationType::Room => {
-                                if mgr.query_room(id).is_some() {
-                                    mgr.query_room_price(id)
-                                } else {
-                                    None
-                                }
-                            }
-                        };
+    // typical client event dispatch
+    fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query> {
+        match req {
+            Query::GetCapacity(t, id) =>
+                match resp {
+                    // Note this query does not make any sense.
+                    // Normally one would directly query for price!
+                    Capacity(Some(_)) => {
+                        Some(Query::GetPrice(t,id))
+                    },
+                    _ => panic!("Communication logic inconsistency.")
+                },
+            Query::GetPrice(t, id) =>
+                match resp {
+                    Price(price) => {
                         let idx = t as usize;
                         if price > max_prices[idx] {
-                            max_prices[idx] = price;
-                            max_ids[idx] = Some(id);
-                            is_found = true;
+                            self.max_prices[idx] = price;
+                            self.max_ids[idx] = Some(id);
                         } else {
                             // nothing
                         }
-                    } /* for n */
 
-                    std::mem::drop(mgr);
-                    let mut mutmgr = self.manager.borrow_mut();
 
-                    if is_found {
-                        mutmgr.add_customer(customer_id);
-                    } else {
-                        // nothing
-                    }
-
-                    match max_ids[ReservationType::Car as usize] {
-                        Some(id) => {
-                            mutmgr.reserve_car(customer_id, id);
-                        }
-                        _ => (),
-                    }
-
-                    match max_ids[ReservationType::Flight as usize] {
-                        Some(id) => {
-                            mutmgr.reserve_flight(customer_id, id);
-                        }
-                        _ => (),
-                    }
-
-                    match max_ids[ReservationType::Room as usize] {
-                        Some(id) => {
-                            mutmgr.reserve_room(customer_id, id);
-                        }
-                        _ => (),
-                    }
-                }
-                Action::DeleteCustomer => {
-                    let customer_id = self.random.gen::<u64>() % self.query_range + 1;
-                    let bill = self.manager.borrow().query_customer_bill(customer_id);
-                    if bill.is_some() {
-                        self.manager.borrow_mut().delete_customer(customer_id);
-                    } else {
-                        //nothing
-                    }
-                }
-                Action::UpdateTables => {
-                    let num_update =
-                        self.random.gen::<usize>() % self.num_query_per_transaction + 1;
-                    let mut mutmgr = self.manager.borrow_mut();
-
-                    for _ in 0..num_update {
-                        let t = self.random.gen::<ReservationType>();
-                        let id = (self.random.gen::<u64>() % self.query_range) + 1;
-                        let tmp = self.random.gen::<bool>();
-                        let new_price0 = if tmp {
-                            Some(((self.random.gen::<u64>() % 5) * 10) + 50)
+                        if self.query_id < self.num_queries {
+                            // continue to issue capacity queries
+                            self.query_id += 1;
+                            self.query = self.prepare_capacity_query();
                         } else {
-                            None
-                        };
-                        match new_price0 {
-                            Some(new_price) => match t {
-                                ReservationType::Car => mutmgr.add_car(id, 100, new_price),
-                                ReservationType::Flight => mutmgr.add_flight(id, 100, new_price),
-                                ReservationType::Room => mutmgr.add_room(id, 100, new_price),
-                            },
-                            None => {
-                                /* do delete */
-                                match t {
-                                    ReservationType::Car => mutmgr.delete_car(id, 100),
-                                    ReservationType::Flight => mutmgr.delete_flight(id),
-                                    ReservationType::Room => mutmgr.delete_room(id, 100),
-                                }
-                            }
-                        };
+                            // we are done with the capacity queries.
+                            // do the reservation
+
+                            // create the customer first
+                            self.query = Query::Insert(self.customer_id);
+                        }
+                    },
+                    _ => panic!("Communication logic inconsistency.")
+                },
+            Query::Insert(customer_id) => {
+                match self.max_ids[ReservationType::Car as usize] {
+                    Some(id) => {
+                        Some(Query::Reserve(ReservationType::Car, customer_id, id))
                     }
-                } /* switch (action) */
-            }
-        } /* for i */
+                    _ => panic!("Impossible: we never issued any read query."),
+                }
+            },
+            Query::Reserve(t,customer_id,_) =>
+            // note: we do not care about the result of the reservation.
+            // neither did the original code.
+                match t {
+                    ReservationType::Car =>
+                        match self.max_ids[ReservationType::Flight as usize] {
+                            Some(id) => {
+                                Some(Query::Reserve(ReservationType::Flight, customer_id, id))
+                            }
+                            _ => panic!("Impossible: we never issued any read query."),
+                        },
+                    ReservationType::Flight =>
+                        match self.max_ids[ReservationType::Flight as usize] {
+                            Some(id) => {
+                                Some(Query::Reserve(ReservationType::Room, customer_id, id))
+                            }
+                            _ => panic!("Impossible: we never issued any read query."),
+                        },
+                    ReservationType::Room => {
+                        // done
+                        Nothing
+                    }
+                },
+            _ => panic!("Unexpected query: inconsistent program flow.")
+        }
     }
 }
+
+struct DeleteCustomer {
+    customer_id: u64
+}
+
+impl DeleteCustomer {
+
+    fn new(customer_id: u64) -> Self {
+        DeleteCustomer{ customer_id }
+    }
+
+    fn prepare_initial_query(&self) {
+        Query::GetBill(self.customer_id)
+    }
+
+    fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query> {
+        match req {
+            Query::GetBill(customer_id) =>
+                match resp {
+                    Bill(oBill) =>
+                        if oBill.is_some() {
+                            // stiff the check
+                            Some(Query::Delete(customer_id))
+                        } else {
+                            // customer did not exist
+                            Nothing
+                        }
+                },
+            _ => Nothing // done
+        }
+    }
+}
+
+struct UpdateTables {
+    num_update: usize,
+    update_id: usize
+}
+
+
+impl UpdateTables {
+
+    fn new(num_updates: usize) -> Self {
+        UpdateTables { num_updates, update_id : 0 }
+    }
+
+    fn prepare_initial_query(&self) -> Query {
+        self.prepare_update_query()
+    }
+
+    fn prepare_update_query(&self) -> Query {
+        let t = self.random.gen::<ReservationType>();
+        let id = (self.random.gen::<u64>() % self.query_range) + 1;
+        let tmp = self.random.gen::<bool>();
+        let new_price0 = if tmp {
+            Some(((self.random.gen::<u64>() % 5) * 10) + 50)
+        } else {
+            None
+        };
+        match new_price0 {
+            Some(new_price) => Query::AddPrice(t, id, 100, new_price),
+            Nothing => Query::Delete(t, id, 100)
+        }
+    }
+
+    fn handle_response(&mut self, req: Query, _resp: Response) -> Option<Query> {
+        // Note, the original code again just did not care about the response.
+        if self.update_id < self.num_update {
+            self.update_id += 1;
+            Some(self.prepare_update_query())
+        } else {
+            // done
+            Nothing
+        }
+    }
+}
+
+
+
 
 
 /*
@@ -196,164 +268,24 @@ fn serve(db, queries, resps) {
        result
    }
 }
+*/
 
 // Just don't parallelize this. as it makes no sense!
 // The whole point of the benchmark is the parallelism in the server, not the client!
-fn run(clients, db) {
+fn run(client: Client, db: Database) {
 
-   let mut clients' = clients;
-
-   for client in clients'.drain() {
-      let query = client.prepare_query();
-      let (db', responses) = server(db, query);
-      client.handle(response);
-      if client.done() {
-           // nothing to be done here!
-      } else {
-           clients'.push(client);
-      }
-   }
-
-}
-*/
-
-struct Run{
-    op: usize,
-    r: i64,
-    action: Action,
-}
-
-impl Run{
-
-    /* =============================================================================
-     * client_run
-     * -- Execute list operations on the database
-     * =============================================================================
-     */
-    pub fn run(&mut self) {
-        for _ in 0..self.num_operation {
-            let r = self.random.gen::<i64>() % 100;
-            let action = select_action(r, self.percent_user);
-
-            match action {
-                Action::MakeReservation => {
-                    let mut max_prices = vec![None, None, None];
-                    let mut max_ids = vec![None, None, None];
-                    let num_query = self.random.gen::<usize>() % self.num_query_per_transaction + 1;
-                    let customer_id = self.random.gen::<u64>() % self.query_range + 1;
-                    let mut is_found = false;
-
-                    //let mgr = self.manager.borrow();
-                    for _ in 0..num_query {
-                        let t = self.random.gen::<ReservationType>();
-                        let id = (self.random.gen::<u64>() % self.query_range) + 1;
-                        let price = match t {
-                            ReservationType::Car => {
-                                if mgr.query_car(id).is_some() {
-                                    mgr.query_car_price(id)
-                                } else {
-                                    None
-                                }
-                            }
-                            ReservationType::Flight => {
-                                if mgr.query_flight(id).is_some() {
-                                    mgr.query_flight_price(id)
-                                } else {
-                                    None
-                                }
-                            }
-                            ReservationType::Room => {
-                                if mgr.query_room(id).is_some() {
-                                    mgr.query_room_price(id)
-                                } else {
-                                    None
-                                }
-                            }
-                        };
-                        let idx = t as usize;
-                        if price > max_prices[idx] {
-                            max_prices[idx] = price;
-                            max_ids[idx] = Some(id);
-                            is_found = true;
-                        } else {
-                            // nothing
-                        }
-                    } /* for n */
-
-                    std::mem::drop(mgr);
-                    let mut mutmgr = self.manager.borrow_mut();
-
-                    if is_found {
-                        mutmgr.add_customer(customer_id);
-                    } else {
-                        // nothing
-                    }
-
-                    match max_ids[ReservationType::Car as usize] {
-                        Some(id) => {
-                            mutmgr.reserve_car(customer_id, id);
-                        }
-                        _ => (),
-                    }
-
-                    match max_ids[ReservationType::Flight as usize] {
-                        Some(id) => {
-                            mutmgr.reserve_flight(customer_id, id);
-                        }
-                        _ => (),
-                    }
-
-                    match max_ids[ReservationType::Room as usize] {
-                        Some(id) => {
-                            mutmgr.reserve_room(customer_id, id);
-                        }
-                        _ => (),
-                    }
-                }
-                Action::DeleteCustomer => {
-                    let customer_id = self.random.gen::<u64>() % self.query_range + 1;
-                    let bill = self.manager.borrow().query_customer_bill(customer_id);
-                    if bill.is_some() {
-                        self.manager.borrow_mut().delete_customer(customer_id);
-                    } else {
-                        //nothing
-                    }
-                }
-                Action::UpdateTables => {
-                    let num_update =
-                        self.random.gen::<usize>() % self.num_query_per_transaction + 1;
-                    let mut mutmgr = self.manager.borrow_mut();
-
-                    for _ in 0..num_update {
-                        let t = self.random.gen::<ReservationType>();
-                        let id = (self.random.gen::<u64>() % self.query_range) + 1;
-                        let tmp = self.random.gen::<bool>();
-                        let new_price0 = if tmp {
-                            Some(((self.random.gen::<u64>() % 5) * 10) + 50)
-                        } else {
-                            None
-                        };
-                        match new_price0 {
-                            Some(new_price) => match t {
-                                ReservationType::Car => mutmgr.add_car(id, 100, new_price),
-                                ReservationType::Flight => mutmgr.add_flight(id, 100, new_price),
-                                ReservationType::Room => mutmgr.add_room(id, 100, new_price),
-                            },
-                            None => {
-                                /* do delete */
-                                match t {
-                                    ReservationType::Car => mutmgr.delete_car(id, 100),
-                                    ReservationType::Flight => mutmgr.delete_flight(id),
-                                    ReservationType::Room => mutmgr.delete_room(id, 100),
-                                }
-                            }
-                        };
-                    }
-                } /* switch (action) */
-            }
-        } /* for i */
+    let mut cprogram = client.next_program();
+    while let Some(program) = cprogram {
+        let mut cquery = Some(program.prepare_initial_query());
+        while let Some(query) = current {
+            let (db', responses) = server(db, query.clone());
+            current = client.handle_response(query, response);
+        }
+        cprogram = client.next_program();
     }
 }
+
+
 
 /* =============================================================================
  * select_action
