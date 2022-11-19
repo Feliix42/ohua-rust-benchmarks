@@ -52,6 +52,15 @@ impl<T: RngCore + SeedableRng> Client<T> {
                     let customer_id = self.random.gen::<u64>() % self.query_range + 1;
                     let seed = self.random.gen::<u64>();
 
+                    // Note that this is a FUNDAMENTAL FLAW in the design of the benchmark:
+                    // Since there are no abstractions for queries and responses, it appears
+                    // that the client can just issue a request, handle the response and issue
+                    // another request in the very same memory(!) transaction.
+                    // This benchmark suggests that I can use memory transaction to implement
+                    // database transactions! This is impossible!
+                    // Memory transactions are only server-side and even then they can not
+                    // included IO!
+                    // The rewrite to the Ohua version makes this flaw obvious!
                     atomically(|trans| {
                         let mut max_prices = vec![None, None, None];
                         let mut max_ids = vec![None, None, None];

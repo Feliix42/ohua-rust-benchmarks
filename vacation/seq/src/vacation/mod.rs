@@ -1,14 +1,9 @@
 use clap::Parser;
-use client::Client;
-use manager::Manager;
-use rand_chacha::ChaCha12Rng;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 mod action;
-pub mod client;
+pub mod original;
+pub mod prime;
 mod customer;
-pub mod manager;
 mod reservation;
 
 #[derive(Parser, Clone, Debug)]
@@ -42,29 +37,7 @@ pub struct Parameters {
     pub num_transactions: usize,
 }
 
-pub fn initialize_clients(
-    manager: Rc<RefCell<Manager>>,
-    params: &Parameters,
-) -> Vec<Client<ChaCha12Rng>> {
-    let mut clients = Vec::with_capacity(params.clients);
 
-    let num_tx_per_client = (params.num_transactions as f64 / params.clients as f64 + 0.5) as usize;
-    let query_range =
-        (params.percentage_queried as f64 / 100_f64 * params.num_relations as f64 + 0.5) as usize;
-
-    for _ in 0..params.clients {
-        clients.push(Client::new(
-            manager.clone(),
-            num_tx_per_client,
-            params.num_queries,
-            query_range as u64,
-            params.percentage_user_tx as i64,
-        ));
-    }
-
-    clients
-}
-
-pub fn check_tables(_manager: Rc<RefCell<Manager>>) {
+//pub fn check_tables(_manager: Rc<RefCell<Manager>>) {
     // TODO(feliix42): implement
-}
+//}

@@ -1,9 +1,11 @@
 use crate::vacation::action::Action;
-use crate::vacation::manager::{Admin, Manager, QueryInterface, ReservationInterface};
+use crate::vacation::original::manager::{Admin, Manager, QueryInterface, ReservationInterface};
 use crate::vacation::reservation::ReservationType;
 use rand::{Rng, RngCore, SeedableRng};
 use std::cell::RefCell;
 use std::rc::Rc;
+use crate::vacation::Parameters;
+use rand_chacha::ChaCha12Rng;
 
 pub struct Client<T: RngCore + SeedableRng> {
     //id: u64,
@@ -178,4 +180,28 @@ fn select_action(r: i64, percent_user: i64) -> Action {
     } else {
         Action::UpdateTables
     }
+}
+
+
+pub fn initialize_clients(
+    manager: Rc<RefCell<Manager>>,
+    params: &Parameters,
+) -> Vec<Client<ChaCha12Rng>> {
+    let mut clients = Vec::with_capacity(params.clients);
+
+    let num_tx_per_client = (params.num_transactions as f64 / params.clients as f64 + 0.5) as usize;
+    let query_range =
+        (params.percentage_queried as f64 / 100_f64 * params.num_relations as f64 + 0.5) as usize;
+
+    for _ in 0..params.clients {
+        clients.push(Client::new(
+            manager.clone(),
+            num_tx_per_client,
+            params.num_queries,
+            query_range as u64,
+            params.percentage_user_tx as i64,
+        ));
+    }
+
+    clients
 }
