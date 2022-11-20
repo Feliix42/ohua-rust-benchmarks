@@ -1,7 +1,38 @@
 use crate::vacation::prime::manager::Manager;
 use crate::vacation::prime::communication::{Query, Response};
-use crate::vacation::prime::database::{Database};
+use crate::vacation::prime::database::{Database, IndexedQuery, index_queries, compute, resolve};
 
+
+
+/// This server algorithm pretends to know nothing.
+/// It just applies changes to the database system in the order that we requests arrived.
+/// For requests that address the same database, we abort and retry.
+pub(crate) fn server_naive_go(db:Database, batch: Vec<IndexedQuery>, responses: Vec<Response>) -> (Manager, Vec<Response>) {
+
+    let shared = Arc::new(db);
+    let mut qr = Vec::new();
+    for query in batch {
+        let owned = shared.clone();
+        let delta = compute(owned, query);
+        let resp = db.apply_delta(delta);
+        qr.push( (query, resp) );
+    }
+
+    let (responses, redo) = resolve(responses, qr);
+
+    if redo.is_some() {
+        server_naive_go(db, redo, responses)
+    } else {
+        (db, responses)
+    }
+}
+
+pub(crate) fn server_naive(db:Database, batch: Vec<Query>) -> (Manager, Vec<Response>) {
+    let batch_p = index_queries(batch);
+    let l = batch_p.len();
+    let responses = Vec::with_capacity(l);
+    server_naive_go(db, batch_p, responses)
+}
 
 /// This server algorithm uses batching and performs reordering of queries.
 /// It applies writes before reads, so reads see the most up-to-date data.
