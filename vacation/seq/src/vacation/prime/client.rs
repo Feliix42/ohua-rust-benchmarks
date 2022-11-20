@@ -3,6 +3,7 @@ use crate::vacation::prime::manager::{Admin, Manager, QueryInterface, Reservatio
 use crate::vacation::reservation::ReservationType;
 use rand::{Rng, RngCore, SeedableRng};
 use crate::vacation::prime::communication::{Query, Response};
+use crate::vacation::prime::server;
 
 pub struct Client<T: RngCore + SeedableRng> {
     random: T,
@@ -17,7 +18,6 @@ pub struct Client<T: RngCore + SeedableRng> {
 
 
 impl Client {
-
     fn next_program() -> Option<Program> {
         if self.op < self.num_operation {
             let r = self.random.gen::<i64>() % 100;
@@ -53,6 +53,7 @@ trait Program {
 
     /// Typical client event dispatch
     fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query>;
+}
 
 /// Possible programs:
 
@@ -69,9 +70,9 @@ impl MkReservation {
         MkReservation{
             max_prices : vec![None, None, None],
             max_ids : vec![None, None, None],
-            num_query, // TODO self.random.gen::<usize>() % self.num_query_per_transaction + 1,
+            num_query,
             query_id : 0,
-            customer_id, // TODO  self.random.gen::<u64>() % self.query_range + 1,
+            customer_id,
         }
     }
 
@@ -198,7 +199,6 @@ struct UpdateTables {
 
 
 impl UpdateTables {
-
     fn new(num_updates: usize) -> Self {
         UpdateTables { num_updates, update_id : 0 }
     }
@@ -268,23 +268,71 @@ fn serve(db, queries, resps) {
        result
    }
 }
+
 */
 
-// Just don't parallelize this. as it makes no sense!
-// The whole point of the benchmark is the parallelism in the server, not the client!
-fn run(client: Client, db: Database) {
+/// Just don't parallelize the client-side. as it makes no sense!
+/// The whole point of the benchmark is the parallelism in the server, not the client!
 
+/// Issues the request directly against the database.
+pub fn run_client(client: Client, db: Database) -> Database {
     let mut cprogram = client.next_program();
+    let mut cdb = db;
     while let Some(program) = cprogram {
         let mut cquery = Some(program.prepare_initial_query());
-        while let Some(query) = current {
-            let (db', responses) = server(db, query.clone());
-            current = client.handle_response(query, response);
+        while let Some(query) = cquery {
+            let (dbp, response) = server::issue(cdb, query.clone());
+            cdb = dbp;
+            cquery = program.handle_response(query, response);
         }
         cprogram = client.next_program();
     }
+    cdb
 }
 
+/// Computes one request from each of the clients and then submits this batch to the database.
+pub fn run_clients(mut clients: Vec<Client>, db: Database) -> Database {
+
+    let mut cdb = db;
+
+    // create the initial batch of requests
+    let mut cpq = Vec::with_capacity(clients.len());
+    for client in clients {
+       let mut cprogram = client.next_program();
+       while let Some(program) = cprogram {
+           let query = program.prepare_initial_query();
+           qAndP.push( (client, program, query)) ;
+        }
+    }
+
+    // loop until all clients are done
+    while cpq_p.len() > 0 {
+        // process the batch
+        let batch = qAndP.iter().map(|(_,_,q)| q.clone()).collect();
+        let (dbp, responses) = server::issue_batch(cdb, batch);
+        cdb = dbp;
+
+        // handle the responses
+        let mut cpq_p = Vec::new();
+        for ((client, program, query), response) in aAndP.zip(responses) {
+            let nq = program.handle_response(query, response);
+            if let Some(q) = nq {
+                cpq_p.push( (client, program, nq) );
+            } else {
+                let np = client.next_program();
+                if let Some(p) = np {
+                    let q = p.prepare_initial_query();
+                    cpq_p.push( (client, p, q) );
+                } else {
+                    // client is done
+                }
+            }
+        }
+        cpq = cpq_p;
+    }
+
+    cdb
+}
 
 
 /* =============================================================================
