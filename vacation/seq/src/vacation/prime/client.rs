@@ -3,7 +3,9 @@ use crate::vacation::prime::manager::{Admin, Manager, QueryInterface, Reservatio
 use crate::vacation::reservation::ReservationType;
 use rand::{Rng, RngCore, SeedableRng};
 use crate::vacation::prime::communication::{Query, Response};
+use crate::vacation::prime::database as db;
 use crate::vacation::prime::server;
+
 
 pub struct Client<T: RngCore + SeedableRng> {
     random: T,
@@ -275,23 +277,21 @@ fn serve(db, queries, resps) {
 /// The whole point of the benchmark is the parallelism in the server, not the client!
 
 /// Issues the request directly against the database.
-pub fn run_client(client: Client, db: Database) -> Database {
+pub fn run_client(client: Client, db: db::Database) -> db::Database {
     let mut cprogram = client.next_program();
-    let mut cdb = db;
     while let Some(program) = cprogram {
         let mut cquery = Some(program.prepare_initial_query());
         while let Some(query) = cquery {
-            let (dbp, response) = server::issue(cdb, query.clone());
-            cdb = dbp;
+            let response = db.issue(cdb, query.clone());
             cquery = program.handle_response(query, response);
         }
         cprogram = client.next_program();
     }
-    cdb
+    db
 }
 
 /// Computes one request from each of the clients and then submits this batch to the database.
-pub fn run_clients(mut clients: Vec<Client>, db: Database) -> Database {
+pub fn run_clients(mut clients: Vec<Client>, db: db::Database) -> db::Database {
 
     let mut cdb = db;
 
@@ -309,7 +309,7 @@ pub fn run_clients(mut clients: Vec<Client>, db: Database) -> Database {
     while cpq_p.len() > 0 {
         // process the batch
         let batch = qAndP.iter().map(|(_,_,q)| q.clone()).collect();
-        let (dbp, responses) = server::issue_batch(cdb, batch);
+        let (dbp, responses) = server::server_wr(cdb, batch);
         cdb = dbp;
 
         // handle the responses

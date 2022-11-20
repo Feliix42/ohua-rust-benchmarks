@@ -24,3 +24,17 @@ enum Response {
 }
 
 
+impl Query {
+    fn is_read(&self) -> bool {
+        match self {
+            Query::AddPrice(_,_,_,_) |
+            Query::DeleteCapacity(_,_,_) |
+            Query::Insert(_) |
+            Query::Delete(_) |
+            Query::Reserve(_,_,_) => false,
+            _ => true
+        }
+    }
+}
+
+
