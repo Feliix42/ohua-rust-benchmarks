@@ -101,6 +101,39 @@ struct IndexedQuery {
     idx: usize
 }
 
+impl IndexedQuery {
+    fn is_collision(&self, writes: &Vec<IndexedQuery>) -> bool {
+        match self.query {
+            Query::GetCapacity(t0,assetId0) =>
+                for write in writes {
+                    match write {
+                        Query::Delete(t1,assetId1,_)     if t0 == t1 && assetId0 == assetId1 => return true,
+                        Query::Reserve(t1,_,assetId1)    if t0 == t1 && assetId0 == assetId1 => return true,
+                        _ => ()
+                    }
+                },
+            Query::GetPrice(t0,assertId0) =>
+                for write in writes {
+                    match write {
+                        Query::AddPrice(t1,assetId1,_,_) if t0 == t1 && assetId0 == assetId1 => return true,
+                        Query::Delete(t1,assetId1,_)     if t0 == t1 && assetId0 == assetId1 => return true,
+                        _ => ()
+                    }
+                },
+            Query::GetBill(customerId0) =>
+                for write in writes {
+                    match write {
+                        Query::Reserve(_,customerId1,_)  if customerId0 == customerId1 => return true,
+                        Query::Insert(customerId1)       if customerId0 == customerId1 => return true,
+                        Query::Delete(customerId1)       if customerId0 == customerId1 => return true,
+                        _ => ()
+                    }
+                },
+            _ => () // write query
+        }
+        false
+    }
+}
 
 pub(crate) fn index_queries(batch: Vec<Query>) -> Vec<IndexedQuery> {
     let mut indexed = Vec::with_capacity(batch.len());
@@ -122,41 +155,51 @@ pub(crate) fn compute(db:Arc<Database>, query: IndexedQuery) -> (IndexedQuery, O
 }
 
 trait Delta {
-    fn apply_delta(&mut self, (query, resp): (IndexedQuery, Option<Response>)) -> Option<Response>;
+    fn apply_delta(&mut self, delta: Vec<(IndexedQuery, Option<Response>)>) -> (Vec<IndexedQuery>, Vec<(usize,Response)>);
 }
 
-enum Either<S,T> {
-    Left(S),
-    Right(T)
-}
 
 impl Delta for Database {
-    /// This implemantation redoes reads that read an old value.
-    fn apply_delta(&mut self, (query, resp): (IndexedQuery, Option<Response>)) -> Either<Query, (usize,Response)> {
-        // FIXME this needs to be done on the whole result set.
-        match resp {
-            Some(_) => {
-                // TODO implement the collision check!
-                (query.idx, resp)
-            },
-            None => {
-                assert!(!query.query.is_read());
-                Some(self.issue_write(query.query))
+    /// This implementation redoes reads that read an old value.
+    /// Note that this version is only here for baseline comparison with the old STM version.
+    /// It does not make any sense, because there is no notion of consistency for single query transactions!
+    /// (The old STM implementation was simulating database transactions with software transactions.)
+    fn apply_delta(&mut self, delta: Vec<(IndexedQuery, Option<Response>)>) -> (Vec<IndexedQuery>, Vec<(usize,Response)>) {
+        let mut redos = Vec::new();
+        let mut responses = Vec::new();
+        let writes = delta.iter().filter(|(_, o)| o.is_none()).collect();
+        for (query, resp) in delta {
+            match resp {
+                Some(_) => {
+                    if query.is_collision(&writes) {
+                        redos.push(query)
+                    } else {
+                        responses.push( (query.idx, resp) );
+                    }
+                },
+                None => {
+                    assert!(!query.query.is_read());
+                    responses.push( (query.idx, self.issue_write(query.query)) );
+                }
             }
         }
+        (redos, responses)
     }
 }
 
-pub(crate) fn resolve(
-    results: Vec<Either<IndexedQuery, (usize,Response)>>,
-    responses: Vec<Response>
-) -> (Vec<Response>,Vec<IndexedQuery>) {
-    let mut redo = Vec::new();
-    for r in results {
-        match r {
-            Either::Left(q) => redo.push(q),
-            Either::Right((idx, resp)) => responses.insert(idx, resp) // TODO check this operation again
-        }
+pub(crate) fn insert_at_index(responses: Vec<Response>, new: Vec<(usize, Response)>) -> Vec<Response> {
+    for (idx,resp) in new {
+        responses[idx] = resp;
     }
-    (responses,redo)
+    responses
+}
+
+trait NotEmpty {
+    fn not_empty(&self) -> bool;
+}
+
+impl<T> NotEmpty for Vec<T> {
+    fn not_empty(&self) -> bool {
+        !self.is_empty()
+    }
 }

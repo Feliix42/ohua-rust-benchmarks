@@ -10,18 +10,18 @@ use crate::vacation::prime::database::{Database, IndexedQuery, index_queries, co
 pub(crate) fn server_naive_go(db:Database, batch: Vec<IndexedQuery>, responses: Vec<Response>) -> (Manager, Vec<Response>) {
 
     let shared = Arc::new(db);
-    let mut qr = Vec::new();
+    let mut qd = Vec::new();
     for query in batch {
         let owned = shared.clone();
         let delta = compute(owned, query);
-        let resp = db.apply_delta(delta);
-        qr.push( (query, resp) );
+        qd.push(qr);
     }
 
-    let (responses, redo) = resolve(responses, qr);
+    let (redo, cresponses) = db.apply_delta(qd);
+    let responses_p = insert_at_index(responses, cresponses);
 
-    if redo.is_some() {
-        server_naive_go(db, redo, responses)
+    if redo.not_empty() {
+        server_naive_go(db, redo, responses_p)
     } else {
         (db, responses)
     }
