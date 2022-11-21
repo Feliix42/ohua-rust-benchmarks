@@ -3,11 +3,12 @@ use crate::vacation::reservation::ReservationType;
 type CustomerID = u64;
 type AssetID = u64;
 
-enum Query {
+#[derive(Clone)]
+pub(crate) enum Query {
     GetCapacity(ReservationType, AssetID),
     GetPrice(ReservationType, AssetID),
     AddPrice(ReservationType, AssetID, u64, u64),
-    Delete(ReservationType, AssetID, u64),
+    DeleteCapacity(ReservationType, AssetID, u64),
 
     Insert(CustomerID),
     Delete(CustomerID),
@@ -16,7 +17,8 @@ enum Query {
     Reserve(ReservationType, CustomerID, AssetID)
 }
 
-enum Response {
+#[derive(Clone)]
+pub(crate) enum Response {
     Capacity(Option<u64>),
     Price(Option<u64>),
     Bill(Option<u64>),
@@ -25,7 +27,7 @@ enum Response {
 
 
 impl Query {
-    fn is_read(&self) -> bool {
+    pub(crate) fn is_read(&self) -> bool {
         match self {
             Query::AddPrice(_,_,_,_) |
             Query::DeleteCapacity(_,_,_) |

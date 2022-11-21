@@ -6,19 +6,21 @@ use std::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub(crate) enum ReservationType {
     Car,
     Flight,
     Room,
 }
 
+#[derive(Clone)]
 pub(crate) struct ReservationInfo {
     pub(crate) typ: ReservationType,
     pub(crate) id: u64,
     pub(crate) price: u64, /* holds price at time reservation was made */
 }
 
+#[derive(Clone)]
 pub(crate) struct Reservation {
     id: u64,
     pub(crate) num_used: u64,

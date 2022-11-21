@@ -6,6 +6,7 @@ use std::collections::HashMap;
 // The benchmark implements tables as hashmaps.
 // That is reasonable for point access but any range read
 // will be a big performance burden.
+#[derive(Clone)]
 pub struct Manager {
     car_table: HashMap<u64, Reservation>,
     room_table: HashMap<u64, Reservation>,

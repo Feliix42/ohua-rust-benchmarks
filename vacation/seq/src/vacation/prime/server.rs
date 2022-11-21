@@ -1,20 +1,25 @@
-use crate::vacation::prime::manager::Manager;
 use crate::vacation::prime::communication::{Query, Response};
-use crate::vacation::prime::database::{Database, IndexedQuery, index_queries, compute, resolve};
-
-
+use crate::vacation::prime::database::{
+    compute, index_queries_and_responses, insert_at_index, issue_read, split, unwrap_responses,
+    Database, Delta, IndexedQuery, NotEmpty,
+};
+use std::sync::Arc;
 
 /// This server algorithm pretends to know nothing.
 /// It just applies changes to the database system in the order that we requests arrived.
 /// For requests that address the same database, we abort and retry.
-pub(crate) fn server_naive_go(db:Database, batch: Vec<IndexedQuery>, responses: Vec<Response>) -> (Manager, Vec<Response>) {
-
-    let shared = Arc::new(db);
+pub(crate) fn server_naive_go(
+    mut db: Database,
+    batch: Vec<IndexedQuery>,
+    responses: Vec<Option<Response>>,
+) -> (Database, Vec<Option<Response>>) {
+    let dbp = db.clone(); // certainly expensive
+    let shared = Arc::new(dbp);
     let mut qd = Vec::new();
     for query in batch {
         let owned = shared.clone();
         let delta = compute(owned, query);
-        qd.push(qr);
+        qd.push(delta);
     }
 
     let (redo, cresponses) = db.apply_delta(qd);
@@ -23,28 +28,32 @@ pub(crate) fn server_naive_go(db:Database, batch: Vec<IndexedQuery>, responses: 
     if redo.not_empty() {
         server_naive_go(db, redo, responses_p)
     } else {
-        (db, responses)
+        (db, responses_p)
     }
 }
 
-pub(crate) fn server_naive(db:Database, batch: Vec<Query>) -> (Manager, Vec<Response>) {
+/// Note, this algo penalizes clients whose queries were successfull.
+// We use the YCSB benchmark to show how those can be responded to and the failed ones are merged
+// with the next set of queries. The failed queries being at the front of the ones worked.
+// This requires showing latency metrics!
+pub(crate) fn server_naive(db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
     let (batch_p, responses) = index_queries_and_responses(batch);
     let (dbp, responsesp) = server_naive_go(db, batch_p, responses);
     let responsespp = unwrap_responses(responsesp);
-    (dbp,responsespp)
+    (dbp, responsespp)
 }
 
 /// This server algorithm uses batching and performs reordering of queries.
 /// It applies writes before reads, so reads see the most up-to-date data.
-pub(crate) fn server_wr(db: Database, batch: Vec<Query>) -> (Manager,Vec<Response>) {
-    let (reads, writes) = split(batch);
+pub(crate) fn server_wr(mut db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
     let mut responses = Vec::with_capacity(batch.len());
+    let (reads, writes) = split(batch);
     for write in writes {
         let resp = db.issue_write(write);
         responses.push(resp);
     }
 
-    let shared = Arc::new(db);
+    let shared = Arc::new(db.clone()); // this is again expensive
     for read in reads {
         let own_db = shared.clone();
         let resp = issue_read(own_db, read);

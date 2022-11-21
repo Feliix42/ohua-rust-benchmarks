@@ -1,6 +1,7 @@
 use crate::vacation::reservation::{ReservationInfo, ReservationType};
 use std::cmp::Ordering;
 
+#[derive(Clone)]
 pub(crate) struct Customer {
     id: u64,
     pub(crate) reservation_info_list: Vec<ReservationInfo>,

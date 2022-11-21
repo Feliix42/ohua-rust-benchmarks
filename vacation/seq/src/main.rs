@@ -7,7 +7,8 @@ use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::rc::Rc;
 use std::time::Instant;
-use vacation::{client::Client, manager::Manager, Parameters};
+use vacation::{manager::Manager, Parameters};
+use vacation::original;
 
 mod vacation;
 
@@ -30,13 +31,13 @@ fn main() {
         manager.initialize(&mut rng, params.num_relations);
         let mgr = Rc::new(RefCell::new(manager));
 
-        let mut clients = vacation::initialize_clients(mgr.clone(), &params);
+        let mut clients = original::client::initialize_clients(mgr.clone(), &params);
 
         // run benchmark
         let start = Instant::now();
         let cpu_start = ProcessTime::now();
 
-        run(&mut clients);
+        original::client::run(&mut clients);
 
         let cpu_stop = ProcessTime::now();
         let stop = Instant::now();
@@ -45,7 +46,7 @@ fn main() {
         cpu_results.push(cpu_stop.duration_since(cpu_start).as_millis());
 
         // check results
-        vacation::check_tables(mgr);
+        //vacation::check_tables(mgr);
     }
 
     if params.json {
@@ -96,11 +97,5 @@ fn main() {
         println!("    Runs: {}", params.runs);
         println!("\nCPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
-    }
-}
-
-fn run(clients: &mut Vec<Client<ChaCha12Rng>>) {
-    for c in clients {
-        c.run();
     }
 }

@@ -1,14 +1,22 @@
 use clap::Parser;
+use strum_macros::{Display, EnumString};
 
 mod action;
-mod manager;
-pub mod original;
-pub mod prime;
 mod customer;
+pub(crate) mod manager;
+pub(crate) mod original;
+pub(crate) mod prime;
 mod reservation;
 
+#[derive(Parser, Clone, Debug, EnumString, Display)]
+pub enum Version {
+    Original,
+    Prime, // TODO add Ohua
+}
+
+
 #[derive(Parser, Clone, Debug)]
-#[clap(author = "Felix Suchert, Sebastian Ertel", version = "1.0", about = "A Rust port ot the vacation benchmark from the STAMP collection", long_about = None)]
+#[clap(author = "Sebastian Ertel, Felix Suchert", version = "1.0", about = "A Rust port ot the vacation benchmark from the STAMP collection", long_about = None)]
 pub struct Parameters {
     #[clap(long = "runs", default_value_t = 1)]
     pub runs: usize,
@@ -36,9 +44,11 @@ pub struct Parameters {
     /// Number of transactions
     #[clap(long = "num_tx", short = 't', default_value_t = 1 << 26)]
     pub num_transactions: usize,
+    /// Version of the benchmark
+    #[clap(long = "bench_version", short = 'b', default_value_t = Version::Original)]
+    pub version: Version,
 }
 
-
 //pub fn check_tables(_manager: Rc<RefCell<Manager>>) {
-    // TODO(feliix42): implement
+// TODO(feliix42): implement
 //}

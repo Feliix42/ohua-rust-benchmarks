@@ -1,13 +1,11 @@
 use crate::vacation::action::Action;
-use crate::vacation::prime::manager::{Admin, Manager, QueryInterface, ReservationInterface};
-use crate::vacation::reservation::ReservationType;
-use rand::{Rng, RngCore, SeedableRng};
 use crate::vacation::prime::communication::{Query, Response};
 use crate::vacation::prime::database as db;
 use crate::vacation::prime::server;
+use crate::vacation::reservation::ReservationType;
+use rand::{Rng, RngCore, SeedableRng};
 
-
-pub struct Client<T: RngCore + SeedableRng> {
+pub struct Client<T: RngCore + SeedableRng + Clone> {
     random: T,
     num_operation: usize,
     num_query_per_transaction: usize,
@@ -18,34 +16,33 @@ pub struct Client<T: RngCore + SeedableRng> {
     op: usize,
 }
 
-
-impl Client {
-    fn next_program() -> Option<Program> {
+impl<T: 'static + RngCore + SeedableRng + Clone> Client<T> {
+    fn next_program(&mut self) -> Option<Box<dyn Program>> {
         if self.op < self.num_operation {
             let r = self.random.gen::<i64>() % 100;
             let action = select_action(r, self.percent_user);
-            match action {
-                Action::MakeReservation =>
-                    MkReservation::new(
-                        self.random.gen::<usize>() % self.num_query_per_transaction + 1,
-                        self.random.gen::<u64>() % self.query_range + 1
-                    ),
-                Action::DeleteCustomer =>
-                    DeleteCustomer::new(
-                        self.random.gen::<u64>() % self.query_range + 1
-                    ),
-                Action::UpdateTables =>
-                    UpdatesTables::new(
-                        self.random.gen::<usize>() % self.num_query_per_transaction + 1
-                    )
-            }
+            Some(match action {
+                Action::MakeReservation => Box::new(MkReservation::new(
+                    self.random.clone(),
+                    self.query_range,
+                    self.random.gen::<usize>() % self.num_query_per_transaction + 1,
+                    self.random.gen::<u64>() % self.query_range + 1,
+                )),
+                Action::DeleteCustomer => Box::new(DeleteCustomer::new(
+                    self.random.gen::<u64>() % self.query_range + 1,
+                )),
+                Action::UpdateTables => Box::new(UpdateTables::new(
+                    self.random.clone(),
+                    self.query_range,
+                    self.random.gen::<usize>() % self.num_query_per_transaction + 1,
+                )),
+            })
         } else {
             // done
-            Nothing
+            None
         }
     }
 }
-
 
 /// Program abstraction
 
@@ -59,157 +56,154 @@ trait Program {
 
 /// Possible programs:
 
-struct MkReservation {
-    max_prices: Vec<_>,
-    max_ids: Vec<_>,
+struct MkReservation<T: RngCore + SeedableRng> {
+    random: T,
+    query_range: u64,
+    max_prices: Vec<Option<u64>>,
+    max_ids: Vec<Option<u64>>,
     num_queries: usize,
     query_id: usize,
     customer_id: u64,
 }
 
-impl MkReservation {
-    fn new(num_query: usize, customer_id: u64) -> Self {
-        MkReservation{
-            max_prices : vec![None, None, None],
-            max_ids : vec![None, None, None],
-            num_query,
-            query_id : 0,
+impl<T: RngCore + SeedableRng> MkReservation<T> {
+    fn new(random: T, query_range: u64, num_queries: usize, customer_id: u64) -> Self {
+        MkReservation {
+            random,
+            query_range,
+            max_prices: vec![None, None, None],
+            max_ids: vec![None, None, None],
+            num_queries,
+            query_id: 0,
             customer_id,
         }
     }
-
-    fn prepare_initial_query(&mut self) -> Query {
-        self.prepare_capacity_query()
-    }
-
     fn prepare_capacity_query(&mut self) -> Query {
         let t = self.random.gen::<ReservationType>();
         let id = (self.random.gen::<u64>() % self.query_range) + 1;
         Query::GetCapacity(t, id)
     }
+}
+
+impl<T: RngCore + SeedableRng> Program for MkReservation<T> {
+    fn prepare_initial_query(&mut self) -> Query {
+        self.prepare_capacity_query()
+    }
 
     // typical client event dispatch
     fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query> {
         match req {
-            Query::GetCapacity(t, id) =>
-                match resp {
-                    // Note this query does not make any sense.
-                    // Normally one would directly query for price!
-                    Capacity(Some(_)) => {
-                        Some(Query::GetPrice(t,id))
-                    },
-                    _ => panic!("Communication logic inconsistency.")
-                },
-            Query::GetPrice(t, id) =>
-                match resp {
-                    Price(price) => {
-                        let idx = t as usize;
-                        if price > max_prices[idx] {
-                            self.max_prices[idx] = price;
-                            self.max_ids[idx] = Some(id);
-                        } else {
-                            // nothing
-                        }
-
-
-                        if self.query_id < self.num_queries {
-                            // continue to issue capacity queries
-                            self.query_id += 1;
-                            self.query = self.prepare_capacity_query();
-                        } else {
-                            // we are done with the capacity queries.
-                            // do the reservation
-
-                            // create the customer first
-                            self.query = Query::Insert(self.customer_id);
-                        }
-                    },
-                    _ => panic!("Communication logic inconsistency.")
-                },
-            Query::Insert(customer_id) => {
-                match self.max_ids[ReservationType::Car as usize] {
-                    Some(id) => {
-                        Some(Query::Reserve(ReservationType::Car, customer_id, id))
-                    }
-                    _ => panic!("Impossible: we never issued any read query."),
-                }
+            Query::GetCapacity(t, id) => match resp {
+                // Note this query does not make any sense.
+                // Normally one would directly query for price!
+                Response::Capacity(Some(_)) => Some(Query::GetPrice(t, id)),
+                _ => panic!("Communication logic inconsistency."),
             },
-            Query::Reserve(t,customer_id,_) =>
+            Query::GetPrice(t, id) => match resp {
+                Response::Price(price) => {
+                    let idx = t as usize;
+                    if price > self.max_prices[idx] {
+                        self.max_prices[idx] = price;
+                        self.max_ids[idx] = Some(id);
+                    } else {
+                        // nothing
+                    }
+
+                    if self.query_id < self.num_queries {
+                        // continue to issue capacity queries
+                        self.query_id += 1;
+                        Some(self.prepare_capacity_query())
+                    } else {
+                        // we are done with the capacity queries.
+                        // do the reservation
+
+                        // create the customer first
+                        Some(Query::Insert(self.customer_id))
+                    }
+                }
+                _ => panic!("Communication logic inconsistency."),
+            },
+            Query::Insert(customer_id) => match self.max_ids[ReservationType::Car as usize] {
+                Some(id) => Some(Query::Reserve(ReservationType::Car, customer_id, id)),
+                _ => panic!("Impossible: we never issued any read query."),
+            },
+            Query::Reserve(t, customer_id, _) =>
             // note: we do not care about the result of the reservation.
             // neither did the original code.
+            {
                 match t {
-                    ReservationType::Car =>
-                        match self.max_ids[ReservationType::Flight as usize] {
-                            Some(id) => {
-                                Some(Query::Reserve(ReservationType::Flight, customer_id, id))
-                            }
-                            _ => panic!("Impossible: we never issued any read query."),
-                        },
-                    ReservationType::Flight =>
-                        match self.max_ids[ReservationType::Flight as usize] {
-                            Some(id) => {
-                                Some(Query::Reserve(ReservationType::Room, customer_id, id))
-                            }
-                            _ => panic!("Impossible: we never issued any read query."),
-                        },
+                    ReservationType::Car => match self.max_ids[ReservationType::Flight as usize] {
+                        Some(id) => Some(Query::Reserve(ReservationType::Flight, customer_id, id)),
+                        _ => panic!("Impossible: we never issued any read query."),
+                    },
+                    ReservationType::Flight => match self.max_ids[ReservationType::Flight as usize]
+                    {
+                        Some(id) => Some(Query::Reserve(ReservationType::Room, customer_id, id)),
+                        _ => panic!("Impossible: we never issued any read query."),
+                    },
                     ReservationType::Room => {
                         // done
-                        Nothing
+                        None
                     }
-                },
-            _ => panic!("Unexpected query: inconsistent program flow.")
+                }
+            }
+            _ => panic!("Unexpected query: inconsistent program flow."),
         }
     }
 }
 
 struct DeleteCustomer {
-    customer_id: u64
+    customer_id: u64,
 }
 
 impl DeleteCustomer {
-
     fn new(customer_id: u64) -> Self {
-        DeleteCustomer{ customer_id }
+        DeleteCustomer { customer_id }
     }
+}
 
-    fn prepare_initial_query(&self) {
+impl Program for DeleteCustomer {
+    fn prepare_initial_query(&mut self) -> Query {
         Query::GetBill(self.customer_id)
     }
 
     fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query> {
         match req {
-            Query::GetBill(customer_id) =>
-                match resp {
-                    Bill(oBill) =>
-                        if oBill.is_some() {
-                            // stiff the check
-                            Some(Query::Delete(customer_id))
-                        } else {
-                            // customer did not exist
-                            Nothing
-                        }
-                },
-            _ => Nothing // done
+            Query::GetBill(customer_id) => match resp {
+                Response::Bill(oBill) => {
+                    if oBill.is_some() {
+                        // stiff the check
+                        Some(Query::Delete(customer_id))
+                    } else {
+                        // customer did not exist
+                        None
+                    }
+                }
+                _ => panic!("Impossible: we never issued any other query than GetBill."),
+            },
+            _ => None, // done
         }
     }
 }
 
-struct UpdateTables {
-    num_update: usize,
-    update_id: usize
+struct UpdateTables<T: RngCore + SeedableRng> {
+    random: T,
+    query_range: u64,
+    num_updates: usize,
+    update_id: usize,
 }
 
-
-impl UpdateTables {
-    fn new(num_updates: usize) -> Self {
-        UpdateTables { num_updates, update_id : 0 }
+impl<T: RngCore + SeedableRng> UpdateTables<T> {
+    fn new(random: T, query_range: u64, num_updates: usize) -> Self {
+        UpdateTables {
+            random,
+            query_range,
+            num_updates,
+            update_id: 0,
+        }
     }
 
-    fn prepare_initial_query(&self) -> Query {
-        self.prepare_update_query()
-    }
-
-    fn prepare_update_query(&self) -> Query {
+    fn prepare_update_query(&mut self) -> Query {
         let t = self.random.gen::<ReservationType>();
         let id = (self.random.gen::<u64>() % self.query_range) + 1;
         let tmp = self.random.gen::<bool>();
@@ -220,25 +214,27 @@ impl UpdateTables {
         };
         match new_price0 {
             Some(new_price) => Query::AddPrice(t, id, 100, new_price),
-            Nothing => Query::Delete(t, id, 100)
-        }
-    }
-
-    fn handle_response(&mut self, req: Query, _resp: Response) -> Option<Query> {
-        // Note, the original code again just did not care about the response.
-        if self.update_id < self.num_update {
-            self.update_id += 1;
-            Some(self.prepare_update_query())
-        } else {
-            // done
-            Nothing
+            None => Query::DeleteCapacity(t, id, 100),
         }
     }
 }
 
+impl<T: RngCore + SeedableRng> Program for UpdateTables<T> {
+    fn prepare_initial_query(&mut self) -> Query {
+        self.prepare_update_query()
+    }
 
-
-
+    fn handle_response(&mut self, _req: Query, _resp: Response) -> Option<Query> {
+        // Note, the original code again just did not care about the response.
+        if self.update_id < self.num_updates {
+            self.update_id += 1;
+            Some(self.prepare_update_query())
+        } else {
+            // done
+            None
+        }
+    }
+}
 
 /*
 
@@ -277,12 +273,15 @@ fn serve(db, queries, resps) {
 /// The whole point of the benchmark is the parallelism in the server, not the client!
 
 /// Issues the request directly against the database.
-pub fn run_client(client: Client, db: db::Database) -> db::Database {
+pub fn run_client<T: 'static + RngCore + SeedableRng + Clone>(
+    mut client: Client<T>,
+    mut db: db::Database,
+) -> db::Database {
     let mut cprogram = client.next_program();
-    while let Some(program) = cprogram {
+    while let Some(mut program) = cprogram {
         let mut cquery = Some(program.prepare_initial_query());
         while let Some(query) = cquery {
-            let response = db.issue(cdb, query.clone());
+            let response = db.issue(query.clone());
             cquery = program.handle_response(query, response);
         }
         cprogram = client.next_program();
@@ -291,38 +290,40 @@ pub fn run_client(client: Client, db: db::Database) -> db::Database {
 }
 
 /// Computes one request from each of the clients and then submits this batch to the database.
-pub fn run_clients(mut clients: Vec<Client>, db: db::Database) -> db::Database {
-
+pub fn run_clients<T: 'static + RngCore + SeedableRng + Clone>(
+    mut clients: Vec<Client<T>>,
+    db: db::Database,
+) -> db::Database {
     let mut cdb = db;
 
     // create the initial batch of requests
     let mut cpq = Vec::with_capacity(clients.len());
-    for client in clients {
-       let mut cprogram = client.next_program();
-       while let Some(program) = cprogram {
-           let query = program.prepare_initial_query();
-           qAndP.push( (client, program, query)) ;
+    for mut client in clients.drain(..) {
+        let cprogram = client.next_program();
+        if let Some(mut program) = cprogram {
+            let query = program.prepare_initial_query();
+            cpq.push((client, program, query));
         }
     }
 
     // loop until all clients are done
-    while cpq_p.len() > 0 {
+    while cpq.len() > 0 {
         // process the batch
-        let batch = qAndP.iter().map(|(_,_,q)| q.clone()).collect();
+        let batch = cpq.iter().map(|(_, _, q)| q.clone()).collect();
         let (dbp, responses) = server::server_wr(cdb, batch);
         cdb = dbp;
 
         // handle the responses
         let mut cpq_p = Vec::new();
-        for ((client, program, query), response) in aAndP.zip(responses) {
+        for ((mut client, mut program, query), response) in cpq.drain(..).zip(responses) {
             let nq = program.handle_response(query, response);
             if let Some(q) = nq {
-                cpq_p.push( (client, program, nq) );
+                cpq_p.push((client, program, q));
             } else {
                 let np = client.next_program();
-                if let Some(p) = np {
+                if let Some(mut p) = np {
                     let q = p.prepare_initial_query();
-                    cpq_p.push( (client, p, q) );
+                    cpq_p.push((client, p, q));
                 } else {
                     // client is done
                 }
@@ -333,7 +334,6 @@ pub fn run_clients(mut clients: Vec<Client>, db: db::Database) -> db::Database {
 
     cdb
 }
-
 
 /* =============================================================================
  * select_action

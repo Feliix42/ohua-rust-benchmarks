@@ -1,11 +1,11 @@
 use crate::vacation::action::Action;
-use crate::vacation::original::manager::{Admin, Manager, QueryInterface, ReservationInterface};
+use crate::vacation::manager::{Admin, Manager, QueryInterface, ReservationInterface};
 use crate::vacation::reservation::ReservationType;
+use crate::vacation::Parameters;
 use rand::{Rng, RngCore, SeedableRng};
+use rand_chacha::ChaCha12Rng;
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::vacation::Parameters;
-use rand_chacha::ChaCha12Rng;
 
 pub struct Client<T: RngCore + SeedableRng> {
     //id: u64,
@@ -182,7 +182,6 @@ fn select_action(r: i64, percent_user: i64) -> Action {
     }
 }
 
-
 pub fn initialize_clients(
     manager: Rc<RefCell<Manager>>,
     params: &Parameters,
@@ -204,4 +203,10 @@ pub fn initialize_clients(
     }
 
     clients
+}
+
+pub(crate) fn run(clients: &mut Vec<Client<ChaCha12Rng>>) {
+    for c in clients {
+        c.run();
+    }
 }
