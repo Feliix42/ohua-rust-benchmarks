@@ -170,8 +170,8 @@ impl Program for DeleteCustomer {
     fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query> {
         match req {
             Query::GetBill(customer_id) => match resp {
-                Response::Bill(oBill) => {
-                    if oBill.is_some() {
+                Response::Bill(obill) => {
+                    if obill.is_some() {
                         // stiff the check
                         Some(Query::Delete(customer_id))
                     } else {

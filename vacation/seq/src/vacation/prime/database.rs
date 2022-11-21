@@ -102,29 +102,29 @@ pub(crate) struct IndexedQuery {
 impl IndexedQuery {
     fn is_collision(&self, writes: &Vec<IndexedQuery>) -> bool {
         match &self.query {
-            Query::GetCapacity(t0, assetId0) => {
+            Query::GetCapacity(t0, asset_id0) => {
                 for write in writes {
                     match &write.query {
-                        Query::DeleteCapacity(t1, assetId1, _)
-                            if t0 == t1 && assetId0 == assetId1 =>
+                        Query::DeleteCapacity(t1, asset_id1, _)
+                            if t0 == t1 && asset_id0 == asset_id1 =>
                         {
                             return true
                         }
-                        Query::Reserve(t1, _, assetId1) if t0 == t1 && assetId0 == assetId1 => {
+                        Query::Reserve(t1, _, asset_id1) if t0 == t1 && asset_id0 == asset_id1 => {
                             return true
                         }
                         _ => (),
                     }
                 }
             }
-            Query::GetPrice(t0, assetId0) => {
+            Query::GetPrice(t0, asset_id0) => {
                 for write in writes {
                     match &write.query {
-                        Query::AddPrice(t1, assetId1, _, _) if t0 == t1 && assetId0 == assetId1 => {
+                        Query::AddPrice(t1, asset_id1, _, _) if t0 == t1 && asset_id0 == asset_id1 => {
                             return true
                         }
-                        Query::DeleteCapacity(t1, assetId1, _)
-                            if t0 == t1 && assetId0 == assetId1 =>
+                        Query::DeleteCapacity(t1, asset_id1, _)
+                            if t0 == t1 && asset_id0 == asset_id1 =>
                         {
                             return true
                         }
@@ -132,14 +132,14 @@ impl IndexedQuery {
                     }
                 }
             }
-            Query::GetBill(customerId0) => {
+            Query::GetBill(customer_id0) => {
                 for write in writes {
                     match &write.query {
-                        Query::Reserve(_, customerId1, _) if customerId0 == customerId1 => {
+                        Query::Reserve(_, customer_id1, _) if customer_id0 == customer_id1 => {
                             return true
                         }
-                        Query::Insert(customerId1) if customerId0 == customerId1 => return true,
-                        Query::Delete(customerId1) if customerId0 == customerId1 => return true,
+                        Query::Insert(customer_id1) if customer_id0 == customer_id1 => return true,
+                        Query::Delete(customer_id1) if customer_id0 == customer_id1 => return true,
                         _ => (),
                     }
                 }
