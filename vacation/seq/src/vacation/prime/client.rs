@@ -3,7 +3,9 @@ use crate::vacation::prime::communication::{Query, Response};
 use crate::vacation::prime::database as db;
 use crate::vacation::prime::server;
 use crate::vacation::reservation::ReservationType;
+use crate::vacation::Parameters;
 use rand::{Rng, RngCore, SeedableRng};
+use rand_chacha::ChaCha12Rng;
 
 pub struct Client<T: RngCore + SeedableRng + Clone> {
     random: T,
@@ -16,7 +18,41 @@ pub struct Client<T: RngCore + SeedableRng + Clone> {
     op: usize,
 }
 
+pub fn initialize_clients(params: &Parameters) -> Vec<Client<ChaCha12Rng>> {
+    let mut clients = Vec::with_capacity(params.clients);
+
+    let num_tx_per_client = (params.num_transactions as f64 / params.clients as f64 + 0.5) as usize;
+    let query_range =
+        (params.percentage_queried as f64 / 100_f64 * params.num_relations as f64 + 0.5) as usize;
+
+    for _ in 0..params.clients {
+        clients.push(Client::new(
+            num_tx_per_client,
+            params.num_queries,
+            query_range as u64,
+            params.percentage_user_tx as i64,
+        ));
+    }
+
+    clients
+}
 impl<T: 'static + RngCore + SeedableRng + Clone> Client<T> {
+    pub fn new(
+        num_operation: usize,
+        num_query_per_transaction: usize,
+        query_range: u64,
+        percent_user: i64,
+    ) -> Self {
+        Client {
+            random: <T as SeedableRng>::seed_from_u64(1),
+            num_operation,
+            num_query_per_transaction,
+            query_range,
+            percent_user,
+            op: 0,
+        }
+    }
+
     fn next_program(&mut self) -> Option<Box<dyn Program>> {
         if self.op < self.num_operation {
             let r = self.random.gen::<i64>() % 100;
@@ -293,6 +329,7 @@ pub fn run_client<T: 'static + RngCore + SeedableRng + Clone>(
 pub fn run_clients<T: 'static + RngCore + SeedableRng + Clone>(
     mut clients: Vec<Client<T>>,
     db: db::Database,
+    serve: server::Server
 ) -> db::Database {
     let mut cdb = db;
 
@@ -310,7 +347,7 @@ pub fn run_clients<T: 'static + RngCore + SeedableRng + Clone>(
     while cpq.len() > 0 {
         // process the batch
         let batch = cpq.iter().map(|(_, _, q)| q.clone()).collect();
-        let (dbp, responses) = server::server_wr(cdb, batch);
+        let (dbp, responses) = serve(cdb, batch);
         cdb = dbp;
 
         // handle the responses

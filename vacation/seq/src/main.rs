@@ -8,12 +8,12 @@ use std::io::Write;
 use std::rc::Rc;
 use std::time::Instant;
 use vacation::{manager::Manager, Parameters};
-use vacation::original;
+use vacation::{original, prime, Version};
 
 mod vacation;
 
 fn main() {
-    let params = Parameters::parse();
+    let mut params = Parameters::parse();
 
     if params.clients != 1 {
         println!(
@@ -29,15 +29,66 @@ fn main() {
         let mut manager = Manager::new();
         let mut rng = ChaCha12Rng::seed_from_u64(0);
         manager.initialize(&mut rng, params.num_relations);
-        let mgr = Rc::new(RefCell::new(manager));
 
-        let mut clients = original::client::initialize_clients(mgr.clone(), &params);
+        let (start, cpu_start) = match params.version {
+            Version::Original => {
+                let mgr = Rc::new(RefCell::new(manager));
+                let mut clients = original::client::initialize_clients(mgr.clone(), &params);
 
-        // run benchmark
-        let start = Instant::now();
-        let cpu_start = ProcessTime::now();
+                // run benchmark
+                let start = Instant::now();
+                let cpu_start = ProcessTime::now();
 
-        original::client::run(&mut clients);
+                original::client::run(&mut clients);
+
+                (start, cpu_start)
+            }
+            Version::PrimeSingleClient => {
+                params.num_transactions = params.num_transactions * params.clients;
+                params.clients = 1;
+                let mut clients = prime::client::initialize_clients(&params);
+                assert!(clients.len() == 1);
+                let client = clients.pop().unwrap();
+
+                // run benchmark
+                let start = Instant::now();
+                let cpu_start = ProcessTime::now();
+
+                prime::client::run_client(client, prime::database::Database::new(manager));
+
+                (start, cpu_start)
+            }
+            Version::PrimeNaive => {
+                let clients = prime::client::initialize_clients(&params);
+
+                // run benchmark
+                let start = Instant::now();
+                let cpu_start = ProcessTime::now();
+
+                prime::client::run_clients(
+                    clients,
+                    prime::database::Database::new(manager),
+                    prime::server::naive,
+                );
+
+                (start, cpu_start)
+            }
+            Version::PrimeSmart => {
+                let clients = prime::client::initialize_clients(&params);
+
+                // run benchmark
+                let start = Instant::now();
+                let cpu_start = ProcessTime::now();
+
+                prime::client::run_clients(
+                    clients,
+                    prime::database::Database::new(manager),
+                    prime::server::writes_before_reads
+                );
+
+                (start, cpu_start)
+            }
+        };
 
         let cpu_stop = ProcessTime::now();
         let stop = Instant::now();

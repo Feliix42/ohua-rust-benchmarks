@@ -5,10 +5,12 @@ use crate::vacation::prime::database::{
 };
 use std::sync::Arc;
 
+pub(crate) type Server = fn(Database, Vec<Query>) -> (Database, Vec<Response>);
+
 /// This server algorithm pretends to know nothing.
 /// It just applies changes to the database system in the order that we requests arrived.
 /// For requests that address the same database, we abort and retry.
-pub(crate) fn server_naive_go(
+pub(crate) fn naive_go(
     mut db: Database,
     batch: Vec<IndexedQuery>,
     responses: Vec<Option<Response>>,
@@ -26,7 +28,7 @@ pub(crate) fn server_naive_go(
     let responses_p = insert_at_index(responses, cresponses);
 
     if redo.not_empty() {
-        server_naive_go(db, redo, responses_p)
+        naive_go(db, redo, responses_p)
     } else {
         (db, responses_p)
     }
@@ -36,16 +38,16 @@ pub(crate) fn server_naive_go(
 // We use the YCSB benchmark to show how those can be responded to and the failed ones are merged
 // with the next set of queries. The failed queries being at the front of the ones worked.
 // This requires showing latency metrics!
-pub(crate) fn server_naive(db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
+pub fn naive(db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
     let (batch_p, responses) = index_queries_and_responses(batch);
-    let (dbp, responsesp) = server_naive_go(db, batch_p, responses);
+    let (dbp, responsesp) = naive_go(db, batch_p, responses);
     let responsespp = unwrap_responses(responsesp);
     (dbp, responsespp)
 }
 
 /// This server algorithm uses batching and performs reordering of queries.
 /// It applies writes before reads, so reads see the most up-to-date data.
-pub(crate) fn server_wr(mut db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
+pub fn writes_before_reads(mut db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
     let mut responses = Vec::with_capacity(batch.len());
     let (reads, writes) = split(batch);
     for write in writes {

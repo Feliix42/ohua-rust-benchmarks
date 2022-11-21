@@ -11,7 +11,10 @@ mod reservation;
 #[derive(Parser, Clone, Debug, EnumString, Display)]
 pub enum Version {
     Original,
-    Prime, // TODO add Ohua
+    PrimeSingleClient,
+    PrimeNaive,
+    PrimeSmart
+    // TODO add Ohua
 }
 
 

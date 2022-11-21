@@ -1,4 +1,4 @@
 pub mod client;
-mod communication;
-mod database;
-mod server;
+pub mod communication;
+pub mod database;
+pub mod server;

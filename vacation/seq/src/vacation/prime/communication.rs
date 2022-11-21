@@ -4,7 +4,7 @@ type CustomerID = u64;
 type AssetID = u64;
 
 #[derive(Clone)]
-pub(crate) enum Query {
+pub enum Query {
     GetCapacity(ReservationType, AssetID),
     GetPrice(ReservationType, AssetID),
     AddPrice(ReservationType, AssetID, u64, u64),
@@ -18,7 +18,7 @@ pub(crate) enum Query {
 }
 
 #[derive(Clone)]
-pub(crate) enum Response {
+pub enum Response {
     Capacity(Option<u64>),
     Price(Option<u64>),
     Bill(Option<u64>),
