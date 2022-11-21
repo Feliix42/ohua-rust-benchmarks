@@ -3,6 +3,7 @@ use crate::vacation::prime::database::{
     compute, index_queries_and_responses, insert_at_index, issue_read, split, unwrap_responses,
     Database, Delta, IndexedQuery, NotEmpty,
 };
+use std::borrow::Borrow;
 use std::sync::Arc;
 
 /// This server algorithm pretends to know nothing.
@@ -53,9 +54,9 @@ pub(crate) fn server_wr(mut db: Database, batch: Vec<Query>) -> (Database, Vec<R
         responses.push(resp);
     }
 
-    let shared = Arc::new(db.clone()); // this is again expensive
+    //let shared = Arc::new(db.clone()); // this is again expensive
     for read in reads {
-        let own_db = shared.clone();
+        let own_db = db.borrow();
         let resp = issue_read(own_db, read);
         responses.push(resp);
     }

@@ -64,7 +64,7 @@ impl Database {
     }
 }
 
-pub(crate) fn issue_read(db: Arc<Database>, q: Query) -> Response {
+pub(crate) fn issue_read(db: &Database, q: Query) -> Response {
     db.issue_read(q)
 }
 
