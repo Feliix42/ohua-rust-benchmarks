@@ -28,10 +28,10 @@ pub(crate) fn server_naive_go(db:Database, batch: Vec<IndexedQuery>, responses: 
 }
 
 pub(crate) fn server_naive(db:Database, batch: Vec<Query>) -> (Manager, Vec<Response>) {
-    let batch_p = index_queries(batch);
-    let l = batch_p.len();
-    let responses = Vec::with_capacity(l);
-    server_naive_go(db, batch_p, responses)
+    let (batch_p, responses) = index_queries_and_responses(batch);
+    let (dbp, responsesp) = server_naive_go(db, batch_p, responses);
+    let responsespp = unwrap_responses(responsesp);
+    (dbp,responsespp)
 }
 
 /// This server algorithm uses batching and performs reordering of queries.

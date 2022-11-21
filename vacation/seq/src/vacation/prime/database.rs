@@ -135,14 +135,28 @@ impl IndexedQuery {
     }
 }
 
-pub(crate) fn index_queries(batch: Vec<Query>) -> Vec<IndexedQuery> {
+pub(crate) fn index_queries_and_responses(batch: Vec<Query>) -> (Vec<IndexedQuery>, Vec<Option<Response>>) {
     let mut indexed = Vec::with_capacity(batch.len());
+    let mut responses = Vec::with_capacity(batch.len());
     let mut idx = 0;
     for query in batch {
         indexed.push(IndexedQuery { query, idx } );
+        responses.push(None);
         idx += 1;
     }
-    indexed
+    (indexed, responses)
+}
+
+pub(crate) fn unwrap_responses(reponses: Vec<Option<Response>>) -> Vec<Response> {
+    responses
+        .iter()
+        .map(|oresp|
+             match oresp {
+                 Some(resp) => resp,
+                 None => panic!("Ivariant broken: the server did not process all queries.")
+             }
+        )
+        .collect()
 }
 
 pub(crate) fn compute(db:Arc<Database>, query: IndexedQuery) -> (IndexedQuery, Option<Response>) {
