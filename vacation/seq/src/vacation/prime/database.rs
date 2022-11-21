@@ -64,8 +64,17 @@ impl Database {
     }
 }
 
-pub(crate) fn issue_read(db: &Database, q: Query) -> Response {
+/// This call consumes the Arc.
+/// The Arc is dropped as soon as the call is done!
+pub(crate) fn issue_read(db: Arc<Database>, q: Query) -> Response {
     db.issue_read(q)
+}
+
+pub(crate) fn seq_arc_unwrap<S, T>(a: Arc<S>, x: T) -> (S, T) {
+    match Arc::<S>::try_unwrap(a) {
+        Ok(ap) => (ap,x),
+        _ => panic!("Failed to unwrap the Arc. Please make sure that the construction of `x` has destructed all previous Arcs.")
+    }
 }
 
 pub(crate) fn split(batch: Vec<Query>) -> (Vec<Query>, Vec<Query>) {
