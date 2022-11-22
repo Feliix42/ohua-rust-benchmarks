@@ -88,7 +88,37 @@ fn main() {
 
                 (start, cpu_start)
             }
-        };
+            Version::OhuaNaive => {
+                let clients = prime::client::initialize_clients(&params);
+
+                // run benchmark
+                let start = Instant::now();
+                let cpu_start = ProcessTime::now();
+
+                prime::client::run_clients(
+                    clients,
+                    prime::database::Database::new(manager),
+                    prime::generated::server::naive,
+                );
+
+                (start, cpu_start)
+            }
+            Version::OhuaSmart => {
+                let clients = prime::client::initialize_clients(&params);
+
+                // run benchmark
+                let start = Instant::now();
+                let cpu_start = ProcessTime::now();
+
+                prime::client::run_clients(
+                    clients,
+                    prime::database::Database::new(manager),
+                    prime::generated::server::writes_before_reads
+                );
+
+                (start, cpu_start)
+            }
+       };
 
         let cpu_stop = ProcessTime::now();
         let stop = Instant::now();

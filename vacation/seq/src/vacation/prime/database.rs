@@ -77,9 +77,10 @@ pub(crate) fn seq_arc_unwrap<S, T>(a: Arc<S>, x: T) -> (S, T) {
     }
 }
 
-pub(crate) fn split(batch: Vec<Query>) -> (Vec<Query>, Vec<Query>) {
+pub(crate) fn split(batch: Vec<Query>) -> (Vec<Query>, Vec<Query>, Vec<Response>) {
     let mut reads = Vec::new();
     let mut writes = Vec::new();
+    let responses = Vec::with_capacity(batch.len());
 
     for q in batch {
         if q.is_read() {
@@ -89,7 +90,7 @@ pub(crate) fn split(batch: Vec<Query>) -> (Vec<Query>, Vec<Query>) {
         }
     }
 
-    (reads, writes)
+    (reads, writes, responses)
 }
 
 /// Code for the naive server version.
@@ -244,4 +245,8 @@ impl<T> NotEmpty for Vec<T> {
     fn not_empty(&self) -> bool {
         !self.is_empty()
     }
+}
+
+pub fn id<T>(t:T) -> T {
+    t
 }

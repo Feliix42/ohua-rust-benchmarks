@@ -1,6 +1,6 @@
 use crate::vacation::prime::communication::{Query, Response};
 use crate::vacation::prime::database::{
-    compute, index_queries_and_responses, insert_at_index, issue_read, seq_arc_unwrap, split,
+    compute, id, index_queries_and_responses, insert_at_index, issue_read, seq_arc_unwrap, split,
     unwrap_responses, Database, Delta, IndexedQuery, NotEmpty,
 };
 use std::sync::Arc;
@@ -11,28 +11,28 @@ pub(crate) type Server = fn(Database, Vec<Query>) -> (Database, Vec<Response>);
 /// It just applies changes to the database system in the order that we requests arrived.
 /// For requests that address the same database, we abort and retry.
 pub(crate) fn naive_go(
-    mut db: Database,
+    package: (Database, Vec<Option<Response>>),
     batch: Vec<IndexedQuery>,
-    responses: Vec<Option<Response>>,
 ) -> (Database, Vec<Option<Response>>) {
-    let dbp : Database = db.clone(); // certainly expensive
+    let (mut db, responses): (Database, Vec<Option<Response>>) = id(package); // FIXME
+    let dbp: Database = db.clone(); // certainly expensive
     let shared: Arc<Database> = Arc::new(dbp);
-    let mut qd : Vec<(IndexedQuery, Option<Response>)> = Vec::new();
+    let mut qd: Vec<(IndexedQuery, Option<Response>)> = Vec::new();
     for query0 in batch {
         let query: IndexedQuery = query0;
-        let owned :Arc<Database> = shared.clone();
+        let owned: Arc<Database> = shared.clone();
         let delta: (IndexedQuery, Option<Response>) = compute(owned, query);
         qd.push(delta);
     }
 
-    let (redo, cresponses): (Vec<IndexedQuery>, Vec<(usize, Response)>)= db.apply_delta(qd);
+    let (redo, cresponses): (Vec<IndexedQuery>, Vec<(usize, Response)>) = db.apply_delta(qd);
     let responses_p: Vec<Option<Response>> = insert_at_index(responses, cresponses);
     let pending: bool = redo.not_empty();
-
+    let packaged: (Database, Vec<Option<Response>>) = (db, responses_p);
     if pending {
-        naive_go(db, redo, responses_p)
+        naive_go(packaged, redo)
     } else {
-        (db, responses_p)
+        packaged
     }
 }
 
@@ -40,18 +40,23 @@ pub(crate) fn naive_go(
 // We use the YCSB benchmark to show how those can be responded to and the failed ones are merged
 // with the next set of queries. The failed queries being at the front of the ones worked.
 // This requires showing latency metrics!
-pub fn naive(db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
-    let (batch_p, responses): (Vec<IndexedQuery>, Vec<Option<Response>>) = index_queries_and_responses(batch);
-    let (dbp, responsesp): (Database, Vec<Option<Response>>) = naive_go(db, batch_p, responses);
+pub fn naive(dbx: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
+    let (batch_p, responses): (Vec<IndexedQuery>, Vec<Option<Response>>) =
+        index_queries_and_responses(batch);
+    let db:Database = id(dbx); // FIXME
+    let state: (Database, Vec<Option<Response>>) = (db, responses);
+    let statep: (Database, Vec<Option<Response>>) = naive_go(state, batch_p);
+    let (dbp, responsesp): (Database, Vec<Option<Response>>) = id(statep); // FIXME 
     let responsespp: Vec<Response> = unwrap_responses(responsesp);
     (dbp, responsespp)
 }
 
+
 /// This server algorithm uses batching and performs reordering of queries.
 /// It applies writes before reads, so reads see the most up-to-date data.
-pub fn writes_before_reads(mut db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
-    let mut responses : Vec<Response> = Vec::with_capacity(batch.len());
-    let (reads, writes): (Vec<Query>, Vec<Query>)= split(batch);
+pub fn writes_before_reads(db0: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
+    let mut db: Database = id(db0); // FIXME
+    let (reads, writes, mut responses): (Vec<Query>, Vec<Query>, Vec<Response>) = split(batch);
     for write0 in writes {
         let write: Query = write0;
         let resp: Response = db.issue_write(write);

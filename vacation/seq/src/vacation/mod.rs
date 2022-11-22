@@ -13,8 +13,9 @@ pub enum Version {
     Original,
     PrimeSingleClient,
     PrimeNaive,
-    PrimeSmart
-    // TODO add Ohua
+    PrimeSmart,
+    OhuaNaive,
+    OhuaSmart
 }
 
 
