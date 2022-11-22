@@ -15,19 +15,21 @@ pub(crate) fn naive_go(
     batch: Vec<IndexedQuery>,
     responses: Vec<Option<Response>>,
 ) -> (Database, Vec<Option<Response>>) {
-    let dbp = db.clone(); // certainly expensive
-    let shared = Arc::new(dbp);
-    let mut qd = Vec::new();
-    for query in batch {
-        let owned = shared.clone();
-        let delta = compute(owned, query);
+    let dbp : Database = db.clone(); // certainly expensive
+    let shared: Arc<Database> = Arc::new(dbp);
+    let mut qd : Vec<(IndexedQuery, Option<Response>)> = Vec::new();
+    for query0 in batch {
+        let query: IndexedQuery = query0;
+        let owned :Arc<Database> = shared.clone();
+        let delta: (IndexedQuery, Option<Response>) = compute(owned, query);
         qd.push(delta);
     }
 
-    let (redo, cresponses) = db.apply_delta(qd);
-    let responses_p = insert_at_index(responses, cresponses);
+    let (redo, cresponses): (Vec<IndexedQuery>, Vec<(usize, Response)>)= db.apply_delta(qd);
+    let responses_p: Vec<Option<Response>> = insert_at_index(responses, cresponses);
+    let pending: bool = redo.not_empty();
 
-    if redo.not_empty() {
+    if pending {
         naive_go(db, redo, responses_p)
     } else {
         (db, responses_p)
@@ -39,29 +41,35 @@ pub(crate) fn naive_go(
 // with the next set of queries. The failed queries being at the front of the ones worked.
 // This requires showing latency metrics!
 pub fn naive(db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
-    let (batch_p, responses) = index_queries_and_responses(batch);
-    let (dbp, responsesp) = naive_go(db, batch_p, responses);
-    let responsespp = unwrap_responses(responsesp);
+    let (batch_p, responses): (Vec<IndexedQuery>, Vec<Option<Response>>) = index_queries_and_responses(batch);
+    let (dbp, responsesp): (Database, Vec<Option<Response>>) = naive_go(db, batch_p, responses);
+    let responsespp: Vec<Response> = unwrap_responses(responsesp);
     (dbp, responsespp)
 }
 
 /// This server algorithm uses batching and performs reordering of queries.
 /// It applies writes before reads, so reads see the most up-to-date data.
 pub fn writes_before_reads(mut db: Database, batch: Vec<Query>) -> (Database, Vec<Response>) {
-    let mut responses = Vec::with_capacity(batch.len());
-    let (reads, writes) = split(batch);
-    for write in writes {
-        let resp = db.issue_write(write);
+    let mut responses : Vec<Response> = Vec::with_capacity(batch.len());
+    let (reads, writes): (Vec<Query>, Vec<Query>)= split(batch);
+    for write0 in writes {
+        let write: Query = write0;
+        let resp: Response = db.issue_write(write);
         responses.push(resp);
     }
 
-    let shared = Arc::new(db);
-    for read in reads {
-        let own_db = shared.clone();
-        let resp = issue_read(own_db, read);
+    let shared: Arc<Database> = Arc::new(db);
+    for read0 in reads {
+        let read: Query = read0;
+        let own_db: Arc<Database> = shared.clone();
+        let resp: Response = issue_read(own_db, read);
         responses.push(resp);
     }
 
+    // TODO check whether this would also work:
+    // let dbp = shared.own();
+    // It should and makes for a much nicer API because it works
+    // based in state threading in Ohua!
     seq_arc_unwrap(shared, responses)
 }
 
