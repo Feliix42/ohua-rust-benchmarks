@@ -92,9 +92,9 @@ fn main() {
             Arg::with_name("runtime")
             .long("runtime")
             .short("rt")
-            .help("The runtime to be executed: seq | stm | dstm | ohua-seq | ohua")
+            .help("The runtime to be executed: Seq | STM | DSTM | OhuaSeq | Ohua")
             .takes_value(true)
-            .default_value("seq")
+            .default_value("Seq")
         )
        .get_matches();
 

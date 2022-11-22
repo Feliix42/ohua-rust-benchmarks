@@ -119,3 +119,7 @@ pub fn generate_stream(
 
     (stream, attacks)
 }
+
+pub fn id<T>(data: T) -> T {
+    data
+}
