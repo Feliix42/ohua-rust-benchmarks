@@ -1,0 +1,15 @@
+[package]
+name = "verification"
+version = "0.1.0"
+edition = "2018"
+authors = ["Sebastian Ertel <sebastian.ertel@barkhauseninstitut.org>"]
+resolver = "2"
+
+
+[dependencies]
+
+[lib]
+
+[package.metadata.kani.options]
+default-unwind = 1 # apparently this option does not work!
+output-format = "Terse"
