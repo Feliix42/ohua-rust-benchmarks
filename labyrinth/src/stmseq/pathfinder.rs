@@ -1,12 +1,15 @@
 #[allow(unused_imports)]
-use crate::types::{at_grid_coordinates, Field, Grid, Maze, Path, Point};
+use crate::stmseq::types::{at_grid_coordinates, Field, Grid, Maze, Path};
+use crate::types::Point;
 #[cfg(feature = "transactional")]
 use crate::stm_grid::StmGrid;
 #[cfg(all(feature = "transactional", feature = "naive"))]
 use stm::{Transaction, StmResult};
 #[cfg(all(feature = "transactional", feature = "naive"))]
 use crate::types::at_stm_grid_coordinates;
-use std::collections::{HashMap, LinkedList};
+use std::collections::LinkedList;
+#[cfg(feature = "naive")]
+use std::collections::HashMap;
 
 /// This HashMap contains the information on how to get back from the end point to the start.
 /// Each point is assigned the previous point in the path to allow easy backtracking.

@@ -1,4 +1,5 @@
-use crate::types::*;
+use crate::types::Point;
+use crate::stmseq::types::*;
 use stm::{StmError, StmResult, TVar, Transaction};
 
 /// The grid the maze is set up in. Contains for every field the information about its state.

@@ -1,10 +1,6 @@
 pub mod parser;
-pub mod pathfinder;
 pub mod types;
+pub mod stmseq;
 
-#[cfg(feature = "transactional")]
-pub mod stm_grid;
-
-#[cfg(not(feature = "transactional"))]
-pub mod grid;
+pub use stmseq::*;
 
