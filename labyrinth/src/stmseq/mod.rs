@@ -6,4 +6,3 @@ pub mod stm_grid;
 
 #[cfg(not(feature = "transactional"))]
 pub mod grid;
-

@@ -48,3 +48,16 @@ pub fn path_available(grid: &Grid, path: &Path) -> bool {
 
     true
 }
+
+pub fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>) -> Maze {
+    // search for a path for all point pairs (sort out any pairs w/o path)
+    for pair in to_map.drain(..) {
+        if let Some(path) = super::pathfinder::find_path(pair.clone(), &maze.grid) {
+            update_maze(&mut maze, path);
+        } else {
+            maze.unmappable_paths.push(pair);
+        }
+    }
+
+    maze
+}

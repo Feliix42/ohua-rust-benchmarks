@@ -4,9 +4,7 @@ static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 use clap::{App, Arg};
 use labyrinth::grid;
 use labyrinth::parser;
-use labyrinth::pathfinder;
 use labyrinth::stmseq::types::Maze;
-use labyrinth::types::Point;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
@@ -68,7 +66,7 @@ fn main() {
         }
 
         let start = PreciseTime::now();
-        let filled_maze = route_paths(maze, paths.clone());
+        let filled_maze = grid::route_paths(maze, paths.clone());
         let end = PreciseTime::now();
 
         if !json_dump {
@@ -128,15 +126,3 @@ fn main() {
     }
 }
 
-fn route_paths(mut maze: Maze, mut to_map: Vec<(Point, Point)>) -> Maze {
-    // search for a path for all point pairs (sort out any pairs w/o path)
-    for pair in to_map.drain(..) {
-        if let Some(path) = pathfinder::find_path(pair.clone(), &maze.grid) {
-            grid::update_maze(&mut maze, path);
-        } else {
-            maze.unmappable_paths.push(pair);
-        }
-    }
-
-    maze
-}
