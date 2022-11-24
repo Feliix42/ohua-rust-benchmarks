@@ -22,7 +22,6 @@ impl fmt::Display for Point {
 
 /// The central maze data structure
 #[derive(Debug)]
-#[cfg_attr(feature = "ohua", derive(Clone))]
 #[cfg(not(feature = "transactional"))]
 pub struct Maze {
     /// The Grid we are working on

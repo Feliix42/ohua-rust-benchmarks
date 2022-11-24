@@ -31,58 +31,6 @@ impl PointStatus {
 }
 
 
-#[cfg(all(feature = "ohua", not(feature = "future")))]
-pub fn find_path(maze: Maze, points: (Point, Point)) -> Option<Path> {
-    compile_error!("This feature set should no longer be used");
-}
-
-#[cfg(all(feature = "ohua", feature = "future"))]
-pub fn find_path(maze: &Maze, points: (Point, Point)) -> Option<Path> {
-    // TODO: Add costs?
-    let (start, end) = points;
-
-    // check if the route is still available
-    if at_grid_coordinates(&maze.grid, &start) != &Field::Free {
-        return None;
-    }
-
-    let mut point_status = vec![vec![vec![PointStatus::Unvisited; maze.grid[0][0].len()]; maze.grid[0].len()]; maze.grid.len()];
-    let mut unseen_points = LinkedList::new();
-
-    // set the start point
-    point_status[start.x][start.y][start.z] = PointStatus::BacktrackInfo(None);
-    unseen_points.push_back(start);
-
-    while !unseen_points.is_empty() {
-        let current = unseen_points.pop_front().unwrap();
-
-        // stop when reacing the end node
-        if current == end {
-            return Some(generate_path(current, &point_status));
-        }
-
-        // get a list of all possible successors
-        for child in get_successors(&current, &maze.grid) {
-            // sort out anything that has been seen or is blocked
-            match at_grid_coordinates(&maze.grid, &child) {
-                &Field::Used => continue,
-                &Field::Wall => continue,
-                &Field::Free => (),
-            }
-
-            if point_status[child.x][child.y][child.z].unvisited() {
-                point_status[child.x][child.y][child.z] = PointStatus::BacktrackInfo(Some(current));
-                unseen_points.push_back(child);
-            }
-        }
-    }
-
-    // All points have been processed and no path was found
-    None
-}
-
-
-
 #[cfg(all(feature = "transactional", feature = "naive"))]
 pub fn find_path(points: (Point, Point), grid: &StmGrid, transaction: &mut Transaction) -> StmResult<Option<Path>> {
     compile_error!("Needs to be adjusted to the new `enqueued` Data Structure used in the other `find_path` implementations");
@@ -136,7 +84,7 @@ pub fn find_path(points: (Point, Point), grid: &StmGrid, transaction: &mut Trans
 }
 
 
-#[cfg(all(not(feature = "ohua"), not(feature = "naive")))]
+#[cfg(not(feature = "naive"))]
 pub fn find_path(points: (Point, Point), grid: &Grid) -> Option<Path> {
     // TODO: Add costs?
     let (start, end) = points;
