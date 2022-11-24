@@ -161,7 +161,7 @@ impl<T: RngCore + SeedableRng> Program for MkReservation<T> {
             },
             Query::Insert(customer_id) => match self.max_ids[ReservationType::Car as usize] {
                 Some(id) => Some(Query::Reserve(ReservationType::Car, customer_id, id)),
-                _ => panic!("Impossible: we never issued any read query."),
+                _ => None, //panic!("Impossible: we never issued any read query."),
             },
             Query::Reserve(t, customer_id, _) =>
             // note: we do not care about the result of the reservation.
@@ -170,12 +170,12 @@ impl<T: RngCore + SeedableRng> Program for MkReservation<T> {
                 match t {
                     ReservationType::Car => match self.max_ids[ReservationType::Flight as usize] {
                         Some(id) => Some(Query::Reserve(ReservationType::Flight, customer_id, id)),
-                        _ => panic!("Impossible: we never issued any read query."),
+                        _ => None, //panic!("Impossible: we never issued any read query."),
                     },
                     ReservationType::Flight => match self.max_ids[ReservationType::Flight as usize]
                     {
                         Some(id) => Some(Query::Reserve(ReservationType::Room, customer_id, id)),
-                        _ => panic!("Impossible: we never issued any read query."),
+                        _ => None, //panic!("Impossible: we never issued any read query."),
                     },
                     ReservationType::Room => {
                         // done
