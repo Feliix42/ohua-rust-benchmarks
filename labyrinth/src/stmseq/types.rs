@@ -1,4 +1,4 @@
-use crate::types::Point;
+use crate::types::*;
 
 #[cfg(feature = "transactional")]
 pub use crate::stm_grid::*;
@@ -20,6 +20,7 @@ pub struct Maze {
     /// Paths that could not be mapped
     pub unmappable_paths: Vec<(Point, Point)>,
 }
+
 
 #[derive(Debug)]
 #[cfg(feature = "transactional")]
@@ -97,12 +98,4 @@ pub struct Path {
     pub end: Point,
     /// All points to be visited from start to end
     pub path: Vec<Point>,
-}
-
-/// A single field. Can be either free or used or it may be a wall.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Field {
-    Free,
-    Used,
-    Wall,
 }

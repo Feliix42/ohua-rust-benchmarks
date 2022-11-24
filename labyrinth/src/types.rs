@@ -13,3 +13,11 @@ impl fmt::Display for Point {
         write!(f, "{}x{}x{}", self.x, self.y, self.z)
     }
 }
+
+/// A single field. Can be either free or used or it may be a wall.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Field {
+    Free,
+    Used,
+    Wall,
+}

@@ -7,6 +7,8 @@ pub use stmseq::*;
 
 #[cfg(kani)]
 mod verification {
+    use super::*;
+    use crate::types::Point;
     // TODO: allow any status of the labyrinth (filled, ...)
 
     #[kani::proof]
@@ -39,11 +41,12 @@ mod verification {
             paths.push((start, end));
         }
 
-    let (filled_maze_ohua, _) = ohua::original::run(dimensions, paths.clone(), 200);
+    let p2 = paths.clone().into_iter().map(|x| Some(x)).collect();
+    let (filled_maze_ohua, _) = ohua::original::run(dimensions, p2, 200);
 
     let maze = stmseq::types::Maze::new(dimensions.clone(), None);
     let filled_maze_seq = stmseq::grid::route_paths(maze, paths);
 
-    assert!(filled_maze_ohua == filled_maze_seq);
+    assert!(filled_maze_ohua.grid == filled_maze_seq.grid);
     }
 }

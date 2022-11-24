@@ -1,5 +1,5 @@
 use crate::ohua::grid::*;
-use crate::types::Point;
+use crate::types::*;
 use std::collections::LinkedList;
 use std::fmt;
 use std::sync::Arc;
@@ -101,14 +101,6 @@ pub struct Path {
     pub end: Point,
     /// All points to be visited from start to end
     pub path: Vec<Point>,
-}
-
-/// A single field. Can be either free or used or it may be a wall.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Field {
-    Free,
-    Used,
-    Wall,
 }
 
 pub fn find_path(maze: Arc<Maze>, pair: Option<(Point, Point)>) -> Option<Path> {

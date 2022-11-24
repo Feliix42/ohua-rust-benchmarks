@@ -1,4 +1,4 @@
-use crate::types::Point;
+use crate::types::*;
 use crate::stmseq::types::*;
 use stm::{StmError, StmResult, TVar, Transaction};
 

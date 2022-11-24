@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
-use crate::stmseq::types::{at_grid_coordinates, Field, Grid, Maze, Path};
-use crate::types::Point;
+use crate::stmseq::types::{at_grid_coordinates, Grid, Maze, Path};
+use crate::types::*;
 #[cfg(feature = "transactional")]
 use crate::stm_grid::StmGrid;
 #[cfg(all(feature = "transactional", feature = "naive"))]
