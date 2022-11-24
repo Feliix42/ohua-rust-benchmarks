@@ -13,3 +13,6 @@ stm-datastructures = { git = "https://github.com/feliix42/stm-datastructures" }
 
 clap = { version = "3.2", features = [ "derive" ] }
 cpu-time = "1.0"
+
+strum = "0.24"
+strum_macros = "0.24"

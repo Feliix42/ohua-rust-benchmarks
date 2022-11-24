@@ -7,7 +7,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum ReservationType {
+pub enum ReservationType {
     Car,
     Flight,
     Room,

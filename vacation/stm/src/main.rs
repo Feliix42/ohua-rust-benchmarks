@@ -7,7 +7,7 @@ use std::io::Write;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
-use vacation::{client::Client, manager::Manager, Parameters};
+use vacation::{client::Client, manager::Manager, prime, Parameters, Version};
 
 mod vacation;
 
@@ -21,15 +21,35 @@ fn main() {
         // setup
         let mut rng = ChaCha12Rng::seed_from_u64(0);
         let manager = Manager::initialize(&mut rng, params.num_relations, params.clients * 32);
-        let mgr = Arc::new(manager);
 
-        let clients = vacation::initialize_clients(mgr.clone(), &params);
+        let (start, cpu_start) = match params.version {
+            Version::Naive => {
+                let mgr = Arc::new(manager);
+                let clients = vacation::initialize_clients(mgr.clone(), &params);
 
-        // run benchmark
-        let start = Instant::now();
-        let cpu_start = ProcessTime::now();
+                // run benchmark
+                let start = Instant::now();
+                let cpu_start = ProcessTime::now();
+                run(clients);
 
-        run(clients);
+                (start, cpu_start)
+            }
+            Version::Prime => {
+                let clients = prime::client::initialize_clients(&params);
+
+                // run benchmark
+                let start = Instant::now();
+                let cpu_start = ProcessTime::now();
+
+                prime::client::run_clients(
+                    clients,
+                    prime::database::Database::new(manager),
+                    //prime::server::writes_before_reads,
+                );
+
+                (start, cpu_start)
+            }
+        };
 
         let cpu_stop = ProcessTime::now();
         let stop = Instant::now();
@@ -38,14 +58,15 @@ fn main() {
         cpu_results.push(cpu_stop.duration_since(cpu_start).as_millis());
 
         // check results
-        vacation::check_tables(mgr);
+        //vacation::check_tables(mgr);
     }
 
     if params.json {
         create_dir_all(&params.outdir).unwrap();
         let filename = format!(
-            "{}/stm-c{}-n{}-q{}-u{}-r{}-t{}-runs{}_log.json",
+            "{}/stm-{}-c{}-n{}-q{}-u{}-r{}-t{}-runs{}_log.json",
             params.outdir,
+            params.version,
             params.clients,
             params.num_queries,
             params.percentage_queried,
@@ -60,6 +81,7 @@ fn main() {
             "{{
         \"application\": \"vacation\",
         \"algorithm\": \"rust-stm\",
+        \"variant\": \"{ver}\",
         \"threadcount\": {clients},
         \"clients\": {clients},
         \"num_queries\": {queries},
@@ -71,6 +93,7 @@ fn main() {
         \"cpu_time\": {cpu:?},
         \"results\": {res:?}
         }}",
+            ver = params.version,
             clients = params.clients,
             queries = params.num_queries,
             queried = params.percentage_queried,

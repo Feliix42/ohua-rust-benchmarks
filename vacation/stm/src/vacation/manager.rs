@@ -45,9 +45,6 @@ impl Manager {
                 let num = (rng.gen_range(0..5) + 1) * 100;
                 let price = (rng.gen_range(0..5) * 10) + 50;
                 match tab {
-                    //0 => atomically(|trans| self.add_car(*id, num, price, trans)),
-                    //1 => atomically(|trans| self.add_flight(*id, num, price, trans)),
-                    //2 => atomically(|trans| self.add_room(*id, num, price, trans)),
                     0 => cars.insert(*id, TVar::new(Reservation::new(*id, num, price))),
                     1 => flights.insert(*id, TVar::new(Reservation::new(*id, num, price))),
                     2 => rooms.insert(*id, TVar::new(Reservation::new(*id, num, price))),

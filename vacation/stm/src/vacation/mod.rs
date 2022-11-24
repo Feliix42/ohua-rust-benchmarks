@@ -3,12 +3,21 @@ use client::Client;
 use manager::Manager;
 use rand_chacha::ChaCha12Rng;
 use std::sync::Arc;
+use strum_macros::{Display, EnumString};
 
 mod action;
 pub mod client;
 mod customer;
 pub mod manager;
 mod reservation;
+pub mod prime;
+
+#[derive(Parser, Clone, Debug, EnumString, Display)]
+pub enum Version {
+    Naive,
+    Prime
+}
+
 
 #[derive(Parser, Clone, Debug)]
 #[clap(author = "Felix Suchert, Sebastian Ertel", version = "1.0", about = "A Rust port ot the vacation benchmark from the STAMP collection", long_about = None)]
@@ -39,6 +48,9 @@ pub struct Parameters {
     /// Number of transactions
     #[clap(long = "num_tx", short = 't', default_value_t = 1 << 26)]
     pub num_transactions: usize,
+    /// Version of the benchmark
+    #[clap(long = "bench_version", short = 'b', default_value_t = Version::Naive)]
+    pub version: Version,
 }
 
 pub fn initialize_clients(manager: Arc<Manager>, params: &Parameters) -> Vec<Client<ChaCha12Rng>> {
@@ -61,6 +73,3 @@ pub fn initialize_clients(manager: Arc<Manager>, params: &Parameters) -> Vec<Cli
     clients
 }
 
-pub fn check_tables(_manager: Arc<Manager>) {
-    // TODO(feliix42): implement
-}
