@@ -399,3 +399,11 @@ impl InternalState {
         res
     }
 }
+
+pub(crate) fn seq_arc_unwrap<S, T>(a: Arc<S>, x: T) -> (S, T) {
+    match Arc::<S>::try_unwrap(a) {
+        Ok(ap) => (ap,x),
+        _ => panic!("Failed to unwrap the Arc. Please make sure that the construction of `x` has destructed all previous Arcs.")
+    }
+}
+

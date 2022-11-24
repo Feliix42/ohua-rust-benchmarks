@@ -10,8 +10,7 @@ fn run(mut state: Netlist, worklist: Vec<Vec<(usize, usize)>>, temperature: f64)
     // challenge: I wish we would not have to do so.
     // But in order to support that, we would need to be incorporate immutable borrows into
     // our subset of the language. Future work!
-    let n2 : Netlist = state.clone();
-    let nro : Arc<Netlist> = Arc::new(n2);
+    let nro : Arc<Netlist> = Arc::new(state);
     for item0 in worklist {
         let item : Vec<(usize,usize)> = item0;
         //let n2: Netlist = state.clone();
@@ -28,13 +27,15 @@ fn run(mut state: Netlist, worklist: Vec<Vec<(usize, usize)>>, temperature: f64)
         rs.push(switch_info);
     }
 
-    let remaining_work: Vec<Vec<(usize, usize)>> = state.update(rs);
-    let keep_going: bool = state.get_keep_going();
+    let (mut nl, res): (Netlist, Vec<Vec<(MoveDecision, (usize, usize))>>) = seq_arc_unwrap(nro, rs);
+
+    let remaining_work: Vec<Vec<(usize, usize)>> = nl.update(res);
+    let keep_going: bool = nl.get_keep_going();
 
     if keep_going {
-        run(state, remaining_work, new_temp)
+        run(nl, remaining_work, new_temp)
     } else {
-        state
+        nl
     }
 }
 
