@@ -1,4 +1,5 @@
-use crate::benchs::*;
+use crate::ohua::benchs::*;
+use crate::types::Point;
 
 /// The grid the maze is set up in. Contains for every field the information about its state.
 pub type Grid = Vec<Vec<Vec<Field>>>;

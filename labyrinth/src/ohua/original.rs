@@ -1,4 +1,5 @@
-use crate::benchs::*;
+use crate::ohua::benchs::*;
+use crate::types::Point;
 use std::sync::Arc;
 
 // this is the most efficient form that I can think of
@@ -32,5 +33,5 @@ fn fill(mut maze: Maze, pairs: Vec<OPoint>, its: u32) -> Maze {
 pub fn run(dimensions: Point, pairs: Vec<Option<(Point, Point)>>, max_it: u32) -> (Maze, usize) {
     let maze: Maze = Maze::init(dimensions);
     let new_maze: Maze = fill(maze, pairs, max_it);
-    (new_maze, 42)
+    (new_maze, 0)
 }

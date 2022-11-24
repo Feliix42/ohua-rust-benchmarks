@@ -2,20 +2,15 @@
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 use clap::{App, Arg};
-// use futures::future::{Future, ok, lazy};
 use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
-//use tokio::runtime::{Builder, Runtime};
 
-mod benchs;
-mod generated;
-mod grid;
-mod original;
-mod parser;
-
+use labyrinth::parser;
+use labyrinth::ohua::generated;
+use labyrinth::ohua::original;
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -78,8 +73,6 @@ fn main() {
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
     let sequential = matches.is_present("sequential");
-    let ndp = matches.is_present("no_data_par");
-    let nam = matches.is_present("no_amorphous");
 
     // #runs
     let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();

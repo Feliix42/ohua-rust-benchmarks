@@ -1,4 +1,5 @@
-use crate::grid::*;
+use crate::ohua::grid::*;
+use crate::types::Point;
 use std::collections::LinkedList;
 use std::fmt;
 use std::sync::Arc;
@@ -89,20 +90,6 @@ pub fn path_available(grid: &Grid, path: &Path) -> bool {
     }
 
     true
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-/// A point in the 3D maze
-pub struct Point {
-    pub x: usize,
-    pub y: usize,
-    pub z: usize,
-}
-
-impl fmt::Display for Point {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}x{}x{}", self.x, self.y, self.z)
-    }
 }
 
 /// A single path in the maze.
@@ -246,10 +233,10 @@ pub struct Unmapped {
 impl Unmapped {
 
     pub fn filter_mapped(&mut self) {
-        self.rs = self.rs.into_iter().filter(Option::is_some).collect();
+        self.rs.retain(Option::is_some);
     }
 
-    pub fn calculate_done(self, iterations_finished: u32) -> (u32, bool, Vec<OPoint>) {
+    pub fn calculate_done(mut self, iterations_finished: u32) -> (u32, bool, Vec<OPoint>) {
         self.filter_mapped();
         let should_cont = self.rs.iter().any(Option::is_some);
         (iterations_finished + 1, should_cont, self.rs)
