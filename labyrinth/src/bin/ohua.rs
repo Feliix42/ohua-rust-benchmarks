@@ -6,11 +6,20 @@ use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::str::FromStr;
+use strum_macros::{Display, EnumString};
 use time::PreciseTime;
 
 use labyrinth::parser;
 use labyrinth::ohua::generated;
-use labyrinth::ohua::original;
+use labyrinth::ohua::{less_arc, original};
+
+#[derive(Display, EnumString)]
+enum Runtime {
+    OhuaSeq,
+    Ohua,
+    OhuaZeroCloneSeq,
+    OhuaZeroClone
+}
 
 fn main() {
     let matches = App::new("Ohua Labyrinth Benchmark")
@@ -62,22 +71,24 @@ fn main() {
                 .default_value("4")
         )
         .arg(
-            Arg::with_name("sequential")
-                .long("seq")
-                .short("s")
-                .help("Run the sequential ohua algorithm (bare)")
+            Arg::with_name("runtime")
+                .long("runtime")
+                .short("rt")
+                .help("The Runtime to be executed: OhuaSeq | Ohua (default) | OhuaZeroCloneSeq | OhuaZeroClone")
+                .takes_value(true)
+                .default_value("Ohua")
         )
         .get_matches();
 
     // JSON Dump?
     let json_dump = matches.is_present("json");
     let out_dir = matches.value_of("outdir").unwrap();
-    let sequential = matches.is_present("sequential");
 
     // #runs
     let runs = usize::from_str(matches.value_of("runs").unwrap()).unwrap();
 
     // runtime parameters
+    let rt = Runtime::from_str(matches.value_of("runtime").unwrap()).expect("Could not parse runtime");
     //let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
     //let threadcount = usize::from_str(matches.value_of("threads").unwrap()).unwrap();
 
@@ -108,10 +119,11 @@ fn main() {
         //#[ohua]
         //let (filled_maze, rollbacks) =
         //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
-        let (filled_maze, retries) = if sequential {
-            original::run(dims2, paths2, 200)
-        } else {
-            generated::original::run(dims2, paths2, 200)
+        let (filled_maze, retries) = match rt {
+            Runtime::OhuaSeq => original::run(dims2, paths2, 200),
+            Runtime::Ohua => generated::original::run(dims2, paths2, 200),
+            Runtime::OhuaZeroCloneSeq => less_arc::run(dims2, paths2, 200),
+            Runtime::OhuaZeroClone => generated::less_arc::run(dims2, paths2, 200),
         };
 
         let cpu_end = ProcessTime::now();
@@ -140,8 +152,9 @@ fn main() {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
 //            "{}/new_ohua_futures-{}-p{}-freq{}-t{}-r{}_log.json",
-            "{}/new_ohua_futures-{}-p{}-freq{}_log.json",
+            "{}/ohua-{}-{}-p{}-freq{}_log.json",
             out_dir,
+            rt,
             dimensions,
             paths.len(),
 //            updates,
@@ -153,6 +166,7 @@ fn main() {
             "{{
     \"algorithm\": \"ohua-futures\",
     \"configuration\": \"{conf}\",
+    \"runtime\": \"{r}\",
     \"paths\": {paths},
     \"runs\": {runs},
     \"sequential\": {seq},
@@ -177,6 +191,7 @@ fn main() {
 //    \"results\": {res:?}
 //}}",
             conf = dimensions,
+            r = rt,
             paths = paths.len(),
             runs = runs,
             seq = sequential,

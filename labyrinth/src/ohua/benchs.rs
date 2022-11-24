@@ -65,6 +65,16 @@ impl Maze {
         }
     }
 
+    pub fn update_paths(&mut self, paths: Vec<Option<Path>>) -> Unmapped {
+        let mut u = Unmapped::default();
+
+        for p in paths {
+            u.push(self.update(p));
+        }
+
+        u
+    }
+
     pub fn is_valid(&self) -> bool {
         let mut ctrl_grid = self.grid.clone();
 
@@ -239,3 +249,9 @@ impl Unmapped {
     }
 }
 
+pub fn seq_arc_unwrap<S, T>(a: Arc<S>, x: T) -> (S, T) {
+    match Arc::<S>::try_unwrap(a) {
+        Ok(ap) => (ap,x),
+        _ => panic!("Failed to unwrap the Arc. Please make sure that the construction of `x` has destructed all previous Arcs.")
+    }
+}

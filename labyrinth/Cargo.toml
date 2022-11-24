@@ -6,6 +6,8 @@ edition = "2018"
 
 [dependencies]
 clap = "2.32"
+strum = "0.24"
+strum_macros = "0.24"
 
 # use patched version of rust-stm
 # stm = { git = "https://github.com/feliix42/rust-stm", branch = "retry-count", optional = true }
