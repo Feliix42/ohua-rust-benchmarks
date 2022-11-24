@@ -66,9 +66,23 @@ fn unrolled_fun(x0:u32, x1:u32) -> u32 {
 mod test {
 
     #[test]
-    fn check_last() {
+    fn check_seq() {
         let xs = vec![1, 2];
         let z = crate::verify::seq_fun(xs);
+        assert!(z == 3)
+    }
+
+    #[test]
+    fn check_threads() {
+        let xs = vec![1, 2];
+        let z = crate::verify::threads_fun(xs);
+        assert!(z == 3 || z == 2)
+    }
+
+    #[test]
+    fn check_ohua() {
+        let xs = vec![1, 2];
+        let z = crate::verify::ohua_fun(xs);
         assert!(z == 3)
     }
 
@@ -93,11 +107,15 @@ mod verification {
     #[kani::unwind(5)]
     #[kani::proof]
     fn check_last_ohua() {
+        let (x0, x1) = (kani::any(), kani::any());
+        /*
         let x0 = kani::any();
         let x1 = kani::any();
         let mut xs = Vec::new();
         xs.push(x0);
         xs.push(x1);
+         */
+        let xs = vec![x0,x1];
         let z = crate::verify::ohua_fun(xs);
         assert!(z == (x1 + 1));
     }
