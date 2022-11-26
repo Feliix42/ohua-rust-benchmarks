@@ -76,6 +76,8 @@ fn main() {
                 .long("threadcount")
                 .short("tc")
                 .help("Thread count")
+                .takes_value(true)
+                .default_value("1")
         )
         .get_matches();
 
