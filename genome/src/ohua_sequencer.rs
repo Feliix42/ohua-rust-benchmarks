@@ -1,7 +1,32 @@
 use crate::segments::Segments;
 use crate::Nucleotide;
-use std::collections::HashSet;
+use itertools::Itertools;
 use std::sync::Arc;
+
+pub struct SequencerData {
+    pub data: Vec<SequencerItem>,
+}
+
+impl SequencerData {
+    pub fn get_indices(&self) -> Vec<usize> {
+        (0..self.data.len()).collect()
+    }
+
+    pub fn update(&mut self, updates: Vec<Option<(usize, usize)>>, overlap: usize) {
+        for u in updates.iter() {
+            if let Some((first, last)) = u {
+                if self.data[*first].next.is_some() || self.data[*last].prev.is_some() {
+                    eprintln!("Encountered invalid match!");
+                    continue;
+                }
+
+                self.data[*first].next = Some(*last);
+                self.data[*last].prev = Some(*first);
+                self.data[*last].overlap_with_prev = overlap;
+            }
+        }
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SequencerItem {
@@ -22,33 +47,41 @@ impl From<Vec<Nucleotide>> for SequencerItem {
     }
 }
 
-pub fn deduplicate(mut segments: Segments) -> Vec<SequencerItem> {
-    let mut tmp: HashSet<Vec<Nucleotide>> = segments.contents.drain(..).collect();
+pub fn deduplicate(segments: Segments) -> SequencerData {
+    let data = segments
+        .contents
+        .into_iter()
+        .unique() // itertools magic for deduplication: fast because of the enums representation in memory as u8
+        .map(SequencerItem::from)
+        .collect();
 
-    tmp.drain().map(SequencerItem::from).collect()
+    SequencerData { data }
 }
 
 /// Searches a segment match for a single sequencer item with a given overlap.
-pub fn search_match(segments: Arc<Vec<SequencerItem>>, overlap: usize, elem: usize) -> Option<(usize, usize)> {
-    let current = &segments[elem];
+pub fn search_match(
+    segments: Arc<SequencerData>,
+    overlap: usize,
+    elem: usize,
+) -> Option<(usize, usize)> {
+    let current = &segments.data[elem];
     let segments_length = current.segment.len();
 
     if current.prev.is_none() {
         let slice = &current.segment[0..overlap];
 
         // go over all items in Vec and test whether we can append our `current` to the item. If so, stop
-        for idx in 0..segments.len() {
-            let item = &segments[idx];
+        for idx in 0..segments.data.len() {
+            let item = &segments.data[idx];
 
             // skip the current item when it already has an appended segment
             if item.next.is_some() {
                 continue;
             }
 
-            let cur_slice =
-                &item.segment[(segments_length - overlap)..segments_length];
+            let cur_slice = &item.segment[(segments_length - overlap)..segments_length];
             if slice == cur_slice {
-                return Some((idx, elem))
+                return Some((idx, elem));
             }
         }
     }
@@ -56,7 +89,11 @@ pub fn search_match(segments: Arc<Vec<SequencerItem>>, overlap: usize, elem: usi
     None
 }
 
-pub fn reassemble(unique_segments: Arc<Vec<SequencerItem>>) -> Vec<Nucleotide> {
+pub fn reassemble(
+    SequencerData {
+        data: unique_segments,
+    }: SequencerData,
+) -> Vec<Nucleotide> {
     if cfg!(feature = "verify") {
         println!("[TEST] checking segment links");
         let mut forward_links = 0;
@@ -97,31 +134,17 @@ pub fn reassemble(unique_segments: Arc<Vec<SequencerItem>>) -> Vec<Nucleotide> {
     reconstructed_sequence
 }
 
-pub fn update_sequence(mut seq_arc: Arc<Vec<SequencerItem>>, updates: Arc<Vec<Option<(usize, usize)>>>, overlap: usize) -> Arc<Vec<SequencerItem>> {
-    //use std::borrow::Borrow;
-    //let bla: &Vec<SequencerItem> = seq_arc.borrow();
-    //let mut seq: Vec<SequencerItem> = bla.clone();
+pub fn get_overlap(cur: usize) -> (usize, usize) {
+    (cur, cur - 1)
+}
 
-    // FIXME WOW!
-    // What is this?!
-    // I hope that this will just go away when this becomes a stateful function.
-    unsafe {
-        let mut seq: &mut Vec<SequencerItem> = Arc::get_mut_unchecked(&mut seq_arc);
+pub fn remaining_computations(overlap: usize) -> bool {
+    overlap > 0
+}
 
-        for u in updates.iter() {
-            if let Some((first, last)) = u {
-                if seq[*first].next.is_some() || seq[*last].prev.is_some() {
-                    eprintln!("Encountered invalid match!");
-                    continue;
-                }
-
-                seq[*first].next = Some(*last);
-                seq[*last].prev = Some(*first);
-                seq[*last].overlap_with_prev = overlap;
-            }
-        }
+pub fn seq_arc_unwrap<S, T>(a: Arc<S>, x: T) -> (S, T) {
+    match Arc::<S>::try_unwrap(a) {
+        Ok(ap) => (ap,x),
+        _ => panic!("Failed to unwrap the Arc. Please make sure that the construction of `x` has destructed all previous Arcs.")
     }
-
-    // Arc::new(seq)
-    seq_arc
 }

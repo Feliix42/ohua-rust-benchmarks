@@ -1,11 +1,7 @@
-#![feature(proc_macro_hygiene)]
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
 use genome::gene::Gene;
-use genome::ohua_sequencer::SequencerItem;
 use genome::segments::Segments;
-use ohua_codegen::ohua;
-use ohua_runtime;
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaCha12Rng;
 use std::fs::{create_dir_all, File};
@@ -13,12 +9,13 @@ use std::io::Write;
 use std::str::FromStr;
 use time::PreciseTime;
 
+
 fn main() {
     let matches = App::new("Ohua genome benchmark")
         .version("1.0")
         .author("Felix Suchert <dev@felixsuchert.de>")
         .about(
-            "A Rust port of the genome benchmark from the STAMP collection, implemented in Ohua.",
+            "A Rust port of the genome benchmark from the STAMP collection, implemented in Ohua with futures and state partitioning.",
         )
         .arg(
             Arg::with_name("genelength")
@@ -59,12 +56,25 @@ fn main() {
                 .help("Dump results as JSON file."),
         )
         .arg(
+            Arg::with_name("sequential")
+                .long("sequential")
+                .help("Run the sequential version of the ohua algorithm"),
+        )
+        .arg(
             Arg::with_name("outdir")
                 .long("outdir")
                 .short("o")
                 .help("Sets the output directory for JSON dumps")
                 .takes_value(true)
                 .default_value("results"),
+        )
+        .arg(
+            Arg::with_name("threads")
+            .long("threads")
+            .short("t")
+            .help("The number of threads to use ")
+            .takes_value(true)
+            .default_value("4")
         )
         .get_matches();
 
@@ -80,7 +90,11 @@ fn main() {
     let runs =
         usize::from_str(matches.value_of("runs").unwrap()).expect("Could not parse number of runs");
     let json_dump = matches.is_present("json");
+    let sequential = matches.is_present("sequential");
     let out_dir = matches.value_of("outdir").unwrap();
+
+    let threadcount = usize::from_str(matches.value_of("threads").unwrap())
+        .expect("Could not parse number of threads");
 
     // generate the gene and its segments
     let mut rng = ChaCha12Rng::seed_from_u64(0);
@@ -107,8 +121,11 @@ fn main() {
         let cpu_start = ProcessTime::now();
 
         // run the algorithm
-        #[ohua]
-        let result = algos::sequencer(input_data, initial_overlap);
+        let result = if sequential {
+            genome::ohua::sequencer(input_data, initial_overlap)
+        } else {
+            genome::generated::ohua::sequencer(input_data, initial_overlap)
+        };
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -132,13 +149,14 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/ohua-g{}-n{}-s{}-r{}_log.json",
-            out_dir, gene_length, min_number, segment_length, runs
+            "{}/ohua-g{}-n{}-s{}-t{}-r{}_log.json",
+            out_dir, gene_length, min_number, segment_length, threadcount, runs
         );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
     \"algorithm\": \"ohua\",
+    \"threadcount\": {threadcount},
     \"gene_length\": {gene_len},
     \"min_segment_count\": {min_segment},
     \"segment_length\": {seg_len},
@@ -146,6 +164,7 @@ fn main() {
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
+            threadcount = threadcount,
             gene_len = gene_length,
             min_segment = min_number,
             seg_len = segment_length,
@@ -160,20 +179,10 @@ fn main() {
         println!("    Length of the generated gene: {}", gene_length);
         println!("    Minimal number of segments:   {}", min_number);
         println!("    Length of a gene segment:     {}", segment_length);
+        println!("    Threads used:                 {}", threadcount);
         println!("    Runs:                         {}", runs);
         println!("\nCPU-time used (ms): {:?}", cpu_results);
         println!("Runtime in ms: {:?}", results);
     }
 }
 
-fn generate_iterator_indices(seq: Vec<SequencerItem>) -> Vec<usize> {
-    seq.iter().enumerate().rev().map(|(i, _)| i).collect()
-}
-
-fn get_overlap(cur: usize) -> (usize, usize) {
-    (cur, cur - 1)
-}
-
-fn remaining_computations(overlap: usize) -> bool {
-    overlap > 0
-}

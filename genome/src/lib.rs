@@ -1,4 +1,3 @@
-#![feature(get_mut_unchecked)]
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 
@@ -6,14 +5,12 @@ mod bitmap;
 pub mod gene;
 pub mod segments;
 
-#[cfg(not(any(feature = "transactional", feature = "ohua")))]
 pub mod sequencer;
-#[cfg(feature = "transactional")]
 pub mod stm_sequencer;
-#[cfg(feature = "transactional")]
 pub mod dstm_sequencer;
-#[cfg(feature = "ohua")]
 pub mod ohua_sequencer;
+pub mod ohua;
+pub mod generated;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[repr(u8)]

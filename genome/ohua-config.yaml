@@ -1,0 +1,15 @@
+extra-features:
+- tail-recursion
+integration-features:
+    arch: SharedMemory
+    options:
+        data-parallelism: 1
+        amorphous: 13
+debug:
+    log-level: info
+    core-stages:
+      - stage: "dflang-custom"
+        dump: yes
+        abort-after: no
+
+
