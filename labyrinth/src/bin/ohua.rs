@@ -89,12 +89,16 @@ fn main() {
 
     // runtime parameters
     let rt = Runtime::from_str(matches.value_of("runtime").unwrap()).expect("Could not parse runtime");
-    //let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
-    //let threadcount = usize::from_str(matches.value_of("threads").unwrap()).unwrap();
+    let updates = usize::from_str(matches.value_of("freq").unwrap()).unwrap();
+    let threadcount = usize::from_str(matches.value_of("threads").unwrap()).unwrap();
 
     // input location & parsing
     let input_file = matches.value_of("INPUT").unwrap();
     let (dimensions, paths) = parser::parse_file(input_file);
+
+    if !json_dump {
+        println!("[INFO] Loaded maze data from file.");
+    }
 
     let mut results = Vec::with_capacity(runs);
     let mut cpu_results = Vec::with_capacity(runs);
@@ -104,21 +108,12 @@ fn main() {
     let mut computations: Vec<usize> = Vec::with_capacity(runs);
 
     for r in 0..runs {
-        //let maze = Arc::new(Maze::new(dimensions.clone(), None));
-
-        if !json_dump && r == 0 {
-            println!("[INFO] Loaded maze data from file.");
-        }
-
         let paths2 = paths.clone().into_iter().map(Some).collect();
         let dims2 = dimensions.clone();
 
         let start = PreciseTime::now();
         let cpu_start = ProcessTime::now();
 
-        //#[ohua]
-        //let (filled_maze, rollbacks) =
-        //modified_algos::futures(maze, paths2, updates, threadcount, taskcount);
         let (filled_maze, retries) = match rt {
             Runtime::OhuaSeq => original::run(dims2, paths2, 200),
             Runtime::Ohua => generated::original::run(dims2, paths2, 200),
@@ -151,14 +146,13 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-//            "{}/new_ohua_futures-{}-p{}-freq{}-t{}-r{}_log.json",
-            "{}/ohua-{}-{}-p{}-freq{}_log.json",
+            "{}/ohua-{}-{}-p{}-freq{}-t{}-r{}_log.json",
             out_dir,
             rt,
             dimensions,
             paths.len(),
-//            updates,
-//            threadcount,
+            updates,
+            threadcount,
             runs
         );
         let mut f = File::create(&filename).unwrap();
@@ -169,35 +163,21 @@ fn main() {
     \"runtime\": \"{r}\",
     \"paths\": {paths},
     \"runs\": {runs},
-    \"sequential\": {seq},
+    \"threadcount\": {threadcount},
+    \"update_frequency\": {freq},
     \"mapped\": {mapped:?},
     \"collisions\": {collisions:?},
     \"computations\": {comps:?},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
-//           "{{
-//    \"algorithm\": \"ohua-futures\",
-//    \"configuration\": \"{conf}\",
-//    \"paths\": {paths},
-//    \"runs\": {runs},
-//    \"sequential\": {seq},
-//    \"threadcount\": {threadcount},
-//    \"update_frequency\": {freq},
-//    \"mapped\": {mapped:?},
-//    \"collisions\": {collisions:?},
-//    \"computations\": {comps:?},
-//    \"cpu_time\": {cpu:?},
-//    \"results\": {res:?}
-//}}",
             conf = dimensions,
             r = rt,
             paths = paths.len(),
             runs = runs,
-            seq = sequential,
-//            threadcount = threadcount,
+            threadcount = threadcount,
             comps = computations,
-//            freq = updates,
+            freq = updates,
             mapped = mapped_paths,
             collisions = collisions,
             cpu = cpu_results,
@@ -210,8 +190,8 @@ fn main() {
         println!("    Maze configuration: {}", dimensions);
         println!("    Paths overall:      {}", paths.len());
         println!("    Runs:               {}", runs);
-//        println!("    Threadpool Size:    {}", threadcount);
-//        println!("    Update frequency:   {}", updates);
+        println!("    Threadpool Size:    {}", threadcount);
+        println!("    Update frequency:   {}", updates);
         println!("    Mapped:             {:?}", mapped_paths);
         println!("    Collisions:         {:?}", collisions);
         println!("    Computations:       {:?}", computations);
