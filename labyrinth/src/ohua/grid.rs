@@ -1,4 +1,3 @@
-use crate::ohua::benchs::*;
 use crate::types::*;
 
 /// The grid the maze is set up in. Contains for every field the information about its state.

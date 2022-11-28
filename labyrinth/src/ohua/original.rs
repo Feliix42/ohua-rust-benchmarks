@@ -1,11 +1,11 @@
+#![allow(dead_code, unused_mut, non_snake_case)]
 use crate::ohua::benchs::*;
 use crate::types::Point;
 use std::sync::Arc;
 
 // this is the most efficient form that I can think of
 fn fill(mut maze: Maze, pairs: Vec<OPoint>, its: u32) -> Maze {
-
-    let mut rs: Unmapped = Unmapped::default();
+    let mut rs: Vec<OPoint> = Vec::default();
     let m2: Maze = maze.clone();
     let mro: Arc<Maze> = Arc::new(m2);
     for pair0 in pairs {
@@ -17,14 +17,24 @@ fn fill(mut maze: Maze, pairs: Vec<OPoint>, its: u32) -> Maze {
         let r: Option<(Point, Point)> = maze.update(path);
         rs.push(r);
     }
-    //rs.filter_mapped();
-    let (new_its, not_done, pending): (u32, bool, Vec<OPoint>) = rs.calculate_done(its);
+
+    let not_done: bool = rs.calculate_done();
+    let new_its: u32 = inc(its);
+    //let (new_its, not_done, pending): (u32, bool, Vec<OPoint>) = rs.calculate_done_with_cont(its);
+
+    // FIXME: didn't work!!
+    // let (new_its, pending): (u32, Vec<OPoint>) = rs.calculate_done(its);
+    // let (not_done, p2): (bool, Vec<OPoint>) = not_done(pending);
+
+    //let pending: Vec<OPoint> = rs.calculate_done();
+    //let (new_its, not_done, p2): (u32, bool, Vec<OPoint>) = not_done(pending, its);
+
     // let new_its_left = decrement(its_left);
     // let new_its_left1 = new_its_left.clone();
     // // let not_done = rs.calculate_done1(new_its_left);
     // let not_done = calculate_done(rs1, new_its_left);
     if not_done {
-        fill(maze, pending, new_its)
+        fill(maze, rs, new_its)
     } else {
         maze
     }

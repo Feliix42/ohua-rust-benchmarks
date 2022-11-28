@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_mut, non_snake_case)]
 use crate::ohua::benchs::*;
 use crate::types::Point;
 use std::sync::Arc;
@@ -16,17 +17,22 @@ fn fill(mut maze: Maze, pairs: Vec<OPoint>, its: u32) -> Maze {
         rs.push(path);
     }
 
-    let (mut maz, paths): (Maze, Vec<Option<Path>>) = seq_arc_unwrap(mro, rs);
-    let res: Unmapped = maz.update_paths(paths);
+    let mut maz: Maze = rs.unarc(mro);
+    let mut res: Vec<OPoint> = maz.update_paths(rs);
+    //let (mut maz, paths): (Maze, Vec<Option<Path>>) = seq_arc_unwrap(mro, rs);
+    //let res: Vec<OPoint> = maz.update_paths(paths);
 
     //rs.filter_mapped();
-    let (new_its, not_done, pending): (u32, bool, Vec<OPoint>) = res.calculate_done(its);
+    // let (new_its, not_done, pending): (u32, bool, Vec<OPoint>) = res.calculate_done_with_cont(its);
+
+    let not_done: bool = res.calculate_done();
+    let new_its: u32 = inc(its);
     // let new_its_left = decrement(its_left);
     // let new_its_left1 = new_its_left.clone();
     // // let not_done = rs.calculate_done1(new_its_left);
     // let not_done = calculate_done(rs1, new_its_left);
     if not_done {
-        fill(maz, pending, new_its)
+        fill(maz, res, new_its)
     } else {
         maz
     }

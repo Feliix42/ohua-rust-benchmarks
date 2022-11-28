@@ -1,7 +1,6 @@
 use crate::ohua::grid::*;
 use crate::types::*;
 use std::collections::LinkedList;
-use std::fmt;
 use std::sync::Arc;
 
 /// This data structure contains information on whether a point has been visited before and
@@ -65,14 +64,8 @@ impl Maze {
         }
     }
 
-    pub fn update_paths(&mut self, paths: Vec<Option<Path>>) -> Unmapped {
-        let mut u = Unmapped::default();
-
-        for p in paths {
-            u.push(self.update(p));
-        }
-
-        u
+    pub fn update_paths(&mut self, paths: Vec<Option<Path>>) -> Vec<OPoint> {
+        paths.into_iter().map(|p| self.update(p)).collect()
     }
 
     pub fn is_valid(&self) -> bool {
@@ -238,9 +231,15 @@ impl Unmapped {
         self.rs.retain(Option::is_some);
     }
 
-    pub fn calculate_done(mut self, iterations_finished: u32) -> (u32, bool, Vec<OPoint>) {
+    pub fn calculate_done(mut self) -> Vec<OPoint> {
         self.filter_mapped();
-        let should_cont = self.rs.iter().any(Option::is_some);
+        //let should_cont = !self.rs.is_empty();
+        self.rs
+    }
+
+    pub fn calculate_done_with_cont(mut self, iterations_finished: u32) -> (u32, bool, Vec<OPoint>) {
+        self.filter_mapped();
+        let should_cont = !self.rs.is_empty();
         (iterations_finished + 1, should_cont, self.rs)
     }
 
@@ -249,9 +248,46 @@ impl Unmapped {
     }
 }
 
+pub trait UnmappedPaths {
+    fn calculate_done(&mut self) -> bool;
+}
+
+impl UnmappedPaths for Vec<OPoint> {
+    fn calculate_done(&mut self) -> bool {
+        // filter old elements
+        self.retain(Option::is_some);
+
+        !self.is_empty()
+    }
+}
+
+pub trait Unarc {
+    fn unarc(&self, item: Arc<Maze>) -> Maze {
+        match Arc::try_unwrap(item) {
+            Ok(ap) => ap,
+            _ => panic!("Failed to unwrap the Arc. Please make sure that the construction of `x` has destructed all previous Arcs.")
+        }
+    }
+}
+
+impl Unarc for Vec<Option<Path>> {}
+
+pub fn filter_paths(mut unm: Unmapped) -> Unmapped {
+    unm.filter_mapped();
+    unm
+}
+
 pub fn seq_arc_unwrap<S, T>(a: Arc<S>, x: T) -> (S, T) {
     match Arc::<S>::try_unwrap(a) {
         Ok(ap) => (ap,x),
         _ => panic!("Failed to unwrap the Arc. Please make sure that the construction of `x` has destructed all previous Arcs.")
     }
+}
+
+pub fn not_done(lst: Vec<OPoint>, iteration_count: u32) -> (u32, bool, Vec<OPoint>) {
+    (iteration_count + 1, !lst.is_empty(), lst)
+}
+
+pub fn inc(num: u32) -> u32 {
+    num + 1
 }
