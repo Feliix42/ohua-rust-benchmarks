@@ -124,7 +124,7 @@ fn main() {
     if json_dump {
         create_dir_all(out_dir).unwrap();
         let filename = format!(
-            "{}/locking-{}opt-t{}-r{}_log.json",
+            "{}/dstm-{}opt-t{}-r{}_log.json",
             out_dir,
             input_data.len(),
             threadcount,
@@ -133,7 +133,7 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"locking\",
+    \"algorithm\": \"rust-dstm\",
     \"options\": {opt},
     \"threadcount\": {threadcount},
     \"runs\": {runs},
