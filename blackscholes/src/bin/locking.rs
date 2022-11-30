@@ -126,7 +126,7 @@ fn main() {
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"threaded\",
+    \"algorithm\": \"locking\",
     \"options\": {opt},
     \"threadcount\": {threadcount},
     \"runs\": {runs},
