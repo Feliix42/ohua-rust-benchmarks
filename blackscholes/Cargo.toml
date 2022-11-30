@@ -10,6 +10,8 @@ edition = "2018"
 clap = { version = "2.33", optional = true }
 cpu-time = { version = "1.0", optional = true }
 
+stm = { git = "https://github.com/feliix42/rust-stm" }
+
 
 [features]
 cli = ["clap", "cpu-time"]
@@ -29,3 +31,12 @@ name = "locked"
 path = "src/bin/locking.rs"
 required-features = ["cli"]
 
+[[bin]]
+name = "stm"
+path = "src/bin/stm.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "dstm"
+path = "src/bin/dstm.rs"
+required-features = ["cli"]
