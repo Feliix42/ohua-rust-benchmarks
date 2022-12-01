@@ -256,6 +256,8 @@ cd ../blackscholes
 #cargo --quiet clean
 cargo build --release --quiet --bin sequential --features "cli"
 cargo build --release --quiet --bin par --features "cli"
+cargo build --release --quiet --bin locked --features "cli"
+cargo build --release --quiet --bin parlist --features "cli"
 
 echo "Running benchmarks"
 
@@ -268,6 +270,8 @@ for tcount in ${threadrange[@]}
 do
     echo -n "."
     target/release/par inputs/$sdir.txt --json --outdir "$RESPATH/$TODAY-blackscholes/$sdir" --runs $RUNS --threads $tcount
+    target/release/locked inputs/$sdir.txt --json --outdir "$RESPATH/$TODAY-blackscholes/$sdir" --runs $RUNS --threads $tcount
+    target/release/parlist inputs/$sdir.txt --json --outdir "$RESPATH/$TODAY-blackscholes/$sdir" --runs $RUNS --threads $tcount
 done
 echo " - done!"
 
