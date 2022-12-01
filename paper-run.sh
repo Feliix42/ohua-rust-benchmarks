@@ -9,7 +9,7 @@ RUNS=10
 #threadrange=$(seq 1 10) # 1 - 10 threads
 #RUNS=20
 
-RESPATH=/net/home/felix/research/ohua/stm/ohua-rust-benchmarks/
+RESPATH=/mnt/benchmarks/
 
 echo "----------------------------------[ labyrinth ]----------------------------------"
 echo "Building binaries"
@@ -31,20 +31,20 @@ do
     labyrinth/target/release/dstm labyrinth/inputs/random-x512-y512-z7-n512.txt --json --outdir $RESPATH/$TODAY-results/labyrinth/ --runs $RUNS --threads $tc
 done
 
- optimal labyrinth frequencies
-declare -a labtcs=(1 2 3 4 5 6 7 8 9 10) # 11 12)
-declare -a labfre=(1 3 4 6 7 8 10 11 13 14) # 15 17)
+# optimal labyrinth frequencies
 cd labyrinth
-for ((i=0; i < ${#labtcs[@]}; i++))
+for tc in ${threadrange[@]}
 do
     sed -i "s/data-parallelism: [0-9]\+/data-parallelism: ${labtcs[$i]}/" ohua-config.yaml
-    sed -i "s/amorphous: [0-9]\+/amorphous: ${labfre[$i]}/" ohua-config.yaml
+    BS=$(python -c "print(round(${labtcs[$i]} * 2.4))")
+    echo "Frequency: $BS"
+    sed -i "s/amorphous: [0-9]\+/amorphous: $BS/" ohua-config.yaml
     ./ohua-compile.sh
 
     cargo build --quiet --release --bin ohua
 
-    #target/release/ohua inputs/random-x512-y512-z7-n512.txt --json --outdir $RESPATH/$TODAY-results/labyrinth/ --runs $RUNS --threads ${labtcs[$i]} --frequency ${labfre[$i]} --runtime Ohua
-    target/release/ohua inputs/random-x512-y512-z7-n512.txt --json --outdir $RESPATH/$TODAY-results/labyrinth/ --runs $RUNS --threads ${labtcs[$i]} --frequency ${labfre[$i]} --runtime OhuaZeroClone
+    target/release/ohua inputs/random-x512-y512-z7-n512.txt --json --outdir $RESPATH/$TODAY-results/labyrinth-non-opt/ --runs $RUNS --threads $tc --frequency $BS --runtime Ohua
+    target/release/ohua inputs/random-x512-y512-z7-n512.txt --json --outdir $RESPATH/$TODAY-results/labyrinth/ --runs $RUNS --threads $tc --frequency $BS --runtime OhuaZeroClone
 done
 cd ..
 
@@ -251,9 +251,9 @@ echo "Building binaries"
 # clean and build
 cd blackscholes_new_compiler
 ./ohua-compile.sh
-cargo --quiet clean
+#cargo --quiet clean
 cd ../blackscholes
-cargo --quiet clean
+#cargo --quiet clean
 cargo build --release --quiet --bin sequential --features "cli"
 cargo build --release --quiet --bin par --features "cli"
 
@@ -289,68 +289,68 @@ echo "Current time: $(date)\n\n"
 ########################################################################################
 ########################################################################################
 ########################################################################################
-echo "----------------------------------[ vacation ]-----------------------------------"
-echo "Building binaries"
-cd vacation
-./ohua-compile.sh
-cd seq
-cargo build --quiet --release
-cd ../stm
-cargo build --quiet --release
-cd ../dstm
-cargo build --quiet --release
-cd ../..
+#echo "----------------------------------[ vacation ]-----------------------------------"
+#echo "Building binaries"
+#cd vacation
+#./ohua-compile.sh
+#cd seq
+#cargo build --quiet --release
+#cd ../stm
+#cargo build --quiet --release
+#cd ../dstm
+#cargo build --quiet --release
+#cd ../..
 
-echo "Running vacation"
-#vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 16384 -t 4096
-#vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 2 -q 60 -u 90 -r 16384 -t 4096
-# +
-#vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-low+/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4096
-#vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-high+/ --runs $RUNS -n 2 -q 60 -u 90 -r 1048576 -t 4096
-# ++
-vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304
-#vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 2 -q 60 -u 90 -r 1048576 -t 4194304
+#echo "Running vacation"
+##vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 16384 -t 4096
+##vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 2 -q 60 -u 90 -r 16384 -t 4096
+## +
+##vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-low+/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4096
+##vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-high+/ --runs $RUNS -n 2 -q 60 -u 90 -r 1048576 -t 4096
+## ++
+#vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304
+##vacation/target/release/seq-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 2 -q 60 -u 90 -r 1048576 -t 4194304
 
-for tc in ${threadrange[@]}
-do
-    #vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 16384 -t 4096 --threads $tc
-    #vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 4 -q 60 -u 90 -r 16384 -t 4096 --threads $tc
-    # +
-    #vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-low+/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4096 --threads $tc
-    #vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-high+/ --runs $RUNS -n 4 -q 60 -u 90 -r 1048576 -t 4096 --threads $tc
-    # ++
-    vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304 --threads $tc -b Naive
-    vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-low-prime/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304 --threads $tc -b Prime
-    #vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 4 -q 60 -u 90 -r 1048576 -t 4194304 --threads $tc
-done
+#for tc in ${threadrange[@]}
+#do
+    ##vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 16384 -t 4096 --threads $tc
+    ##vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 4 -q 60 -u 90 -r 16384 -t 4096 --threads $tc
+    ## +
+    ##vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-low+/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4096 --threads $tc
+    ##vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-high+/ --runs $RUNS -n 4 -q 60 -u 90 -r 1048576 -t 4096 --threads $tc
+    ## ++
+    #vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304 --threads $tc -b Naive
+    #vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-low-prime/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304 --threads $tc -b Prime
+    ##vacation/target/release/stm-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 4 -q 60 -u 90 -r 1048576 -t 4194304 --threads $tc
+#done
 
-# dstm
-for tc in ${threadrange[@]}
-do
-    #vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 16384 -t 4096 --threads $tc
-    #vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 4 -q 60 -u 90 -r 16384 -t 4096 --threads $tc
-    # +
-    #vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-low+/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4096 --threads $tc
-    #vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-high+/ --runs $RUNS -n 4 -q 60 -u 90 -r 1048576 -t 4096 --threads $tc
-    # ++
-    vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304 --threads $tc
-    #vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 4 -q 60 -u 90 -r 1048576 -t 4194304 --threads $tc
-done
+## dstm
+#for tc in ${threadrange[@]}
+#do
+    ##vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 16384 -t 4096 --threads $tc
+    ##vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 4 -q 60 -u 90 -r 16384 -t 4096 --threads $tc
+    ## +
+    ##vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-low+/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4096 --threads $tc
+    ##vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-high+/ --runs $RUNS -n 4 -q 60 -u 90 -r 1048576 -t 4096 --threads $tc
+    ## ++
+    #vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304 --threads $tc
+    ##vacation/target/release/dstm-vacation --json --outdir $TODAY-results/vacation-high/ --runs $RUNS -n 4 -q 60 -u 90 -r 1048576 -t 4194304 --threads $tc
+#done
 
-cd vacation
-for tc in ${threadrange[@]}
-do
-    sed -i "s/data-parallelism: [0-9]\+/data-parallelism: $tc/" ohua-config.yaml
-    ./ohua-compile.sh
-    cargo build --release --quiet --bin seq-vacation
-    ##target/release/vacation_new_compiler --json --outdir ../$TODAY-results/vacation/ --runs $RUNS -a 10 -l 128 -n 262144 -s 1
-    #target/release/vacation_new_compiler --json --outdir ../$TODAY-results/vacation/ --runs $RUNS -a 10 -l 16 -n 4096 -s 1
-    target/release/seq-vacation --json --outdir ../$TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304 --clients $tc -b OhuaNaive
-done
-cd ..
+#cd vacation
+#for tc in ${threadrange[@]}
+#do
+    #sed -i "s/data-parallelism: [0-9]\+/data-parallelism: $tc/" ohua-config.yaml
+    #./ohua-compile.sh
+    #cargo build --release --quiet --bin seq-vacation
+    ###target/release/vacation_new_compiler --json --outdir ../$TODAY-results/vacation/ --runs $RUNS -a 10 -l 128 -n 262144 -s 1
+    ##target/release/vacation_new_compiler --json --outdir ../$TODAY-results/vacation/ --runs $RUNS -a 10 -l 16 -n 4096 -s 1
+    #target/release/seq-vacation --json --outdir ../$TODAY-results/vacation-low/ --runs $RUNS -n 2 -q 90 -u 98 -r 1048576 -t 4194304 --clients $tc -b OhuaNaive
+#done
+#cd ..
 
 
-echo "Current time: $(date)\n\n"
+#echo "Current time: $(date)\n\n"
     
 
 
