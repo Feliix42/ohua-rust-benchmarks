@@ -5,11 +5,11 @@ echo "Starting benchmarks at $(date)"
 TODAY=`date +%Y-%m-%d`
 
 threadrange=$(seq 2 2 10) # 1 - 10 threads
-RUNS=10
+RUNS=30
 #threadrange=$(seq 1 10) # 1 - 10 threads
 #RUNS=20
 
-RESPATH=/mnt/benchmarks/
+RESPATH=/opt/benchmarks
 
 echo "----------------------------------[ labyrinth ]----------------------------------"
 echo "Building binaries"
@@ -77,7 +77,7 @@ do
     ./ohua-compile.sh
     cargo build --release --quiet
 
-    target/release/kmeans_new_compiler ../kmeans/inputs/random-n65536-d32-c16.txt --json --outdir $RESPATH/$TODAY-results/kmeans/ --runs $RUNS -n 40 -t 0.00001
+    target/release/kmeans_new_compiler ../kmeans/inputs/random-n65536-d32-c16.txt --json --outdir $RESPATH/$TODAY-results/kmeans/ --runs $RUNS -n 40 -t 0.00001 --threadcount $tc
 done
 cd ..
 
@@ -212,13 +212,13 @@ cd ..
 echo "Running intruder"
 # TODO: Change
 ##intruder/target/release/sequential --json --outdir $RESPATH/$TODAY-results/intruder/ --runs $RUNS -a 10 -l 128 -n 262144 -s 1
-intruder/target/release/sequential --json --outdir $RESPATH/$TODAY-results/intruder/ --runs $RUNS -a 10 -l 16 -n 4096 -s 1
+intruder/target/release/bench --json --outdir $RESPATH/$TODAY-results/intruder/ --runs $RUNS -a 10 -l 16 -n 4096 -s 1 --runtime Seq
 
 for tc in ${threadrange[@]}
 do
     ###intruder/target/release/stm --json --outdir $RESPATH/$TODAY-results/intruder/ --runs $RUNS -a 10 -l 128 -n 262144 -s 1 --threads $tc
-    intruder/target/release/stm --json --outdir $RESPATH/$TODAY-results/intruder/ --runs $RUNS -a 10 -l 16 -n 4096 -s 1 --threads $tc
-    intruder/target/release/dstm --json --outdir $RESPATH/$TODAY-results/intruder/ --runs $RUNS -a 10 -l 16 -n 4096 -s 1 --threads $tc
+    intruder/target/release/bench --json --outdir $RESPATH/$TODAY-results/intruder/ --runs $RUNS -a 10 -l 16 -n 4096 -s 1 --threads $tc --runtime STM
+    intruder/target/release/bench --json --outdir $RESPATH/$TODAY-results/intruder/ --runs $RUNS -a 10 -l 16 -n 4096 -s 1 --threads $tc --runtime DSTM
 done
 
 cd intruder
