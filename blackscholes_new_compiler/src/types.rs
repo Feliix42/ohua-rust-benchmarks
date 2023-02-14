@@ -1,7 +1,9 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::ops::Range;
 use std::str::FromStr;
+use std::sync::Arc;
 
 const INV_SQRT_2PI: f32 = 0.39894228040143270286;
 
@@ -92,10 +94,14 @@ impl OptionData {
 }
 
 pub fn batch_calculate_black_scholes(opts: Vec<OptionData>) -> Vec<f32> {
-     opts.into_iter().map(calculate_black_scholes).collect()
+     opts.iter().map(calculate_black_scholes).collect()
 }
 
-pub fn calculate_black_scholes(opt: OptionData) -> f32 {
+pub fn batch_calculate_black_scholes_arc(opts: Arc<Vec<OptionData>>, rng: Range<usize>) -> Vec<f32> {
+     opts[rng].iter().map(calculate_black_scholes).collect()
+}
+
+pub fn calculate_black_scholes(opt: &OptionData) -> f32 {
     // just the 1:1 copyover of the calculation in the C version
     let x_sqrt_time = opt.time.sqrt();
     let x_log_term = (opt.spot / opt.strike).ln();
@@ -179,4 +185,9 @@ pub fn verify_all_results(options: &[OptionData], results: &[f32]) -> usize {
 #[inline(always)]
 pub fn unpack(v: Vec<Vec<f32>>) -> Vec<f32> {
     v.into_iter().flatten().collect()
+}
+
+#[inline(always)]
+pub fn id<T>(t: T) -> T {
+    t
 }

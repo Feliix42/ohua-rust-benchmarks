@@ -1,45 +1,19 @@
+use blackscholes::{self, OptionData};
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::ops::Range;
+use std::thread::{self, JoinHandle};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
-use types::*;
-
-mod generated;
-mod original;
-mod opt;
-mod types;
-
-enum Runtime {
-    Seq,
-    Ohua,
-    Opt,
-    OhuaOpt,
-}
-
-impl FromStr for Runtime {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "seq" => Ok(Self::Seq),
-            "ohua" => Ok(Self::Ohua),
-            "opt" => Ok(Self::Opt),
-            "ohuaopt" => Ok(Self::OhuaOpt),
-            _ => panic!("Unsupported runtime specification"),
-        }
-    }
-}
-
 
 fn main() {
-    let matches = App::new("Ohua blackscholes benchmark for the new compiler")
+    let matches = App::new("Threaded blackscholes benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
-        .about("A Rust port of the blackscholes benchmark from the PARSEC collection, implemented using the Ohua framework")
+        .about("A Rust port of the blackscholes benchmark from the PARSEC collection, implemented using threads only")
         .arg(
             Arg::with_name("INPUT")
                 .help("Input file describing the stock options to trade.")
@@ -75,26 +49,19 @@ fn main() {
                 .default_value("results")
         )
         .arg(
-            Arg::with_name("runtime")
-                .long("rt")
-                .help("Specify the runtime to use: seq | ohua (default) | opt | ohuaopt")
-                .takes_value(true)
-                .default_value("ohua")
-        )
-        .arg(
             Arg::with_name("threadcount")
-                .long("threadcount")
+                .long("threads")
                 .short("t")
-                .help("Thread count/batch size")
+                .help("Sets the number of threads to use for computation")
                 .takes_value(true)
-                .default_value("1")
+                .default_value("4")
         )
-       .get_matches();
+        .get_matches();
 
     // parse parameters
     let input_file = matches.value_of("INPUT").unwrap();
-    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap()).expect("Could not parse thread count");
-    let runtime = Runtime::from_str(matches.value_of("runtime").unwrap()).expect("Couldn't parse runtime spec");
+    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap())
+        .expect("Could not parse thread count");
 
     // parse runtime parameters
     let runs =
@@ -104,7 +71,7 @@ fn main() {
     let out_dir = matches.value_of("outdir").unwrap();
 
     // read and parse input data
-    let input_data = OptionData::load_from_file(input_file).unwrap();
+    let input_data = Arc::new(OptionData::load_from_file(input_file).unwrap());
 
     if !json_dump {
         println!("[info] Loaded {} options.", input_data.len());
@@ -119,56 +86,16 @@ fn main() {
     }
 
     for _ in 0..runs {
+        // clone the necessary data
+        let options = input_data.clone();
+        // let options = input_data.clone();
+
+        // start the clock
+        let cpu_start = ProcessTime::now();
+        let start = Instant::now();
 
         // run the algorithm
-        let (cpu_start, start, res) = match runtime {
-            Runtime::Seq => {
-                // clone the necessary data
-                let options = splitup(input_data.clone(), threadcount);
-
-                // start the clock
-                let cpu_start = ProcessTime::now();
-                let start = Instant::now();
-                let res = original::calculate(options);
-
-                (cpu_start, start, res)
-            },
-            Runtime::Ohua => {
-                // clone the necessary data
-                let options = splitup(input_data.clone(), threadcount);
-
-                // start the clock
-                let cpu_start = ProcessTime::now();
-                let start = Instant::now();
-                let res = generated::original::calculate(options);
-
-                (cpu_start, start, res)
-            },
-            Runtime::Opt => {
-                let options = Arc::new(input_data.clone());
-                let ranges = get_ranges(&options, threadcount);
-
-                // start the clock
-                let cpu_start = ProcessTime::now();
-                let start = Instant::now();
-                let res = opt::calculate(options, ranges);
-
-                (cpu_start, start, res)
-            },
-            Runtime::OhuaOpt => {
-                let options = Arc::new(input_data.clone());
-                let ranges = get_ranges(&options, threadcount);
-
-                println!("running the generated OPT runtime");
-
-                // start the clock
-                let cpu_start = ProcessTime::now();
-                let start = Instant::now();
-                let res = generated::opt::calculate(options, ranges);
-
-                (cpu_start, start, res)
-            },
-        };
+        let res = run_blackcholes(options, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -185,7 +112,7 @@ fn main() {
 
         // optionally run the verification
         if verify {
-            let err_count = verify_all_results(&input_data, &res);
+            let err_count = blackscholes::verify_all_results(&input_data, &res);
             if err_count != 0 {
                 eprintln!("[error] Encountered {} errors in calculation.", err_count);
             }
@@ -195,22 +122,20 @@ fn main() {
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
-        let filename = format!("{}/ohua_futures-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
+        let filename = format!("{}/par-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"ohua-futures\",
+    \"algorithm\": \"threaded\",
     \"options\": {opt},
     \"threadcount\": {threadcount},
     \"runs\": {runs},
-    \"runtime\": {rt},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
             opt = input_data.len(),
             threadcount = threadcount,
             runs = runs,
-            rt = matches.value_of("runtime").unwrap().to_lowercase(),
             cpu = cpu_time,
             res = results
         ))
@@ -222,7 +147,6 @@ fn main() {
         println!("\nStatistics:");
         println!("    Number of options: {}", input_data.len());
         println!("    Input file used:   {}", input_file);
-        println!("    Runtime:           {}", matches.value_of("runtime").unwrap().to_lowercase());
         println!("    Threads:           {}", threadcount);
         println!("    Runs:              {}", runs);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
@@ -230,44 +154,55 @@ fn main() {
     }
 }
 
-fn splitup<T>(vec: Vec<T>, split_size: usize) -> Vec<Vec<T>>
-where
-    T: Clone,
-{
-    let size = split_size * 2; // magic number to oversaturate workers
-    let element_count = vec.len();
-    let mut rest = element_count % size;
-    let window_len: usize = element_count / size;
-    let per_vec = if rest != 0 {
-        window_len + 1
-    } else {
-        window_len
-    };
+fn run_blackcholes(data: Arc<Vec<OptionData>>, threadcount: usize) -> Vec<f32> {
+    let ranges = splitup(&data, threadcount);
+    let mut handles: Vec<JoinHandle<Vec<f32>>> = Vec::with_capacity(threadcount);
 
-    let mut res = vec![Vec::with_capacity(per_vec); size];
-
-    let mut start = 0;
-    for i in 0..size {
-        // calculate the length of the window (for even distribution of the `rest` elements)
-        let len = if rest > 0 {
-            rest -= 1;
-            window_len + 1
-        } else {
-            window_len
-        };
-
-        let dst = start + len;
-
-        res[i].extend_from_slice(&vec[start..dst]);
-
-        start = dst;
+    for range in ranges {
+        let dat = data.clone();
+        handles.push(
+            thread::spawn(move || {
+                dat[range]
+                    .iter()
+                    .map(OptionData::calculate_black_scholes)
+                    .collect()
+            })
+        );
     }
 
-    return res;
+    handles
+        .drain(..)
+        .map(|h| h.join().unwrap())
+        .flatten()
+        .collect()
 }
 
+//fn splitup(mut to_split: Vec<OptionData>, split_size: usize) -> Vec<Vec<OptionData>> {
+    //// TODO: Is this the new optimized implementation?
+    //let l = to_split.len() / split_size;
+    //let mut rest = to_split.len() % split_size;
+
+    //let mut splitted = Vec::new();
+
+    //for t_num in 0..split_size {
+        //splitted.push(Vec::with_capacity(l));
+        //if rest > 0 {
+            //splitted[t_num] = to_split.split_off(to_split.len() - l - 1);
+            //rest -= 1;
+        //} else {
+            //if to_split.len() <= l {
+                //splitted[t_num] = to_split.split_off(0);
+            //} else {
+                //splitted[t_num] = to_split.split_off(to_split.len() - l);
+            //}
+        //}
+    //}
+
+    //splitted
+//}
+
 /// Splits the input vector into evenly sized ranges for `split_size` workers.
-fn get_ranges<T>(vec: &Vec<T>, split_size: usize) -> Vec<Range<usize>>
+fn splitup<T>(vec: &Vec<T>, split_size: usize) -> Vec<Range<usize>>
 {
     let size = split_size;
     let element_count = vec.len();
