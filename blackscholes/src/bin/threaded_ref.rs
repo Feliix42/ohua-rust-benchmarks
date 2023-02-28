@@ -122,11 +122,11 @@ fn main() {
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
-        let filename = format!("{}/threaded_opt-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
+        let filename = format!("{}/threaded_ref-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"threaded-opt\",
+    \"algorithm\": \"threaded-ref\",
     \"options\": {opt},
     \"threadcount\": {threadcount},
     \"runs\": {runs},
@@ -157,21 +157,30 @@ fn main() {
 fn run_blackcholes(data: Arc<Vec<OptionData>>, threadcount: usize) -> Vec<f32> {
     let ranges = splitup(&data, threadcount);
     let mut handles: Vec<JoinHandle<Vec<f32>>> = Vec::with_capacity(threadcount);
+    //let mut handles: Vec<JoinHandle<usize>> = Vec::with_capacity(threadcount);
 
     for range in ranges {
         let dat = data.clone();
         handles.push(
             thread::spawn(move || {
-                dat[range]
+                let d: &Vec<OptionData> = &dat;
+                d[range]
                     .iter()
                     .map(OptionData::calculate_black_scholes)
+                    //.map(|i| i.calculate_n_times(10_000))
+                    //.for_each(|i| i.calculate_n_times(10_000))
+                    //.map(|i| i.calculate_n_times(10_000))
+                    //.for_each(|i| i.calculate_n_times(2_500_000))
+                    //.flatten()
+                    //.collect::<Vec<_>>().len()
                     .collect()
             })
         );
     }
 
     handles
-        .drain(..)
+        .into_iter()
+        //.map(|h| h.join().unwrap()).sum();
         .map(|h| h.join().unwrap())
         .flatten()
         .collect()

@@ -1,3 +1,5 @@
+#![feature(get_mut_unchecked)]
+
 use blackscholes::{self, OptionData};
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
@@ -88,6 +90,8 @@ fn main() {
     for _ in 0..runs {
         // clone the necessary data
         let options = input_data.clone();
+        let res = Arc::new(vec![0_f32; input_data.len()]);
+        let r = res.clone();
         // let options = input_data.clone();
 
         // start the clock
@@ -95,7 +99,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        let res = run_blackcholes(options, threadcount);
+        run_blackcholes(options, r, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -122,11 +126,11 @@ fn main() {
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
-        let filename = format!("{}/threaded_opt-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
+        let filename = format!("{}/threaded_unsafe-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"threaded-opt\",
+    \"algorithm\": \"threaded-unsafe\",
     \"options\": {opt},
     \"threadcount\": {threadcount},
     \"runs\": {runs},
@@ -154,52 +158,26 @@ fn main() {
     }
 }
 
-fn run_blackcholes(data: Arc<Vec<OptionData>>, threadcount: usize) -> Vec<f32> {
+fn run_blackcholes(data: Arc<Vec<OptionData>>, res: Arc<Vec<f32>>, threadcount: usize) {
     let ranges = splitup(&data, threadcount);
-    let mut handles: Vec<JoinHandle<Vec<f32>>> = Vec::with_capacity(threadcount);
+    let mut handles: Vec<JoinHandle<()>> = Vec::with_capacity(threadcount);
 
     for range in ranges {
         let dat = data.clone();
+        let mut r = res.clone();
         handles.push(
             thread::spawn(move || {
-                dat[range]
-                    .iter()
-                    .map(OptionData::calculate_black_scholes)
-                    .collect()
+                let results: &mut Vec<f32> = unsafe { Arc::get_mut_unchecked(&mut r) };
+
+                for idx in range {
+                    results[idx] = dat[idx].calculate_black_scholes();
+                }
             })
         );
     }
 
-    handles
-        .drain(..)
-        .map(|h| h.join().unwrap())
-        .flatten()
-        .collect()
+    handles.into_iter().for_each(|h| h.join().unwrap());
 }
-
-//fn splitup(mut to_split: Vec<OptionData>, split_size: usize) -> Vec<Vec<OptionData>> {
-    //// TODO: Is this the new optimized implementation?
-    //let l = to_split.len() / split_size;
-    //let mut rest = to_split.len() % split_size;
-
-    //let mut splitted = Vec::new();
-
-    //for t_num in 0..split_size {
-        //splitted.push(Vec::with_capacity(l));
-        //if rest > 0 {
-            //splitted[t_num] = to_split.split_off(to_split.len() - l - 1);
-            //rest -= 1;
-        //} else {
-            //if to_split.len() <= l {
-                //splitted[t_num] = to_split.split_off(0);
-            //} else {
-                //splitted[t_num] = to_split.split_off(to_split.len() - l);
-            //}
-        //}
-    //}
-
-    //splitted
-//}
 
 /// Splits the input vector into evenly sized ranges for `split_size` workers.
 fn splitup<T>(vec: &Vec<T>, split_size: usize) -> Vec<Range<usize>>
