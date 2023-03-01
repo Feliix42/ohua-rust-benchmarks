@@ -15,6 +15,7 @@ mod opt;
 mod original;
 mod types;
 mod un_safe;
+mod nested;
 
 enum Runtime {
     Seq,
@@ -23,6 +24,13 @@ enum Runtime {
     OhuaOpt,
     Unsafe,
     OhuaUnsafe,
+    Nested,
+    OhuaNested,
+}
+
+enum Either<S, T> {
+    Left(S),
+    Right(T)
 }
 
 impl FromStr for Runtime {
@@ -36,6 +44,8 @@ impl FromStr for Runtime {
             "ohuaopt" => Ok(Self::OhuaOpt),
             "unsafe" => Ok(Self::Unsafe),
             "ohuaunsafe" => Ok(Self::OhuaUnsafe),
+            "nested" => Ok(Self::Nested),
+            "ohuanested" => Ok(Self::OhuaNested),
             _ => panic!("Unsupported runtime specification"),
         }
     }
@@ -138,7 +148,7 @@ fn main() {
                 let start = Instant::now();
                 let res = original::calculate(options);
 
-                (cpu_start, start, res)
+                (cpu_start, start, Either::Left(res))
             }
             Runtime::Ohua => {
                 // clone the necessary data
@@ -149,7 +159,7 @@ fn main() {
                 let start = Instant::now();
                 let res = generated::original::calculate(options);
 
-                (cpu_start, start, res)
+                (cpu_start, start, Either::Left(res))
             }
             Runtime::Opt => {
                 let options = Arc::new(input_data.clone());
@@ -160,7 +170,7 @@ fn main() {
                 let start = Instant::now();
                 let res = opt::calculate(options, ranges);
 
-                (cpu_start, start, res)
+                (cpu_start, start, Either::Left(res))
             }
             Runtime::OhuaOpt => {
                 let options = Arc::new(input_data.clone());
@@ -171,7 +181,7 @@ fn main() {
                 let start = Instant::now();
                 let res = generated::opt::calculate(options, ranges);
 
-                (cpu_start, start, res)
+                (cpu_start, start, Either::Left(res))
             }
             Runtime::Unsafe => {
                 let options = Arc::new(input_data.clone());
@@ -183,7 +193,7 @@ fn main() {
                 let start = Instant::now();
                 let res = un_safe::calculate(options, r, ranges);
 
-                (cpu_start, start, res)
+                (cpu_start, start, Either::Left(res))
             }
             Runtime::OhuaUnsafe => {
                 let options = Arc::new(input_data.clone());
@@ -195,7 +205,29 @@ fn main() {
                 let start = Instant::now();
                 let res = generated::un_safe::calculate(options, r, ranges);
 
-                (cpu_start, start, res)
+                (cpu_start, start, Either::Left(res))
+            }
+            Runtime::Nested => {
+                let options = Arc::new(input_data.clone());
+                let ranges = get_packed_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = nested::calculate(options, ranges);
+
+                (cpu_start, start, Either::Right(res))
+            }
+            Runtime::OhuaNested => {
+                let options = Arc::new(input_data.clone());
+                let ranges = get_packed_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = generated::nested::calculate(options, ranges);
+
+                (cpu_start, start, Either::Right(res))
             }
         };
 
@@ -214,7 +246,14 @@ fn main() {
 
         // optionally run the verification
         if verify {
-            let err_count = verify_all_results(&input_data, &res);
+            let err_count = match res {
+                Either::Left(r) => verify_all_results(&input_data, &r),
+                Either::Right(r) => {
+                    let comb: Vec<f32> = r.into_iter().flatten().collect();
+                    verify_all_results(&input_data, &comb)
+                }
+            };
+
             if err_count != 0 {
                 eprintln!("[error] Encountered {} errors in calculation.", err_count);
             }
@@ -325,6 +364,34 @@ fn get_ranges<T>(vec: &Vec<T>, split_size: usize) -> Vec<Range<usize>> {
 
         let dst = start + len;
         res.push(start..dst);
+
+        start = dst;
+    }
+
+    return res;
+}
+
+/// Splits the input vector into evenly sized ranges for `split_size` workers.
+fn get_packed_ranges<T>(vec: &Vec<T>, split_size: usize) -> Vec<(Vec<f32>, Range<usize>)> {
+    let size = split_size;
+    let element_count = vec.len();
+    let mut rest = element_count % size;
+    let window_len: usize = element_count / size;
+
+    let mut res = Vec::with_capacity(size);
+
+    let mut start = 0;
+    for _ in 0..size {
+        // calculate the length of the window (for even distribution of the `rest` elements)
+        let len = if rest > 0 {
+            rest -= 1;
+            window_len + 1
+        } else {
+            window_len
+        };
+
+        let dst = start + len;
+        res.push((vec![0_f32; len], start..dst));
 
         start = dst;
     }

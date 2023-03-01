@@ -104,6 +104,18 @@ pub fn batch_calculate_black_scholes_arc(
     opts[rng].iter().map(calculate_black_scholes).collect()
 }
 
+pub fn batch_calculate_black_scholes_nested(
+    opts: Arc<Vec<OptionData>>,
+    item: (Vec<f32>, Range<usize>),
+) -> Vec<f32> {
+    let (mut lst, rng) = item;
+    for (r_idx, idx) in rng.into_iter().enumerate() {
+        lst[r_idx] = calculate_black_scholes(&opts[idx]);
+    }
+
+    lst
+}
+
 pub fn batch_calculate_black_scholes_unsafe(
     opts: Arc<Vec<OptionData>>,
     mut results: Arc<Vec<f32>>,

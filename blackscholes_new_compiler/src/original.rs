@@ -1,3 +1,5 @@
+#![allow(unused_mut, non_snake_case)]
+
 use crate::types::*;
 
 pub fn calculate(ops: Vec<Vec<OptionData>>) -> Vec<f32> {
