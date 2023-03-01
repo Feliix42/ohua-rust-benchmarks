@@ -1,3 +1,5 @@
+#![feature(get_mut_unchecked)]
+
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
@@ -12,12 +14,15 @@ mod generated;
 mod original;
 mod opt;
 mod types;
+mod un_safe;
 
 enum Runtime {
     Seq,
     Ohua,
     Opt,
     OhuaOpt,
+    Unsafe,
+    OhuaUnsafe,
 }
 
 impl FromStr for Runtime {
@@ -29,6 +34,8 @@ impl FromStr for Runtime {
             "ohua" => Ok(Self::Ohua),
             "opt" => Ok(Self::Opt),
             "ohuaopt" => Ok(Self::OhuaOpt),
+            "unsafe" => Ok(Self::Unsafe),
+            "ohuaunsafe" => Ok(Self::OhuaUnsafe),
             _ => panic!("Unsupported runtime specification"),
         }
     }
@@ -159,12 +166,34 @@ fn main() {
                 let options = Arc::new(input_data.clone());
                 let ranges = get_ranges(&options, threadcount);
 
-                println!("running the generated OPT runtime");
-
                 // start the clock
                 let cpu_start = ProcessTime::now();
                 let start = Instant::now();
                 let res = generated::opt::calculate(options, ranges);
+
+                (cpu_start, start, res)
+            },
+            Runtime::Unsafe => {
+                let options = Arc::new(input_data.clone());
+                let r = Arc::new(vec![0_f32; options.len()]);
+                let ranges = get_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = un_safe::calculate(options, r, ranges);
+
+                (cpu_start, start, res)
+            },
+            Runtime::OhuaUnsafe => {
+                let options = Arc::new(input_data.clone());
+                let r = Arc::new(vec![0_f32; options.len()]);
+                let ranges = get_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = generated::un_safe::calculate(options, r, ranges);
 
                 (cpu_start, start, res)
             },

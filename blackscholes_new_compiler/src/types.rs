@@ -101,6 +101,17 @@ pub fn batch_calculate_black_scholes_arc(opts: Arc<Vec<OptionData>>, rng: Range<
      opts[rng].iter().map(calculate_black_scholes).collect()
 }
 
+pub fn batch_calculate_black_scholes_unsafe(opts: Arc<Vec<OptionData>>, mut results: Arc<Vec<f32>>, rng: Range<usize>) -> Arc<Vec<f32>> {
+    unsafe {
+        let res: &mut Vec<f32> = Arc::get_mut_unchecked(&mut results);
+        for idx in rng {
+            res[idx] = calculate_black_scholes(&opts[idx]);
+        }
+    }
+
+    results
+}
+
 pub fn calculate_black_scholes(opt: &OptionData) -> f32 {
     // just the 1:1 copyover of the calculation in the C version
     let x_sqrt_time = opt.time.sqrt();
@@ -190,4 +201,13 @@ pub fn unpack(v: Vec<Vec<f32>>) -> Vec<f32> {
 #[inline(always)]
 pub fn id<T>(t: T) -> T {
     t
+}
+
+pub(crate) fn seq_arc_unpack(a: Arc<Vec<f32>>, x: Vec<Arc<Vec<f32>>>) -> Vec<f32> {
+    std::mem::drop(x);
+
+    match Arc::<Vec<f32>>::try_unwrap(a) {
+        Ok(ap) => ap,
+        _ => panic!("Failed to unwrap the Arc. Please make sure that the construction of `x` has destructed all previous Arcs.")
+    }
 }
