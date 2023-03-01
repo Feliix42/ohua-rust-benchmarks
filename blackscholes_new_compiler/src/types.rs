@@ -94,14 +94,21 @@ impl OptionData {
 }
 
 pub fn batch_calculate_black_scholes(opts: Vec<OptionData>) -> Vec<f32> {
-     opts.iter().map(calculate_black_scholes).collect()
+    opts.iter().map(calculate_black_scholes).collect()
 }
 
-pub fn batch_calculate_black_scholes_arc(opts: Arc<Vec<OptionData>>, rng: Range<usize>) -> Vec<f32> {
-     opts[rng].iter().map(calculate_black_scholes).collect()
+pub fn batch_calculate_black_scholes_arc(
+    opts: Arc<Vec<OptionData>>,
+    rng: Range<usize>,
+) -> Vec<f32> {
+    opts[rng].iter().map(calculate_black_scholes).collect()
 }
 
-pub fn batch_calculate_black_scholes_unsafe(opts: Arc<Vec<OptionData>>, mut results: Arc<Vec<f32>>, rng: Range<usize>) -> Arc<Vec<f32>> {
+pub fn batch_calculate_black_scholes_unsafe(
+    opts: Arc<Vec<OptionData>>,
+    mut results: Arc<Vec<f32>>,
+    rng: Range<usize>,
+) -> Arc<Vec<f32>> {
     unsafe {
         let res: &mut Vec<f32> = Arc::get_mut_unchecked(&mut results);
         for idx in rng {
@@ -191,7 +198,6 @@ pub fn verify_all_results(options: &[OptionData], results: &[f32]) -> usize {
 
     err_count
 }
-
 
 #[inline(always)]
 pub fn unpack(v: Vec<Vec<f32>>) -> Vec<f32> {

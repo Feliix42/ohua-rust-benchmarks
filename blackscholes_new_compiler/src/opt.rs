@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 pub fn calculate(options: Arc<Vec<OptionData>>, ranges: Vec<Range<usize>>) -> Vec<f32> {
     let ops: Arc<Vec<OptionData>> = id(options);
-    let mut results:Vec<Vec<f32>> = Vec::new();
+    let mut results: Vec<Vec<f32>> = Vec::new();
 
     for rng in ranges {
         let rng0: Range<usize> = rng;

@@ -2,7 +2,11 @@ use crate::types::*;
 use std::ops::Range;
 use std::sync::Arc;
 
-pub fn calculate(options: Arc<Vec<OptionData>>, items: Arc<Vec<f32>>, ranges: Vec<Range<usize>>) -> Vec<f32> {
+pub fn calculate(
+    options: Arc<Vec<OptionData>>,
+    items: Arc<Vec<f32>>,
+    ranges: Vec<Range<usize>>,
+) -> Vec<f32> {
     let ops: Arc<Vec<OptionData>> = id(options);
     let its: Arc<Vec<f32>> = id(items);
     let mut results: Vec<Arc<Vec<f32>>> = Vec::new();
