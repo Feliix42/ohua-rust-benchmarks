@@ -104,6 +104,29 @@ mod verification {
 //        assert!(z == (x0 + 1) || z == (x1 + 1));
 //    }
 
+//    #[kani::unwind(5)]
+    #[kani::proof]
+    fn right_id() {
+        let a:u64 = kani::any();
+        assert!(a + 0 == a);
+    }
+
+    #[kani::proof]
+    fn left_id() {
+        let a:u64 = kani::any();
+        let b = 0 + a;
+        assert!(a == b);
+    }
+
+    #[kani::proof]
+    fn commutative() {
+        let a:u64 = kani::any();
+        let b:u64 = kani::any();
+        let z1 = a + b;
+        let z2 = b + a;
+        assert!(z1 == z2);
+    }
+
     #[kani::unwind(5)]
     #[kani::proof]
     fn check_last_ohua() {
