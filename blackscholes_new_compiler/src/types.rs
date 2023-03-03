@@ -1,7 +1,9 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::ops::Range;
 use std::str::FromStr;
+use std::sync::Arc;
 
 const INV_SQRT_2PI: f32 = 0.39894228040143270286;
 
@@ -92,10 +94,44 @@ impl OptionData {
 }
 
 pub fn batch_calculate_black_scholes(opts: Vec<OptionData>) -> Vec<f32> {
-     opts.into_iter().map(calculate_black_scholes).collect()
+    opts.iter().map(calculate_black_scholes).collect()
 }
 
-pub fn calculate_black_scholes(opt: OptionData) -> f32 {
+pub fn batch_calculate_black_scholes_arc(
+    opts: Arc<Vec<OptionData>>,
+    rng: Range<usize>,
+) -> Vec<f32> {
+    opts[rng].iter().map(calculate_black_scholes).collect()
+}
+
+pub fn batch_calculate_black_scholes_nested(
+    opts: Arc<Vec<OptionData>>,
+    item: (Vec<f32>, Range<usize>),
+) -> Vec<f32> {
+    let (mut lst, rng) = item;
+    for (r_idx, idx) in rng.into_iter().enumerate() {
+        lst[r_idx] = calculate_black_scholes(&opts[idx]);
+    }
+
+    lst
+}
+
+pub fn batch_calculate_black_scholes_unsafe(
+    opts: Arc<Vec<OptionData>>,
+    mut results: Arc<Vec<f32>>,
+    rng: Range<usize>,
+) -> Arc<Vec<f32>> {
+    unsafe {
+        let res: &mut Vec<f32> = Arc::get_mut_unchecked(&mut results);
+        for idx in rng {
+            res[idx] = calculate_black_scholes(&opts[idx]);
+        }
+    }
+
+    results
+}
+
+pub fn calculate_black_scholes(opt: &OptionData) -> f32 {
     // just the 1:1 copyover of the calculation in the C version
     let x_sqrt_time = opt.time.sqrt();
     let x_log_term = (opt.spot / opt.strike).ln();
@@ -175,8 +211,21 @@ pub fn verify_all_results(options: &[OptionData], results: &[f32]) -> usize {
     err_count
 }
 
-
 #[inline(always)]
 pub fn unpack(v: Vec<Vec<f32>>) -> Vec<f32> {
     v.into_iter().flatten().collect()
+}
+
+#[inline(always)]
+pub fn id<T>(t: T) -> T {
+    t
+}
+
+pub(crate) fn seq_arc_unpack(a: Arc<Vec<f32>>, x: Vec<Arc<Vec<f32>>>) -> Vec<f32> {
+    std::mem::drop(x);
+
+    match Arc::<Vec<f32>>::try_unwrap(a) {
+        Ok(ap) => ap,
+        _ => panic!("Failed to unwrap the Arc. Please make sure that the construction of `x` has destructed all previous Arcs.")
+    }
 }

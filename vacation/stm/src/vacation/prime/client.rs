@@ -55,6 +55,7 @@ impl<T: 'static + RngCore + SeedableRng + Clone> Client<T> {
 
     fn next_program(&mut self) -> Option<Box<dyn Program>> {
         if self.op < self.num_operation {
+            self.op += 1;
             let r = self.random.gen::<i64>() % 100;
             let action = select_action(r, self.percent_user);
             Some(match action {
@@ -84,7 +85,7 @@ impl<T: 'static + RngCore + SeedableRng + Clone> Client<T> {
 
 trait Program {
     /// Initialization
-    fn prepare_initial_query(&mut self) -> Query;
+    fn prepare_initial_query(&mut self) -> Vec<Query>;
 
     /// Typical client event dispatch
     fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query>;
@@ -114,16 +115,25 @@ impl<T: RngCore + SeedableRng> MkReservation<T> {
             customer_id,
         }
     }
-    fn prepare_capacity_query(&mut self) -> Query {
-        let t = self.random.gen::<ReservationType>();
-        let id = (self.random.gen::<u64>() % self.query_range) + 1;
-        Query::GetCapacity(t, id)
+    fn prepare_capacity_queries(&mut self) -> Vec<Query> {
+        let mut queries = Vec::with_capacity(self.num_queries);
+
+        for _ in 0..self.num_queries {
+            let t = self.random.gen::<ReservationType>();
+            let id = (self.random.gen::<u64>() % self.query_range) + 1;
+            queries.push(Query::GetCapacity(t, id));
+        }
+
+        // just a formality
+        self.query_id = self.num_queries;
+
+        queries
     }
 }
 
 impl<T: RngCore + SeedableRng> Program for MkReservation<T> {
-    fn prepare_initial_query(&mut self) -> Query {
-        self.prepare_capacity_query()
+    fn prepare_initial_query(&mut self) -> Vec<Query> {
+        self.prepare_capacity_queries()
     }
 
     // typical client event dispatch
@@ -146,9 +156,10 @@ impl<T: RngCore + SeedableRng> Program for MkReservation<T> {
                     }
 
                     if self.query_id < self.num_queries {
+                        panic!("cannot possibly reach self.query_id < self.num_queries when handling an update response");
                         // continue to issue capacity queries
-                        self.query_id += 1;
-                        Some(self.prepare_capacity_query())
+                        //self.query_id += 1;
+                        //Some(self.prepare_capacity_query())
                     } else {
                         // we are done with the capacity queries.
                         // do the reservation
@@ -161,7 +172,7 @@ impl<T: RngCore + SeedableRng> Program for MkReservation<T> {
             },
             Query::Insert(customer_id) => match self.max_ids[ReservationType::Car as usize] {
                 Some(id) => Some(Query::Reserve(ReservationType::Car, customer_id, id)),
-                _ => None, //panic!("Impossible: we never issued any read query, but got {:?}", e),
+                _ => None, //panic!("Impossible: we never issued any read query."),
             },
             Query::Reserve(t, customer_id, _) =>
             // note: we do not care about the result of the reservation.
@@ -199,8 +210,8 @@ impl DeleteCustomer {
 }
 
 impl Program for DeleteCustomer {
-    fn prepare_initial_query(&mut self) -> Query {
-        Query::GetBill(self.customer_id)
+    fn prepare_initial_query(&mut self) -> Vec<Query> {
+        vec![Query::GetBill(self.customer_id)]
     }
 
     fn handle_response(&mut self, req: Query, resp: Response) -> Option<Query> {
@@ -239,32 +250,41 @@ impl<T: RngCore + SeedableRng> UpdateTables<T> {
         }
     }
 
-    fn prepare_update_query(&mut self) -> Query {
-        let t = self.random.gen::<ReservationType>();
-        let id = (self.random.gen::<u64>() % self.query_range) + 1;
-        let tmp = self.random.gen::<bool>();
-        let new_price0 = if tmp {
-            Some(((self.random.gen::<u64>() % 5) * 10) + 50)
-        } else {
-            None
-        };
-        match new_price0 {
-            Some(new_price) => Query::AddPrice(t, id, 100, new_price),
-            None => Query::DeleteCapacity(t, id, 100),
+    fn prepare_update_queries(&mut self) -> Vec<Query> {
+        let mut update_queries = Vec::with_capacity(self.num_updates);
+
+        for _ in 0..self.num_updates {
+            let t = self.random.gen::<ReservationType>();
+            let id = (self.random.gen::<u64>() % self.query_range) + 1;
+            let tmp = self.random.gen::<bool>();
+            let new_price0 = if tmp {
+                Some(((self.random.gen::<u64>() % 5) * 10) + 50)
+            } else {
+                None
+            };
+            match new_price0 {
+                Some(new_price) => update_queries.push(Query::AddPrice(t, id, 100, new_price)),
+                None => update_queries.push(Query::DeleteCapacity(t, id, 100)),
+            }
         }
+
+        self.update_id = self.num_updates;
+
+        update_queries
     }
 }
 
 impl<T: RngCore + SeedableRng> Program for UpdateTables<T> {
-    fn prepare_initial_query(&mut self) -> Query {
-        self.prepare_update_query()
+    fn prepare_initial_query(&mut self) -> Vec<Query> {
+        self.prepare_update_queries()
     }
 
     fn handle_response(&mut self, _req: Query, _resp: Response) -> Option<Query> {
         // Note, the original code again just did not care about the response.
         if self.update_id < self.num_updates {
-            self.update_id += 1;
-            Some(self.prepare_update_query())
+            panic!("cannot possibly reach self.update_id < self.num_updates when handling an update response");
+            //self.update_id += 1;
+            //Some(self.prepare_update_query())
         } else {
             // done
             None
@@ -308,89 +328,89 @@ fn serve(db, queries, resps) {
 /// Just don't parallelize the client-side. as it makes no sense!
 /// The whole point of the benchmark is the parallelism in the server, not the client!
 
-    // TODO(feliix42): adjust this to be called by the multi-threaded rt (I think the actual MT needs to be
-    // somewhere else?)
 /// Issues the request directly against the database.
+#[allow(unused_variables, unused_mut)]
 pub fn run_client<T: 'static + RngCore + SeedableRng + Clone>(
     mut client: Client<T>,
-    db: db::Database,
+    mut db: db::Database,
 ) {
     let mut cprogram = client.next_program();
     while let Some(mut program) = cprogram {
-        let mut cquery = Some(program.prepare_initial_query());
-        while let Some(query) = cquery {
+        let mut cquery = program.prepare_initial_query();
+        // FIXME: Theoretically, pop from the front
+        while let Some(query) = cquery.pop() {
             let response = db.issue(query.clone());
-            cquery = program.handle_response(query, response);
+            cquery.extend(program.handle_response(query, response).into_iter());
         }
+
         cprogram = client.next_program();
     }
 }
 
+/// Computes one request from each of the clients and then submits this batch to the database.
 pub fn run_clients<T: 'static + RngCore + SeedableRng + Clone + Send>(
     clients: Vec<Client<T>>,
     db: db::Database,
+    //serve: server::Server
 ) {
     let mut handles = Vec::new();
 
     for c in clients {
         let d = db.clone();
-        handles.push(std::thread::spawn(move || 
-            run_client(
-                c,
-                d
-            )
-        ));
+        handles.push(std::thread::spawn(move || run_client(c, d)));
     }
 
-    handles.into_iter().map(std::thread::JoinHandle::join).for_each(Result::unwrap);
-}
+    handles.into_iter().map(std::thread::JoinHandle::join).for_each(Result::unwrap)
+    //let mut cdb = db;
 
-// /// Computes one request from each of the clients and then submits this batch to the database.
-// pub fn run_clients<T: 'static + RngCore + SeedableRng + Clone>(
-//     mut clients: Vec<Client<T>>,
-//     db: db::Database,
-//     serve: server::Server
-// ) -> db::Database {
-//     let mut cdb = db;
-// 
-//     // create the initial batch of requests
-//     let mut cpq = Vec::with_capacity(clients.len());
-//     for mut client in clients.drain(..) {
-//         let cprogram = client.next_program();
-//         if let Some(mut program) = cprogram {
-//             let query = program.prepare_initial_query();
-//             cpq.push((client, program, query));
-//         }
-//     }
-// 
-//     // loop until all clients are done
-//     while cpq.len() > 0 {
-//         // process the batch
-//         let batch = cpq.iter().map(|(_, _, q)| q.clone()).collect();
-//         let (dbp, responses) = serve(cdb, batch);
-//         cdb = dbp;
-// 
-//         // handle the responses
-//         let mut cpq_p = Vec::new();
-//         for ((mut client, mut program, query), response) in cpq.into_iter().zip(responses) {
-//             let nq = program.handle_response(query, response);
-//             if let Some(q) = nq {
-//                 cpq_p.push((client, program, q));
-//             } else {
-//                 let np = client.next_program();
-//                 if let Some(mut p) = np {
-//                     let q = p.prepare_initial_query();
-//                     cpq_p.push((client, p, q));
-//                 } else {
-//                     // client is done
-//                 }
-//             }
-//         }
-//         cpq = cpq_p;
-//     }
-// 
-//     cdb
-// }
+    //// create the initial batch of requests
+    //let mut cpq = Vec::with_capacity(clients.len());
+    //for mut client in clients.into_iter() {
+        //let cprogram = client.next_program();
+        //if let Some(mut program) = cprogram {
+            //let queries = program.prepare_initial_query();
+            //cpq.push((client, program, queries));
+        //}
+    //}
+
+    //// loop until all clients are done
+    //while !cpq.is_empty() {
+        //// process the batch
+        //let batch = cpq.iter().map(|(_, _, q)| q.clone()).flatten().collect();
+        //let (dbp, mut responses) = serve(cdb, batch);
+        //cdb = dbp;
+
+        //// handle the responses
+        //let mut cpq_p = Vec::new();
+        ////for ((mut client, mut program, queries), response) in cpq.drain(..).zip(responses) {
+        //for (mut client, mut program, queries) in cpq {
+            //let mut local_queries = Vec::new();
+            //let bound = queries.len();
+
+            //for (query, response) in queries.into_iter().zip(responses.drain(..bound)) {
+                //let nq = program.handle_response(query, response);
+                //if let Some(q) = nq {
+                    //local_queries.push(q);
+                //}
+            //}
+
+            //if !local_queries.is_empty() {
+                //cpq_p.push((client, program, local_queries));
+            //} else {
+                //let np = client.next_program();
+                //if let Some(mut p) = np {
+                    //let q = p.prepare_initial_query();
+                    //cpq_p.push((client, p, q));
+                //} else {
+                    //// client is done
+                //}
+            //}
+        //}
+        //cpq = cpq_p;
+    //}
+
+    //cdb
+}
 
 /* =============================================================================
  * select_action

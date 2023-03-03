@@ -1,25 +1,19 @@
-#![feature(proc_macro_hygiene)]
 use blackscholes::{self, OptionData};
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
-use ohua_codegen::ohua;
-use ohua_runtime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
 use std::thread::{self, JoinHandle};
 use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::mpsc::{self, Receiver};
 use std::time::Instant;
-use tokio::runtime::{Builder, Runtime};
-
-static TASKS_PER_THREAD: usize = 2;
+use std::sync::Arc;
+use crossbeam::queue::SegQueue;
 
 fn main() {
-    let matches = App::new("Future-based Ohua blackscholes benchmark")
+    let matches = App::new("Threaded blackscholes benchmark")
         .version("1.0")
         .author("Felix Wittwer <dev@felixwittwer.de>")
-        .about("A Rust port of the blackscholes benchmark from the PARSEC collection, implemented using the Ohua framework")
+        .about("A Rust port of the blackscholes benchmark from the PARSEC collection, implemented using threads only")
         .arg(
             Arg::with_name("INPUT")
                 .help("Input file describing the stock options to trade.")
@@ -102,8 +96,7 @@ fn main() {
         let start = Instant::now();
 
         // run the algorithm
-        #[ohua]
-        let res = ohua_futures(options, threadcount);
+        let res = run_blackcholes(options, threadcount);
 
         // stop the clock
         let cpu_end = ProcessTime::now();
@@ -130,11 +123,11 @@ fn main() {
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
-        let filename = format!("{}/ohua_futures-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
+        let filename = format!("{}/parlist-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"ohua-futures\",
+    \"algorithm\": \"parlist\",
     \"options\": {opt},
     \"threadcount\": {threadcount},
     \"runs\": {runs},
@@ -162,19 +155,62 @@ fn main() {
     }
 }
 
-fn run_blackscholes(options: Vec<OptionData>) -> Vec<f32> {
-    options
-        .iter()
-        .map(OptionData::calculate_black_scholes)
-        .collect()
+fn run_blackcholes(splitted: Vec<Vec<OptionData>>, threadcount: usize) -> Vec<f32> {
+    // let mut splitted = splitup(options, threadcount);
+
+    let options = Arc::new(SegQueue::new());
+
+    let mut handles: Vec<JoinHandle<()>> = Vec::with_capacity(threadcount);
+    for items in splitted {
+        let opt = options.clone();
+        handles.push(
+            thread::spawn(move || {
+                for item in items {
+                    let res = item.calculate_black_scholes();
+                    opt.push(res);
+                }
+            })
+        );
+    }
+
+    handles
+        .into_iter()
+        .map(std::thread::JoinHandle::join)
+        .for_each(Result::unwrap);
+
+    Arc::try_unwrap(options).unwrap().into_iter().collect()
 }
 
+//fn splitup(mut to_split: Vec<OptionData>, split_size: usize) -> Vec<Vec<OptionData>> {
+    //// TODO: Is this the new optimized implementation?
+    //let l = to_split.len() / split_size;
+    //let mut rest = to_split.len() % split_size;
 
+    //let mut splitted = Vec::new();
+
+    //for t_num in 0..split_size {
+        //splitted.push(Vec::with_capacity(l));
+        //if rest > 0 {
+            //splitted[t_num] = to_split.split_off(to_split.len() - l - 1);
+            //rest -= 1;
+        //} else {
+            //if to_split.len() <= l {
+                //splitted[t_num] = to_split.split_off(0);
+            //} else {
+                //splitted[t_num] = to_split.split_off(to_split.len() - l);
+            //}
+        //}
+    //}
+
+    //splitted
+//}
+
+/// Splits the input vector into evenly sized vectors for `split_size` workers.
 fn splitup<T>(vec: Vec<T>, split_size: usize) -> Vec<Vec<T>>
 where
     T: Clone,
 {
-    let size = split_size * TASKS_PER_THREAD;
+    let size = split_size;
     let element_count = vec.len();
     let mut rest = element_count % size;
     let window_len: usize = element_count / size;
@@ -204,42 +240,4 @@ where
     }
 
     return res;
-}
-
-
-fn spawn_onto_pool(
-    mut values: Vec<Vec<OptionData>>,
-    rt: Arc<Runtime>,
-) -> (Arc<Runtime>, Vec<Receiver<Vec<f32>>>) {
-    let mut handles = Vec::with_capacity(values.len());
-
-    for lst in values.drain(..) {
-        let (sx, rx) = mpsc::channel();
-
-        rt.spawn(async move { sx.send(run_blackscholes(lst)).unwrap() });
-
-        handles.push(rx);
-    }
-
-    (rt, handles)
-}
-
-fn create_runtime(threadcount: usize) -> Arc<Runtime> {
-    Arc::new(
-        Builder::new()
-            .threaded_scheduler()
-            .core_threads(threadcount)
-            .thread_name("ohua-tokio-worker")
-            .build()
-            .unwrap(),
-    )
-}
-
-fn collect_work<T>(tokio_data: (Arc<Runtime>, Vec<Receiver<Vec<T>>>)) -> Vec<T> {
-    let (_rt, mut receivers) = tokio_data;
-    receivers
-        .drain(..)
-        .map(|h| h.recv().unwrap())
-        .flatten()
-        .collect()
 }

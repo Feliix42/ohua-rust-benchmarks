@@ -261,7 +261,7 @@ fn run_annealer(
                     &netlist.elements[idx_b].read_atomic(),
                 );
 
-                let (_, retries) = atomically(|trans| {
+                atomically(|trans| {
                     match assess_move(delta_cost, local_tmp.read(trans)?, random_value) {
                         MoveDecision::Good => {
                             accepted_good.modify(trans, |x| x + 1)?;

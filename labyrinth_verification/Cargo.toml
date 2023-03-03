@@ -1,0 +1,24 @@
+[package]
+name = "labyrinth"
+version = "0.1.0"
+authors = ["Felix Suchert <dev@felixsuchert.de>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.32"
+strum = "0.24"
+strum_macros = "0.24"
+
+time = "0.1"
+cpu-time = "1.0"
+tokio = { version = "0.2", features = ["full"] }
+
+jemallocator = "0.5.0"
+
+[[bin]]
+name = "sequential"
+path = "src/bin/simple_sequential.rs"
+
+[[bin]]
+name = "ohua"
+path = "src/bin/ohua.rs"

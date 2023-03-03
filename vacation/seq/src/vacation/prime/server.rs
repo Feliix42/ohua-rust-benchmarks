@@ -1,3 +1,4 @@
+#![allow(unused_mut, non_snake_case, dead_code)]
 use crate::vacation::prime::communication::{Query, Response};
 use crate::vacation::prime::database::{
     compute, id, index_queries_and_responses, insert_at_index, issue_read, seq_arc_unwrap, split,
@@ -15,8 +16,8 @@ pub(crate) fn naive_go(
     batch: Vec<IndexedQuery>,
 ) -> (Database, Vec<Option<Response>>) {
     let (mut db, responses): (Database, Vec<Option<Response>>) = id(package); // FIXME
-    let dbp: Database = db.clone(); // certainly expensive
-    let shared: Arc<Database> = Arc::new(dbp);
+    //let dbp: Database = db.clone(); // certainly expensive
+    let shared: Arc<Database> = Arc::new(db);
     let mut qd: Vec<(IndexedQuery, Option<Response>)> = Vec::new();
     for query0 in batch {
         let query: IndexedQuery = query0;
@@ -25,10 +26,12 @@ pub(crate) fn naive_go(
         qd.push(delta);
     }
 
-    let (redo, cresponses): (Vec<IndexedQuery>, Vec<(usize, Response)>) = db.apply_delta(qd);
+    let (mut dbp, qd2): (Database, Vec<(IndexedQuery, Option<Response>)>) = seq_arc_unwrap(shared, qd);
+    let (redo, cresponses): (Vec<IndexedQuery>, Vec<(usize, Response)>) = dbp.apply_delta(qd2);
+
     let responses_p: Vec<Option<Response>> = insert_at_index(responses, cresponses);
     let pending: bool = redo.not_empty();
-    let packaged: (Database, Vec<Option<Response>>) = (db, responses_p);
+    let packaged: (Database, Vec<Option<Response>>) = (dbp, responses_p);
     if pending {
         naive_go(packaged, redo)
     } else {

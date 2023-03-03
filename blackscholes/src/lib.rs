@@ -6,7 +6,7 @@ use std::str::FromStr;
 const INV_SQRT_2PI: f32 = 0.39894228040143270286;
 
 /// Type of a stock option
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum OptionType {
     Put,
     Call,
@@ -22,7 +22,7 @@ impl From<&str> for OptionType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct OptionData {
     /// Spot Price
     pub spot: f32,
@@ -112,6 +112,11 @@ impl OptionData {
         };
 
         option_price
+    }
+
+    pub fn calculate_n_times(&self, num: usize) -> Vec<f32> {
+        (0..num).map(|_| self.calculate_black_scholes()).collect()
+        //(0..num).for_each(|_| self.calculate_black_scholes());
     }
 
     /// Returns `true` when the divergence between the computed price and the DerivaGem Reference Value is within the acceptable tolerance of 0.0001.

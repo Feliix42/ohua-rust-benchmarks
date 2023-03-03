@@ -1,14 +1,55 @@
+#![feature(get_mut_unchecked)]
+
 use clap::{App, Arg};
 use cpu_time::ProcessTime;
 use std::fs::{create_dir_all, File};
 use std::io::Write;
+use std::ops::Range;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Instant;
 use types::*;
 
 mod generated;
+mod opt;
 mod original;
 mod types;
+mod un_safe;
+mod nested;
+
+enum Runtime {
+    Seq,
+    Ohua,
+    Opt,
+    OhuaOpt,
+    Unsafe,
+    OhuaUnsafe,
+    Nested,
+    OhuaNested,
+}
+
+enum Either<S, T> {
+    Left(S),
+    Right(T)
+}
+
+impl FromStr for Runtime {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "seq" => Ok(Self::Seq),
+            "ohua" => Ok(Self::Ohua),
+            "opt" => Ok(Self::Opt),
+            "ohuaopt" => Ok(Self::OhuaOpt),
+            "unsafe" => Ok(Self::Unsafe),
+            "ohuaunsafe" => Ok(Self::OhuaUnsafe),
+            "nested" => Ok(Self::Nested),
+            "ohuanested" => Ok(Self::OhuaNested),
+            _ => panic!("Unsupported runtime specification"),
+        }
+    }
+}
 
 fn main() {
     let matches = App::new("Ohua blackscholes benchmark for the new compiler")
@@ -50,15 +91,16 @@ fn main() {
                 .default_value("results")
         )
         .arg(
-            Arg::with_name("sequential")
-                .long("seq")
-                .short("s")
-                .help("Run the sequential ohua algorithm (bare)")
+            Arg::with_name("runtime")
+                .long("rt")
+                .help("Specify the runtime to use: seq | ohua (default) | opt | ohuaopt")
+                .takes_value(true)
+                .default_value("ohua")
         )
         .arg(
             Arg::with_name("threadcount")
                 .long("threadcount")
-                .short("tc")
+                .short("t")
                 .help("Thread count/batch size")
                 .takes_value(true)
                 .default_value("1")
@@ -67,8 +109,10 @@ fn main() {
 
     // parse parameters
     let input_file = matches.value_of("INPUT").unwrap();
-    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap()).expect("Could not parse thread count");
-    let sequential = matches.is_present("sequential");
+    let threadcount = usize::from_str(matches.value_of("threadcount").unwrap())
+        .expect("Could not parse thread count");
+    let runtime = Runtime::from_str(matches.value_of("runtime").unwrap())
+        .expect("Couldn't parse runtime spec");
 
     // parse runtime parameters
     let runs =
@@ -93,19 +137,98 @@ fn main() {
     }
 
     for _ in 0..runs {
-        // clone the necessary data
-        let options = splitup(input_data.clone(), threadcount);
-        // let options = input_data.clone();
-
-        // start the clock
-        let cpu_start = ProcessTime::now();
-        let start = Instant::now();
-
         // run the algorithm
-        let res = if sequential {
-            original::calculate(options)
-        } else {
-            generated::original::calculate(options)
+        let (cpu_start, start, res) = match runtime {
+            Runtime::Seq => {
+                // clone the necessary data
+                let options = splitup(input_data.clone(), threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = original::calculate(options);
+
+                (cpu_start, start, Either::Left(res))
+            }
+            Runtime::Ohua => {
+                // clone the necessary data
+                let options = splitup(input_data.clone(), threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = generated::original::calculate(options);
+
+                (cpu_start, start, Either::Left(res))
+            }
+            Runtime::Opt => {
+                let options = Arc::new(input_data.clone());
+                let ranges = get_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = opt::calculate(options, ranges);
+
+                (cpu_start, start, Either::Left(res))
+            }
+            Runtime::OhuaOpt => {
+                let options = Arc::new(input_data.clone());
+                let ranges = get_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = generated::opt::calculate(options, ranges);
+
+                (cpu_start, start, Either::Left(res))
+            }
+            Runtime::Unsafe => {
+                let options = Arc::new(input_data.clone());
+                let r = Arc::new(vec![0_f32; options.len()]);
+                let ranges = get_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = un_safe::calculate(options, r, ranges);
+
+                (cpu_start, start, Either::Left(res))
+            }
+            Runtime::OhuaUnsafe => {
+                let options = Arc::new(input_data.clone());
+                let r = Arc::new(vec![0_f32; options.len()]);
+                let ranges = get_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = generated::un_safe::calculate(options, r, ranges);
+
+                (cpu_start, start, Either::Left(res))
+            }
+            Runtime::Nested => {
+                let options = Arc::new(input_data.clone());
+                let ranges = get_packed_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = nested::calculate(options, ranges);
+
+                (cpu_start, start, Either::Right(res))
+            }
+            Runtime::OhuaNested => {
+                let options = Arc::new(input_data.clone());
+                let ranges = get_packed_ranges(&options, threadcount);
+
+                // start the clock
+                let cpu_start = ProcessTime::now();
+                let start = Instant::now();
+                let res = generated::nested::calculate(options, ranges);
+
+                (cpu_start, start, Either::Right(res))
+            }
         };
 
         // stop the clock
@@ -123,7 +246,14 @@ fn main() {
 
         // optionally run the verification
         if verify {
-            let err_count = verify_all_results(&input_data, &res);
+            let err_count = match res {
+                Either::Left(r) => verify_all_results(&input_data, &r),
+                Either::Right(r) => {
+                    let comb: Vec<f32> = r.into_iter().flatten().collect();
+                    verify_all_results(&input_data, &comb)
+                }
+            };
+
             if err_count != 0 {
                 eprintln!("[error] Encountered {} errors in calculation.", err_count);
             }
@@ -133,22 +263,28 @@ fn main() {
     // write output
     if json_dump {
         create_dir_all(out_dir).unwrap();
-        let filename = format!("{}/ohua_futures-{}opt-t{}-r{}_log.json", out_dir, input_data.len(), threadcount, runs);
+        let filename = format!(
+            "{}/{}-{}opt-t{}-r{}_log.json",
+            out_dir,
+            matches.value_of("runtime").unwrap().to_lowercase(),
+            input_data.len(),
+            threadcount,
+            runs
+        );
         let mut f = File::create(&filename).unwrap();
         f.write_fmt(format_args!(
             "{{
-    \"algorithm\": \"ohua-futures\",
+    \"algorithm\": \"{rt}\",
     \"options\": {opt},
     \"threadcount\": {threadcount},
     \"runs\": {runs},
-    \"sequential\": {seq},
     \"cpu_time\": {cpu:?},
     \"results\": {res:?}
 }}",
+            rt = matches.value_of("runtime").unwrap().to_lowercase(),
             opt = input_data.len(),
             threadcount = threadcount,
             runs = runs,
-            seq = sequential,
             cpu = cpu_time,
             res = results
         ))
@@ -160,6 +296,10 @@ fn main() {
         println!("\nStatistics:");
         println!("    Number of options: {}", input_data.len());
         println!("    Input file used:   {}", input_file);
+        println!(
+            "    Runtime:           {}",
+            matches.value_of("runtime").unwrap().to_lowercase()
+        );
         println!("    Threads:           {}", threadcount);
         println!("    Runs:              {}", runs);
         println!("\nCPU-time used (ms): {:?}", cpu_time);
@@ -196,6 +336,62 @@ where
         let dst = start + len;
 
         res[i].extend_from_slice(&vec[start..dst]);
+
+        start = dst;
+    }
+
+    return res;
+}
+
+/// Splits the input vector into evenly sized ranges for `split_size` workers.
+fn get_ranges<T>(vec: &Vec<T>, split_size: usize) -> Vec<Range<usize>> {
+    let size = split_size;
+    let element_count = vec.len();
+    let mut rest = element_count % size;
+    let window_len: usize = element_count / size;
+
+    let mut res = Vec::with_capacity(size);
+
+    let mut start = 0;
+    for _ in 0..size {
+        // calculate the length of the window (for even distribution of the `rest` elements)
+        let len = if rest > 0 {
+            rest -= 1;
+            window_len + 1
+        } else {
+            window_len
+        };
+
+        let dst = start + len;
+        res.push(start..dst);
+
+        start = dst;
+    }
+
+    return res;
+}
+
+/// Splits the input vector into evenly sized ranges for `split_size` workers.
+fn get_packed_ranges<T>(vec: &Vec<T>, split_size: usize) -> Vec<(Vec<f32>, Range<usize>)> {
+    let size = split_size;
+    let element_count = vec.len();
+    let mut rest = element_count % size;
+    let window_len: usize = element_count / size;
+
+    let mut res = Vec::with_capacity(size);
+
+    let mut start = 0;
+    for _ in 0..size {
+        // calculate the length of the window (for even distribution of the `rest` elements)
+        let len = if rest > 0 {
+            rest -= 1;
+            window_len + 1
+        } else {
+            window_len
+        };
+
+        let dst = start + len;
+        res.push((vec![0_f32; len], start..dst));
 
         start = dst;
     }

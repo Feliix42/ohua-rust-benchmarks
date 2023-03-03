@@ -8,6 +8,8 @@ use std::sync::Arc;
 
 use rand::Rng;
 
+const WORKITEM_SIZE: usize = 10;
+
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Location {
     pub x: usize,
@@ -200,8 +202,8 @@ impl Netlist {
 
         let mut computations_this_step = 0;
 
+        let mut tmp = Vec::with_capacity(WORKITEM_SIZE);
         for updts in updt_sets {
-            let mut tmp = Vec::with_capacity(updts.len());
             computations_this_step += updts.len();
 
             for updt in updts {
@@ -215,9 +217,15 @@ impl Netlist {
                             changed[b] = true;
 
                             self.internal_state.accepted_good_moves += 1;
+                            self.internal_state.accepted_computations += 1;
                         } else {
                             self.failed_updates += 1;
                             tmp.push(updt.1);
+
+                            if tmp.len() == WORKITEM_SIZE {
+                                res.push(tmp);
+                                tmp = Vec::with_capacity(WORKITEM_SIZE);
+                            }
                         }
                     }
                     MoveDecision::Bad => {
@@ -227,34 +235,48 @@ impl Netlist {
                             changed[b] = true;
 
                             self.internal_state.accepted_bad_moves += 1;
+                            self.internal_state.accepted_computations += 1;
                         } else {
                             self.failed_updates += 1;
                             tmp.push(updt.1);
+
+                            if tmp.len() == WORKITEM_SIZE {
+                                res.push(tmp);
+                                tmp = Vec::with_capacity(WORKITEM_SIZE);
+                            }
                         }
                     }
-                    MoveDecision::Rejected => (),
+                    MoveDecision::Rejected => {
+                        self.internal_state.accepted_computations += 1;
+                    },
                 }
             }
+        }
+
+        if !tmp.is_empty() {
             res.push(tmp);
         }
 
         self.internal_state.total_moves += computations_this_step;
 
-        if res.iter().flatten().count() == 0 {
+        //if res.iter().flatten().count() == 0 {
+        if res.is_empty() && self.internal_state.accepted_computations == self.internal_state.swaps_per_temp {
             //println!("Current done!");
             // current worklist done!
             let keep_going = self.get_keep_going();
 
             self.internal_state.accepted_good_moves = 0;
             self.internal_state.accepted_bad_moves = 0;
+            self.internal_state.accepted_computations = 0;
             self.internal_state.completed_steps += 1;
 
             if keep_going {
-                res = self.internal_state.generate_worklist();
+                return self.internal_state.generate_worklist()
             }
         } /* else {
               println!("Remaining elements: {}", res.len());
-              println!("Failed updates: {}", self.failed_updates);
+              println!("computations done: {}/{}", self.internal_state.accepted_computations, self.internal_state.swaps_per_temp);
+              // println!("Failed updates: {}", self.failed_updates);
           } */
 
         res
@@ -322,6 +344,7 @@ pub struct InternalState {
     pub total_moves: usize,
     accepted_good_moves: u32,
     accepted_bad_moves: u32,
+    accepted_computations: usize,
     max_steps: Option<i32>,
     completed_steps: i32,
     swaps_per_temp: usize,
@@ -339,6 +362,7 @@ impl InternalState {
             total_moves: 0,
             accepted_good_moves: 0,
             accepted_bad_moves: 0,
+            accepted_computations: 0,
             max_steps,
             completed_steps: 0,
             swaps_per_temp,
@@ -369,11 +393,11 @@ impl InternalState {
 
     pub fn generate_worklist(&mut self) -> Vec<Vec<(usize, usize)>> {
         // Optimization: Bigger work packages
-        let mut res = Vec::with_capacity(self.swaps_per_temp / 100);
+        let mut res = Vec::with_capacity(self.swaps_per_temp / WORKITEM_SIZE);
         let mut idx_a;
         let mut idx_b;
 
-        let mut tmp = Vec::with_capacity(100);
+        let mut tmp = Vec::with_capacity(WORKITEM_SIZE);
         for _ in 0..self.swaps_per_temp {
             // todo
             idx_a = self.rng.gen_range(0..self.total_elements);
@@ -384,9 +408,9 @@ impl InternalState {
             }
 
             tmp.push((idx_a, idx_b));
-            if tmp.len() == 100 {
+            if tmp.len() == WORKITEM_SIZE {
                 res.push(tmp);
-                tmp = Vec::with_capacity(100);
+                tmp = Vec::with_capacity(WORKITEM_SIZE);
             }
         }
 
@@ -394,7 +418,7 @@ impl InternalState {
             res.push(tmp);
         }
 
-        println!("Generated {} elements", res.iter().flatten().count());
+        //println!("Generated {} elements", res.iter().flatten().count());
 
         res
     }

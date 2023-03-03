@@ -13,6 +13,7 @@ impl Database {
         Database { mngr }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn issue(&mut self, q: Query) -> Response {
         if q.is_read() {
             self.issue_read(q)
